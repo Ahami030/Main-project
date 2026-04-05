@@ -27,23 +27,49 @@ export default function AdminPage() {
 
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const justSwitchedUser = useRef(false);
+  const switchTimeRef = useRef<number>(0);
 
-  const loadUsers = async () => {
-    try {
-      const res = await fetch("/api/chat/users", {
-        cache: "no-store",
-      });
-      const data = await res.json();
-      setUsers(data);
-      if (data.length > 0 && !selectedUserId) {
-        setSelectedUserId(data[0].userId);
+  // แยก initial load กับ polling
+  useEffect(() => {
+    const initLoad = async () => {
+      try {
+        const res = await fetch("/api/chat/users", { cache: "no-store" });
+        const data = await res.json();
+        setUsers(data);
+        if (data.length > 0) {
+          setSelectedUserId(data[0].userId);
+        }
+      } catch (error) {
+        console.error("Error loading users:", error);
+      } finally {
+        setLoadingUsers(false);
       }
-    } catch (error) {
-      console.error("Error loading users:", error);
-    } finally {
-      setLoadingUsers(false);
-    }
-  };
+    };
+
+    initLoad();
+
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch("/api/chat/users", { cache: "no-store" });
+        const data = await res.json();
+        setUsers(data);
+      } catch (error) {
+        console.error("Error loading users:", error);
+      }
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  // Reset state + mark justSwitchedUser เมื่อเปลี่ยน user
+  useEffect(() => {
+    setShouldAutoScroll(true);
+    setShowNewButton(false);
+    setChats([]);
+    justSwitchedUser.current = true;
+    switchTimeRef.current = Date.now();
+  }, [selectedUserId]);
 
   const loadChats = async () => {
     if (!selectedUserId) return;
@@ -54,13 +80,12 @@ export default function AdminPage() {
       });
       const data = await res.json();
 
-      if (data.length > chats.length) {
-        if (!shouldAutoScroll) {
+      setChats((prev) => {
+        if (data.length > prev.length && !shouldAutoScroll) {
           setShowNewButton(true);
         }
-      }
-
-      setChats(data);
+        return data;
+      });
     } catch (error) {
       console.error("Error loading chats:", error);
     }
@@ -72,9 +97,7 @@ export default function AdminPage() {
     try {
       await fetch("/api/chat", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           userId: selectedUserId,
           senderRole: "admin",
@@ -86,7 +109,6 @@ export default function AdminPage() {
       setShouldAutoScroll(true);
       setShowNewButton(false);
       loadChats();
-      loadUsers();
     } catch (error) {
       console.error("Error sending message:", error);
     }
@@ -97,63 +119,66 @@ export default function AdminPage() {
     if (!container) return;
 
     const isAtBottom =
-      container.scrollTop + container.clientHeight >=
-      container.scrollHeight - 50;
+      container.scrollTop + container.clientHeight >= container.scrollHeight - 50;
 
     setShouldAutoScroll(isAtBottom);
-
-    if (isAtBottom) {
-      setShowNewButton(false);
-    }
+    if (isAtBottom) setShowNewButton(false);
   };
 
+  // Scroll เมื่อ chats เปลี่ยน
   useEffect(() => {
-  if (shouldAutoScroll) {
-    const container = chatContainerRef.current;
-    if (container) {
-      container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
+    if (shouldAutoScroll) {
+      const container = chatContainerRef.current;
+      if (container) {
+        // Use instant scroll for 500ms after switching users, then switch to smooth
+        const timeSinceSwitched = Date.now() - switchTimeRef.current;
+        const useInstant = justSwitchedUser.current || timeSinceSwitched < 500;
+
+        if (useInstant) {
+          container.scrollTo({
+            top: container.scrollHeight,
+            behavior: "instant",
+          });
+          justSwitchedUser.current = false;
+        } else {
+          container.scrollTo({
+            top: container.scrollHeight,
+            behavior: "smooth",
+          });
+        }
+      }
     }
-  }
-}, [chats, shouldAutoScroll]);
+  }, [chats, shouldAutoScroll]);
 
   useEffect(() => {
-    loadUsers();
-    const interval = setInterval(loadUsers, 3000);
-    return () => clearInterval(interval);
-  }, []);
-
-  useEffect(() => {
+    if (!selectedUserId) return;
     loadChats();
     const interval = setInterval(loadChats, 1000);
     return () => clearInterval(interval);
   }, [selectedUserId]);
 
- const scrollToBottom = () => {
-  const container = chatContainerRef.current;
-  if (container) {
-    container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
-  }
-  setShowNewButton(false);
-  setShouldAutoScroll(true);
-};
+  const scrollToBottom = () => {
+    const container = chatContainerRef.current;
+    if (container) {
+      container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
+    }
+    setShowNewButton(false);
+    setShouldAutoScroll(true);
+  };
 
   return (
     <div className="flex h-screen bg-gray-50">
       {/* Sidebar - Users List */}
       <div className="w-64 bg-white border-r border-gray-200 flex flex-col">
-        {/* Header */}
         <div className="p-4 bg-gradient-to-r from-blue-600 to-green-600 text-white font-bold">
           💬 Messages
         </div>
 
-        {/* Users List */}
         <div className="flex-1 overflow-y-auto">
           {loadingUsers ? (
             <div className="p-4 text-center text-gray-400">Loading...</div>
           ) : users.length === 0 ? (
-            <div className="p-4 text-center text-gray-400">
-              No messages yet
-            </div>
+            <div className="p-4 text-center text-gray-400">No messages yet</div>
           ) : (
             users.map((user) => (
               <button
