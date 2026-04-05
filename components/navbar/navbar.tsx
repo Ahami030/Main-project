@@ -71,6 +71,12 @@ export default function Navbar() {
                   >
                     Login
                   </Link>
+                  <Link
+                    href="/register"
+                    className="text-sm text-base-content/70 hover:text-base-content"
+                  >
+                    Register
+                  </Link>
                 </li>
 
                 <li>
