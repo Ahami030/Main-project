@@ -54,7 +54,7 @@ export default function Navbar() {
               Login
             </Link>
 
-            {/* page navigation */}
+            {/* page navigation user */}
             <div className="dropdown">
               <div tabIndex={0} role="button" className="btn m-1">
                 Page Navigation
@@ -114,6 +114,35 @@ export default function Navbar() {
                   </Link>
                 </li>
 
+              </ul>
+            </div>
+            {/* page navigation employee */}
+            <div className="dropdown">
+              <div tabIndex={0} role="button" className="btn m-1">
+                Page Navigation employee
+              </div>
+
+              <ul
+                tabIndex={0}
+                className="dropdown-content menu bg-base-100 rounded-box z-50 w-52 p-2 shadow"
+              >
+                <li>
+                  <Link
+                    href="/Login"
+                    className="text-sm text-base-content/70 hover:text-base-content"
+                  >
+                    Login
+                  </Link>
+                </li>
+
+                <li>
+                  <Link
+                    href="/Admin/chat"
+                    className="text-sm text-base-content/70 hover:text-base-content"
+                  >
+                    Admin chat
+                  </Link>
+                </li>
               </ul>
             </div>
 
