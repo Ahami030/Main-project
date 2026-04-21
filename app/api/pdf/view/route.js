@@ -43,7 +43,8 @@ export async function GET(req) {
   return new NextResponse(fileBuffer, {
     headers: {
       "Content-Type": "application/pdf",
-      "Content-Disposition": `inline; filename="${pdf.filename}"`,
+      // ✅ ใหม่ - encode ด้วย encodeURIComponent
+      "Content-Disposition": `inline; filename*=UTF-8''${encodeURIComponent(pdf.filename)}`,
     },
   });
 }
