@@ -1,12 +1,25 @@
+"use client";
+import { useEffect, useRef } from "react";
 export default function PdfDashboardLayout() {
+  const pdfRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (pdfRef.current) {
+      pdfRef.current.scrollIntoView({
+        behavior: "smooth",
+        block: "center", // <-- สำคัญ: ให้อยู่กลางจอ
+      });
+    }
+  }, []); // <-- run ครั้งเดียวตอนเข้า page
   return (
-    <div
+   <div
       className="grid gap-3 p-3 min-h-screen bg-gray-100 dark:bg-zinc-900
       grid-cols-1 lg:grid-cols-[40%_1fr]
       auto-rows-auto"
     >
       {/* ===== PDF Original ===== */}
-      <div
+       <div
+        ref={pdfRef} // 👈 ใส่ ref ตรงนี้
         className="bg-white dark:bg-zinc-800 border border-black/10 dark:border-white/10 rounded-xl p-4 flex flex-col gap-2.5
         lg:row-span-3 min-h-[300px] lg:min-h-[480px]"
       >
