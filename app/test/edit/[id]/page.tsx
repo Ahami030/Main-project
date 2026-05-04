@@ -91,7 +91,7 @@ export default function EditPage() {
     const updated = [...form.line_items];
     if (field === "description" || field === "unit") {
       updated[index][field] = value;
-    } else if (field === "unit_price") {
+    } else if (field === "unit_price" || field === "quantity") {
       updated[index][field] = parseCurrency(value);
     } else {
       updated[index][field] = Number(value) || 0;
@@ -209,11 +209,18 @@ export default function EditPage() {
 
                       <td>
                         <input
-                          type="number"
-                          value={item.quantity || 0}
+                          type="text"
+                          inputMode="numeric"
+                          value={
+                            focusedLineField === `${i}-quantity`
+                              ? String(item.quantity || "")
+                              : formatCurrency(item.quantity || 0)
+                          }
                           onChange={(e) =>
                             handleLineChange(i, "quantity", e.target.value)
                           }
+                          onFocus={() => setFocusedLineField(`${i}-quantity`)}
+                          onBlur={() => setFocusedLineField("")}
                           className="input input-bordered input-sm w-full text-center"
                         />
                       </td>
