@@ -6,9 +6,7 @@ import { useSession } from "next-auth/react";
 type UploadStatus = "idle" | "uploading" | "success" | "error";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
-const N8N_WEBHOOK_URL =
-  process.env.NEXT_PUBLIC_N8N_WEBHOOK_URL ??
-  "http://localhost:5678/webhook-test/pdf-test";
+const API_QUOTATION_URL = "/api/quotation";
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
 
@@ -98,7 +96,7 @@ export default function Page(): JSX.Element {
     };
   }, [pdfPreviewUrl]);
 
-  // ── n8n upload ──────────────────────────────────────────────────
+  // ── Upload quotation (to database, PDF folder, and n8n) ──────────────────────────
   const handleSendToN8n = async () => {
     if (!pdfFile) {
       setUploadStatus("error");
@@ -106,21 +104,14 @@ export default function Page(): JSX.Element {
       return;
     }
 
-    const userId =
-      (session as any)?.id ??
-      (session as any)?.sessionId ??
-      (session?.user as any)?.id ??
-      "anonymous";
-
     const formData = new FormData();
     formData.append("file", pdfFile);
-    formData.append("userId", userId);
 
     setUploadStatus("uploading");
-    setUploadMessage("กำลังส่งข้อมูลไปยัง n8n…");
+    setUploadMessage("กำลังส่งข้อมูลและอัปโหลดไฟล์...");
 
     try {
-      const res = await fetch(N8N_WEBHOOK_URL, {
+      const res = await fetch(API_QUOTATION_URL, {
         method: "POST",
         body: formData,
       });
@@ -132,7 +123,7 @@ export default function Page(): JSX.Element {
       const json = await res.json();
       setUploadStatus("success");
       setUploadMessage(
-        `✅ ส่งสำเร็จ! ตอบกลับจาก n8n: ${JSON.stringify(json)}`
+        `✅ ส่งสำเร็จ! ไฟล์: ${json.filename} • UserID: ${json.userId}`
       );
     } catch (err) {
       setUploadStatus("error");
@@ -140,8 +131,8 @@ export default function Page(): JSX.Element {
     }
   };
 
-  // ── Derived ─────────────────────────────────────────────────────
-  const userId =
+  // ── Derived ─────────────────────────
+  const displayUserId =
     (session?.user as any)?.id ??
     (session as any)?.id ??
     (session as any)?.sessionId ??
@@ -265,7 +256,7 @@ export default function Page(): JSX.Element {
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-success" />
               <code className="text-xs bg-base-200 px-2 py-1 rounded">
-                {userId}
+                {displayUserId}
               </code>
             </div>
           </div>
