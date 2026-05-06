@@ -1,17 +1,20 @@
-import NextAuth from "next-auth/next";
+import NextAuth, { AuthOptions } from "next-auth"; // ⭐ เพิ่ม AuthOptions
 import CredentialsProvider from "next-auth/providers/credentials";
 import { connectMongoDB } from "@/lib/mongo";
 import User from "@/app/models/User";
 import bcrypt from "bcryptjs";
 
-export const authOptions = {
+export const authOptions: AuthOptions = { // ⭐ เพิ่ม : AuthOptions
   providers: [
     CredentialsProvider({
       name: "credentials",
       credentials: {},
 
       async authorize(credentials) {
-        const { email, password } = credentials;
+        const { email, password } = credentials as { 
+          email: string; 
+          password: string; 
+        };
 
         try {
           await connectMongoDB();
@@ -27,7 +30,6 @@ export const authOptions = {
 
           if (!passwordMatch) return null;
 
-          // ✅ ตรงนี้ถูกแล้ว
           return {
             id: user._id.toString(),
             email: user.email,
@@ -42,21 +44,20 @@ export const authOptions = {
   ],
 
   session: {
-    strategy: "jwt", // or "database", depending on your setup
+    strategy: "jwt", // ⭐ ไม่ต้องใส่ as const แล้วเพราะมี AuthOptions
   },
 
-  // ⭐⭐⭐ สำคัญมาก
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
-        token.id = user.id; // เก็บ _id ลง token
+        token.id = user.id;
       }
       return token;
     },
 
     async session({ session, token }) {
       if (session.user) {
-        session.user.id = token.id; // ส่งไป client
+        session.user.id = token.id as string;
       }
       return session;
     },
