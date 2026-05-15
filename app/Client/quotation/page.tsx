@@ -1,74 +1,175 @@
 "use client";
-import React, { JSX, useEffect, useRef, useState } from "react";
+import React, { JSX, useCallback, useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 
-// ─── Types ──────────────────────────────────────────────────────────────────
+// ─── Types ───────────────────────────────────────────────────────────────────
 type UploadStatus = "idle" | "uploading" | "success" | "error";
+type QuotationStatus = "sent" | "reviewing" | "completed";
+type View = "upload" | "history";
 
-// ─── Constants ───────────────────────────────────────────────────────────────
+interface Quotation {
+  _id: string;
+  filename: string;
+  status: QuotationStatus;
+  createdAt: string;
+}
+
+// ─── Constants ────────────────────────────────────────────────────────────────
 const N8N_WEBHOOK_URL =
   process.env.NEXT_PUBLIC_N8N_WEBHOOK_URL ??
   "http://localhost:5678/webhook-test/pdf-test";
 
-// ─── Sub-components ──────────────────────────────────────────────────────────
+const STEPS: { key: QuotationStatus; label: string; sublabel: string }[] = [
+  { key: "sent",      label: "ส่งไฟล์แล้ว",        sublabel: "ระบบได้รับเอกสารของคุณแล้ว" },
+  { key: "reviewing", label: "ตรวจสอบ / จัดทำราย", sublabel: "ทีมงานกำลังตรวจสอบเอกสาร" },
+  { key: "completed", label: "ดำเนินการเสร็จสิ้น",  sublabel: "ใบเสนอราคาพร้อมแล้ว" },
+];
 
-function UploadBadge({
-  status,
-  message,
-}: {
-  status: UploadStatus;
-  message: string;
-}) {
-  if (status === "idle") return null;
+const STATUS_ORDER: Record<QuotationStatus, number> = {
+  sent: 0,
+  reviewing: 1,
+  completed: 2,
+};
 
-  const styles: Record<Exclude<UploadStatus, "idle">, string> = {
-    uploading: "alert-info",
-    success: "alert-success",
-    error: "alert-error",
-  };
+// ─── Status Stepper ───────────────────────────────────────────────────────────
+function StatusStepper({ status }: { status: QuotationStatus }) {
+  const current = STATUS_ORDER[status];
 
   return (
-    <div
-      className={`alert ${styles[status as Exclude<UploadStatus, "idle">]} py-2 text-sm animate-pulse`}
-    >
+    <ul className="steps steps-horizontal w-full text-xs">
+      {STEPS.map((step, i) => {
+        const done = i <= current;
+        return (
+          <li
+            key={step.key}
+            className={`step ${done ? "step-primary" : ""}`}
+            data-content={done ? "✓" : String(i + 1)}
+          >
+            <span className={done ? "font-medium" : "text-base-content/40"}>
+              {step.label}
+            </span>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+// ─── Quotation Card ───────────────────────────────────────────────────────────
+function QuotationCard({ q }: { q: Quotation }) {
+  const date = new Date(q.createdAt).toLocaleDateString("th-TH", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+  return (
+    <div className="card bg-base-100 border border-base-300 shadow-sm">
+      <div className="card-body space-y-4">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="font-medium text-sm truncate max-w-70">
+              {q.filename}
+            </p>
+            <p className="text-xs text-base-content/50 mt-0.5">{date}</p>
+          </div>
+          <StatusBadge status={q.status} />
+        </div>
+        <StatusStepper status={q.status} />
+      </div>
+    </div>
+  );
+}
+
+function StatusBadge({ status }: { status: QuotationStatus }) {
+  const map: Record<QuotationStatus, { cls: string; label: string }> = {
+    sent:      { cls: "badge-success",  label: "ส่งแล้ว" },
+    reviewing: { cls: "badge-warning",  label: "กำลังดำเนินการ" },
+    completed: { cls: "badge-primary",  label: "เสร็จสิ้น" },
+  };
+  const { cls, label } = map[status];
+  return <span className={`badge ${cls} badge-sm`}>{label}</span>;
+}
+
+// ─── Upload Badge ─────────────────────────────────────────────────────────────
+function UploadBadge({ status, message }: { status: UploadStatus; message: string }) {
+  if (status === "idle") return null;
+  const styles: Record<Exclude<UploadStatus, "idle">, string> = {
+    uploading: "alert-info",
+    success:   "alert-success",
+    error:     "alert-error",
+  };
+  return (
+    <div className={`alert ${styles[status as Exclude<UploadStatus, "idle">]} py-2 text-sm`}>
       {message}
     </div>
   );
 }
 
-// ─── Main Page ───────────────────────────────────────────────────────────────
+// ─── Main Page ────────────────────────────────────────────────────────────────
 export default function Page(): JSX.Element {
   const { data: session } = useSession();
-
-  // ── PDF / drag-drop state ───────────────────────────────────────
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [isDragging, setIsDragging] = useState(false);
-  const [pdfFile, setPdfFile] = useState<File | null>(null);
-  const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
-  const [fileError, setFileError] = useState<string | null>(null);
 
-  // ── n8n upload state ────────────────────────────────────────────
-  const [uploadStatus, setUploadStatus] = useState<UploadStatus>("idle");
+  const [view, setView] = useState<View>("upload");
+  const [initializing, setInitializing] = useState(true);
+
+  // upload state
+  const [isDragging, setIsDragging]       = useState(false);
+  const [pdfFile, setPdfFile]             = useState<File | null>(null);
+  const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
+  const [fileError, setFileError]         = useState<string | null>(null);
+  const [uploadStatus, setUploadStatus]   = useState<UploadStatus>("idle");
   const [uploadMessage, setUploadMessage] = useState("");
 
-  // ── PDF helpers ─────────────────────────────────────────────────
-  const handlePdfFile = (file: File) => {
-    const isPdf =
-      file.type === "application/pdf" ||
-      file.name.toLowerCase().endsWith(".pdf");
+  // history state
+  const [quotations, setQuotations]   = useState<Quotation[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
 
-    if (!isPdf) {
-      setFileError("รองรับเฉพาะไฟล์ PDF เท่านั้น");
-      return;
+  const userId =
+    (session?.user as any)?.id ??
+    (session as any)?.id ??
+    (session as any)?.sessionId ??
+    "ไม่พบข้อมูล";
+
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+
+  // ── fetch history (also decides initial view) ──────────────────
+  const fetchHistory = useCallback(async (silent = false) => {
+    if (!silent) setHistoryLoading(true);
+    try {
+      const res = await fetch("/api/quotation");
+      const data = await res.json();
+      const list: Quotation[] = data.quotations ?? [];
+      setQuotations(list);
+      setLastUpdated(new Date());
+      if (list.length > 0) setView("history");
+    } finally {
+      if (!silent) setHistoryLoading(false);
+      setInitializing(false);
     }
-    if (file.size > 10 * 1024 * 1024) {
-      setFileError("ไฟล์ต้องมีขนาดไม่เกิน 10MB");
-      return;
-    }
+  }, []);
+
+  // initial load
+  useEffect(() => { fetchHistory(); }, [fetchHistory]);
+
+  // auto-poll every 5 s while on history view
+  useEffect(() => {
+    if (view !== "history") return;
+    const id = setInterval(() => fetchHistory(true), 5000);
+    return () => clearInterval(id);
+  }, [view, fetchHistory]);
+
+  // ── PDF helpers ────────────────────────────────────────────────
+  const handlePdfFile = (file: File) => {
+    const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+    if (!isPdf)             { setFileError("รองรับเฉพาะไฟล์ PDF เท่านั้น"); return; }
+    if (file.size > 10 * 1024 * 1024) { setFileError("ไฟล์ต้องมีขนาดไม่เกิน 10MB"); return; }
 
     setFileError(null);
     if (pdfPreviewUrl) URL.revokeObjectURL(pdfPreviewUrl);
-
     setPdfFile(file);
     setPdfPreviewUrl(URL.createObjectURL(file));
     setUploadStatus("idle");
@@ -93,20 +194,18 @@ export default function Page(): JSX.Element {
   };
 
   useEffect(() => {
-    return () => {
-      if (pdfPreviewUrl) URL.revokeObjectURL(pdfPreviewUrl);
-    };
+    return () => { if (pdfPreviewUrl) URL.revokeObjectURL(pdfPreviewUrl); };
   }, [pdfPreviewUrl]);
 
-  // ── n8n upload ──────────────────────────────────────────────────
-  const handleSendToN8n = async () => {
+  // ── send to n8n + save to DB ────────────────────────────────────
+  const handleSend = async () => {
     if (!pdfFile) {
       setUploadStatus("error");
       setUploadMessage("กรุณาเลือกไฟล์ PDF ก่อน");
       return;
     }
 
-    const userId =
+    const uid =
       (session as any)?.id ??
       (session as any)?.sessionId ??
       (session?.user as any)?.id ??
@@ -114,219 +213,223 @@ export default function Page(): JSX.Element {
 
     const formData = new FormData();
     formData.append("file", pdfFile);
-    formData.append("userId", userId);
+    formData.append("userId", uid);
 
     setUploadStatus("uploading");
     setUploadMessage("กำลังส่งข้อมูลไปยัง n8n…");
 
     try {
-      const res = await fetch(N8N_WEBHOOK_URL, {
+      const res = await fetch(N8N_WEBHOOK_URL, { method: "POST", body: formData });
+      if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+
+      // save quotation record to DB
+      const saveRes = await fetch("/api/quotation", {
         method: "POST",
-        body: formData,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ filename: pdfFile.name }),
       });
+      const saveData = await saveRes.json();
 
-      if (!res.ok) {
-        throw new Error(`HTTP ${res.status}: ${res.statusText}`);
-      }
-
-      const json = await res.json();
+      // optimistic: show the card immediately without waiting for the next poll
+      const optimistic: Quotation = saveData.quotation ?? {
+        _id: `temp-${Date.now()}`,
+        filename: pdfFile.name,
+        status: "sent",
+        createdAt: new Date().toISOString(),
+      };
+      setQuotations([optimistic]);
       setUploadStatus("success");
-      setUploadMessage(
-        `✅ ส่งสำเร็จ! ตอบกลับจาก n8n: ${JSON.stringify(json)}`
-      );
+      setUploadMessage("ส่งสำเร็จ!");
+
+      resetPdf();
+      setView("history");
     } catch (err) {
       setUploadStatus("error");
-      setUploadMessage(`❌ เกิดข้อผิดพลาด: ${(err as Error).message}`);
+      setUploadMessage(`เกิดข้อผิดพลาด: ${(err as Error).message}`);
     }
   };
 
-  // ── Derived ─────────────────────────────────────────────────────
-  const userId =
-    (session?.user as any)?.id ??
-    (session as any)?.id ??
-    (session as any)?.sessionId ??
-    "ไม่พบข้อมูล";
+  // ─── Render ───────────────────────────────────────────────────────────────
+  if (initializing) {
+    return (
+      <main className="min-h-screen bg-base-200 flex items-center justify-center">
+        <span className="loading loading-spinner loading-lg" />
+      </main>
+    );
+  }
 
-  // ─── Render ──────────────────────────────────────────────────────────────
   return (
-  <main className="min-h-screen bg-base-200 px-4 md:px-8 py-8">
-    <div className="max-w-4xl mx-auto space-y-8">
+    <main className="min-h-screen bg-base-200 px-4 md:px-8 py-8">
+      <div className="max-w-4xl mx-auto space-y-8">
 
-      {/* ── Header ───────────────────────────── */}
-      <header className="space-y-3">
-        <p className="text-xs tracking-widest uppercase text-primary/60 font-medium">
-          Quotation Request System
-        </p>
+        {/* ── Header ───────────────────────────── */}
+        <header className="space-y-3">
+          <p className="text-xs tracking-widest uppercase text-primary/60 font-medium">
+            Quotation Request System
+          </p>
+          <h1 className="text-3xl md:text-4xl font-semibold tracking-tight">
+            {view === "upload" ? "ส่งเอกสารเพื่อขอใบเสนอราคา" : "สถานะการดำเนินการ"}
+          </h1>
+          <p className="text-base text-base-content/60 leading-relaxed max-w-2xl">
+            {view === "upload"
+              ? "อัปโหลดเอกสารรายการสินค้า เช่น ใบสั่งซื้อ หรือ BOQ ระบบจะช่วยอ่านข้อมูลและแปลงเป็นรายการพร้อมใช้งาน"
+              : "ติดตามสถานะเอกสารที่ส่งเข้ามาทั้งหมดของคุณ"}
+          </p>
+        </header>
 
-        <h1 className="text-3xl md:text-4xl font-semibold tracking-tight">
-          ส่งเอกสารเพื่อขอใบเสนอราคา
-        </h1>
-
-        <p className="text-base text-base-content/60 leading-relaxed max-w-2xl">
-          อัปโหลดเอกสารรายการสินค้า เช่น ใบสั่งซื้อ หรือ BOQ ระบบจะช่วยอ่านข้อมูล
-          และแปลงเป็นรายการพร้อมใช้งาน เพื่อให้ทีมสามารถจัดทำใบเสนอราคาได้รวดเร็วขึ้น
-        </p>
-      </header>
-
-      {/* ── Upload Card ───────────────────────────── */}
-      <section className="card bg-base-100 shadow-lg border border-base-300">
-        <div className="card-body space-y-6">
-
-          <div className="flex items-center justify-between">
-            <p className="text-sm font-medium text-base-content/70">
-              อัปโหลดเอกสาร
-            </p>
-            <div className="badge badge-outline text-xs">
-              PDF only
-            </div>
-          </div>
-
-          {/* Dropzone */}
-          {!pdfPreviewUrl ? (
-            <div
-              onClick={() => fileInputRef.current?.click()}
-              onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-              onDragLeave={() => setIsDragging(false)}
-              onDrop={handleDrop}
-              className={`
-                flex flex-col items-center justify-center gap-4
-                h-64 rounded-2xl border-2 border-dashed cursor-pointer
-                transition-all duration-200
-                ${isDragging
-                  ? "border-primary bg-primary/10 scale-[1.01]"
-                  : "border-base-300 hover:border-primary/40 hover:bg-base-200"
-                }
-              `}
+        {/* ── View Toggle — only show tabs when user has no submission yet ── */}
+        {quotations.length === 0 && !historyLoading && (
+          <div className="tabs tabs-boxed w-fit">
+            <button
+              className={`tab ${view === "upload" ? "tab-active" : ""}`}
+              onClick={() => setView("upload")}
             >
-              <div className="text-center space-y-1">
-                <p className="text-base font-medium">
-                  ลากไฟล์มาวาง หรือคลิกเพื่ออัปโหลด
-                </p>
-                <p className="text-sm text-base-content/50">
-                  รองรับเฉพาะ PDF • ขนาดไม่เกิน 10 MB
-                </p>
-              </div>
+              อัปโหลดเอกสาร
+            </button>
+            <button
+              className={`tab ${view === "history" ? "tab-active" : ""}`}
+              onClick={() => setView("history")}
+            >
+              ประวัติการส่ง
+            </button>
+          </div>
+        )}
 
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="application/pdf"
-                hidden
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) handlePdfFile(file);
-                }}
-              />
-            </div>
-          ) : (
-            <div className="space-y-4">
+        {/* ── Upload View ───────────────────────── */}
+        {view === "upload" && (
+          <>
+            <section className="card bg-base-100 shadow-lg border border-base-300">
+              <div className="card-body space-y-6">
 
-              {/* File info */}
-              <div className="flex items-center justify-between bg-base-200 rounded-xl px-4 py-3">
-                <div className="flex items-center gap-3">
-                  <div className="badge badge-neutral">PDF</div>
-                  <span className="text-sm truncate max-w-[260px]">
-                    {pdfFile?.name}
-                  </span>
-                  <span className="text-xs text-base-content/50">
-                    {((pdfFile?.size ?? 0) / 1024 / 1024).toFixed(2)} MB
-                  </span>
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-medium text-base-content/70">อัปโหลดเอกสาร</p>
+                  <div className="badge badge-outline text-xs">PDF only</div>
+                </div>
+
+                {!pdfPreviewUrl ? (
+                  <div
+                    onClick={() => fileInputRef.current?.click()}
+                    onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+                    onDragLeave={() => setIsDragging(false)}
+                    onDrop={handleDrop}
+                    className={`
+                      flex flex-col items-center justify-center gap-4
+                      h-64 rounded-2xl border-2 border-dashed cursor-pointer
+                      transition-all duration-200
+                      ${isDragging
+                        ? "border-primary bg-primary/10 scale-[1.01]"
+                        : "border-base-300 hover:border-primary/40 hover:bg-base-200"
+                      }
+                    `}
+                  >
+                    <div className="text-center space-y-1">
+                      <p className="text-base font-medium">ลากไฟล์มาวาง หรือคลิกเพื่ออัปโหลด</p>
+                      <p className="text-sm text-base-content/50">รองรับเฉพาะ PDF • ขนาดไม่เกิน 10 MB</p>
+                    </div>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="application/pdf"
+                      hidden
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) handlePdfFile(file);
+                      }}
+                    />
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between bg-base-200 rounded-xl px-4 py-3">
+                      <div className="flex items-center gap-3">
+                        <div className="badge badge-neutral">PDF</div>
+                        <span className="text-sm truncate max-w-65">{pdfFile?.name}</span>
+                        <span className="text-xs text-base-content/50">
+                          {((pdfFile?.size ?? 0) / 1024 / 1024).toFixed(2)} MB
+                        </span>
+                      </div>
+                      <button onClick={resetPdf} className="btn btn-ghost btn-xs">เปลี่ยนไฟล์</button>
+                    </div>
+                    <div className="rounded-xl overflow-hidden border border-base-300 h-130">
+                      <iframe src={pdfPreviewUrl} className="w-full h-full" title="PDF Preview" />
+                    </div>
+                  </div>
+                )}
+
+                {fileError && <div className="alert alert-error text-sm">{fileError}</div>}
+
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-base-content/50">ผู้ส่ง</span>
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-success" />
+                    <code className="text-xs bg-base-200 px-2 py-1 rounded">{userId}</code>
+                  </div>
                 </div>
 
                 <button
-                  onClick={resetPdf}
-                  className="btn btn-ghost btn-xs"
+                  onClick={handleSend}
+                  disabled={!pdfFile || uploadStatus === "uploading"}
+                  className="btn btn-primary w-full text-base font-medium"
                 >
-                  เปลี่ยนไฟล์
+                  {uploadStatus === "uploading" ? (
+                    <><span className="loading loading-spinner loading-sm" />กำลังส่งเอกสาร...</>
+                  ) : (
+                    "ส่งเอกสารเพื่อออกใบเสนอราคา"
+                  )}
                 </button>
+
+                <UploadBadge status={uploadStatus} message={uploadMessage} />
               </div>
+            </section>
 
-              {/* Preview */}
-              <div className="rounded-xl overflow-hidden border border-base-300 h-[520px]">
-                <iframe
-                  src={pdfPreviewUrl}
-                  className="w-full h-full"
-                  title="PDF Preview"
-                />
+            <section className="grid md:grid-cols-3 gap-4">
+              {[
+                { title: "อัปโหลดเอกสาร",   desc: "แนบไฟล์รายการสินค้า หรือใบสั่งซื้อ" },
+                { title: "ระบบประมวลผล",    desc: "AI อ่านและจัดโครงสร้างข้อมูลอัตโนมัติ" },
+                { title: "ออกใบเสนอราคา",   desc: "ทีมงานนำข้อมูลไปจัดทำราคาได้ทันที" },
+              ].map((s, i) => (
+                <div key={i} className="card bg-base-100 border border-base-300 shadow-sm">
+                  <div className="card-body space-y-2">
+                    <div className="text-sm text-primary font-semibold">
+                      STEP {String(i + 1).padStart(2, "0")}
+                    </div>
+                    <p className="font-medium">{s.title}</p>
+                    <p className="text-sm text-base-content/60">{s.desc}</p>
+                  </div>
+                </div>
+              ))}
+            </section>
+          </>
+        )}
+
+        {/* ── History View ──────────────────────── */}
+        {view === "history" && (
+          <section className="space-y-4">
+            {historyLoading ? (
+              <div className="flex justify-center py-16">
+                <span className="loading loading-spinner loading-lg" />
               </div>
-            </div>
-          )}
-
-          {/* Error */}
-          {fileError && (
-            <div className="alert alert-error text-sm">
-              {fileError}
-            </div>
-          )}
-
-          {/* User */}
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-base-content/50">ผู้ส่ง</span>
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-success" />
-              <code className="text-xs bg-base-200 px-2 py-1 rounded">
-                {userId}
-              </code>
-            </div>
-          </div>
-
-          {/* Submit */}
-          <button
-            onClick={handleSendToN8n}
-            disabled={!pdfFile || uploadStatus === "uploading"}
-            className="btn btn-primary w-full text-base font-medium"
-          >
-            {uploadStatus === "uploading" ? (
-              <>
-                <span className="loading loading-spinner loading-sm" />
-                กำลังส่งเอกสาร...
-              </>
+            ) : quotations.length === 0 ? (
+              <div className="card bg-base-100 border border-base-300">
+                <div className="card-body items-center text-center py-16 space-y-2">
+                  <p className="font-medium">ยังไม่มีการส่งเอกสาร</p>
+                  <p className="text-sm text-base-content/50">
+                    กลับไปที่แท็บ "อัปโหลดเอกสาร" เพื่อเริ่มต้น
+                  </p>
+                </div>
+              </div>
             ) : (
-              "ส่งเอกสารเพื่อออกใบเสนอราคา"
+              quotations.map((q) => <QuotationCard key={q._id} q={q} />)
             )}
-          </button>
 
-          <UploadBadge status={uploadStatus} message={uploadMessage} />
+            <p className="text-center text-xs text-base-content/40">
+              {lastUpdated
+                ? `อัปเดตอัตโนมัติทุก 5 วินาที • ล่าสุด ${lastUpdated.toLocaleTimeString("th-TH")}`
+                : "กำลังโหลด..."}
+            </p>
+          </section>
+        )}
 
-        </div>
-      </section>
-
-      {/* ── Steps ───────────────────────────── */}
-      <section className="grid md:grid-cols-3 gap-4">
-
-        {[
-          {
-            title: "อัปโหลดเอกสาร",
-            desc: "แนบไฟล์รายการสินค้า หรือใบสั่งซื้อ",
-          },
-          {
-            title: "ระบบประมวลผล",
-            desc: "AI อ่านและจัดโครงสร้างข้อมูลอัตโนมัติ",
-          },
-          {
-            title: "ออกใบเสนอราคา",
-            desc: "ทีมงานนำข้อมูลไปจัดทำราคาได้ทันที",
-          },
-        ].map((s, i) => (
-          <div
-            key={i}
-            className="card bg-base-100 border border-base-300 shadow-sm"
-          >
-            <div className="card-body space-y-2">
-              <div className="text-sm text-primary font-semibold">
-                STEP {String(i + 1).padStart(2, "0")}
-              </div>
-              <p className="font-medium">{s.title}</p>
-              <p className="text-sm text-base-content/60">
-                {s.desc}
-              </p>
-            </div>
-          </div>
-        ))}
-
-      </section>
-
-    </div>
-  </main>
-);
+      </div>
+    </main>
+  );
 }
