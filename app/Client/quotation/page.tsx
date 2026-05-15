@@ -12,6 +12,8 @@ interface Quotation {
   filename: string;
   status: QuotationStatus;
   createdAt: string;
+  pdfId:   string | null;
+  pdfPath: string | null;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -216,17 +218,31 @@ export default function Page(): JSX.Element {
     formData.append("userId", uid);
 
     setUploadStatus("uploading");
-    setUploadMessage("กำลังส่งข้อมูลไปยัง n8n…");
+    setUploadMessage("กำลังบันทึกไฟล์…");
 
     try {
+      // 1. save PDF to disk + MongoDB first to get the stored path
+      const pdfFormData = new FormData();
+      pdfFormData.append("file", pdfFile);
+      const pdfRes = await fetch("/api/pdf", { method: "POST", body: pdfFormData });
+      const pdfData = pdfRes.ok ? await pdfRes.json() : {};
+
+      // 2. send to n8n with file + userId + stored filename/path
+      setUploadMessage("กำลังส่งข้อมูลไปยัง n8n…");
+      const storedFilename = (pdfData.pdfPath ?? pdfFile.name).replace(/^\/PDF\//, "");
+      formData.append("filename", storedFilename);
       const res = await fetch(N8N_WEBHOOK_URL, { method: "POST", body: formData });
       if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
 
-      // save quotation record to DB
+      // 3. save quotation record with PDF reference
       const saveRes = await fetch("/api/quotation", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ filename: pdfFile.name }),
+        body: JSON.stringify({
+          filename: pdfFile.name,
+          pdfId:   pdfData.pdfId   ?? null,
+          pdfPath: pdfData.pdfPath ?? null,
+        }),
       });
       const saveData = await saveRes.json();
 

@@ -41,7 +41,7 @@ export async function POST(req) {
 
   await connectMongoDB();
 
-  await PDF.create({
+  const pdf = await PDF.create({
     userId: session.user.id,
     filename,
     path: `/PDF/${filename}`,
@@ -49,5 +49,7 @@ export async function POST(req) {
 
   return NextResponse.json({
     message: "Upload success",
+    pdfId: pdf._id.toString(),
+    pdfPath: `/PDF/${filename}`,
   });
 }

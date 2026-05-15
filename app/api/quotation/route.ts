@@ -10,7 +10,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
   }
 
-  const { filename } = await req.json();
+  const { filename, pdfId, pdfPath } = await req.json();
   if (!filename) {
     return NextResponse.json({ message: "filename required" }, { status: 400 });
   }
@@ -18,7 +18,7 @@ export async function POST(req: Request) {
   await connectMongoDB();
 
   const userId = (session.user as any)?.id ?? (session as any)?.id ?? "unknown";
-  const quotation = await Quotation.create({ userId, filename, status: "sent" });
+  const quotation = await Quotation.create({ userId, filename, pdfId, pdfPath, status: "sent" });
 
   return NextResponse.json({ quotation }, { status: 201 });
 }
