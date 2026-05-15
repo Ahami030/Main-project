@@ -15,21 +15,30 @@ export async function GET(req) {
 
   const { searchParams } = new URL(req.url);
   const id = searchParams.get("id");
-
-  if (!id) {
-    return new NextResponse("Missing id", { status: 400 });
-  }
+  const filenameParam = searchParams.get("filename");
 
   await connectMongoDB();
 
-  // 🔐 เช็คว่าไฟล์นี้เป็นของ user จริงไหม
-  const pdf = await PDF.findOne({
-    _id: id,
-    userId: session.user.id,
-  });
+  let pdf = null;
+
+  // 🔥 MODE 1: ใช้ id (เหมือนเดิม)
+  if (id) {
+    pdf = await PDF.findOne({
+      _id: id,
+      userId: session.user.id,
+    });
+  }
+
+  // 🔥 MODE 2: ใช้ filename (เพิ่มใหม่)
+  if (!pdf && filenameParam) {
+    pdf = await PDF.findOne({
+      filename: filenameParam,
+      userId: session.user.id,
+    });
+  }
 
   if (!pdf) {
-    return new NextResponse("Forbidden", { status: 403 });
+    return new NextResponse("Forbidden or Not Found", { status: 403 });
   }
 
   const filePath = path.join(process.cwd(), "PDF", pdf.filename);
@@ -43,7 +52,6 @@ export async function GET(req) {
   return new NextResponse(fileBuffer, {
     headers: {
       "Content-Type": "application/pdf",
-      // ✅ ใหม่ - encode ด้วย encodeURIComponent
       "Content-Disposition": `inline; filename*=UTF-8''${encodeURIComponent(pdf.filename)}`,
     },
   });
