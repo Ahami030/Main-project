@@ -117,6 +117,15 @@ export default function Page(): JSX.Element {
 
   const [view, setView] = useState<View>("upload");
   const [initializing, setInitializing] = useState(true);
+  const [visible, setVisible] = useState(false);
+
+  const switchView = useCallback((next: View) => {
+    setVisible(false);
+    setTimeout(() => {
+      setView(next);
+      setVisible(true);
+    }, 220);
+  }, []);
 
   // upload state
   const [isDragging, setIsDragging]       = useState(false);
@@ -151,6 +160,7 @@ export default function Page(): JSX.Element {
     } finally {
       if (!silent) setHistoryLoading(false);
       setInitializing(false);
+      setVisible(true);
     }
   }, []);
 
@@ -258,7 +268,7 @@ export default function Page(): JSX.Element {
       setUploadMessage("ส่งสำเร็จ!");
 
       resetPdf();
-      setView("history");
+      switchView("history");
     } catch (err) {
       setUploadStatus("error");
       setUploadMessage(`เกิดข้อผิดพลาด: ${(err as Error).message}`);
@@ -298,18 +308,21 @@ export default function Page(): JSX.Element {
           <div className="tabs tabs-boxed w-fit">
             <button
               className={`tab ${view === "upload" ? "tab-active" : ""}`}
-              onClick={() => setView("upload")}
+              onClick={() => switchView("upload")}
             >
               อัปโหลดเอกสาร
             </button>
             <button
               className={`tab ${view === "history" ? "tab-active" : ""}`}
-              onClick={() => setView("history")}
+              onClick={() => switchView("history")}
             >
               ประวัติการส่ง
             </button>
           </div>
         )}
+
+        {/* ── Animated view container ─────────────── */}
+        <div className={`transition-all duration-200 ease-out ${visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-3"}`}>
 
         {/* ── Upload View ───────────────────────── */}
         {view === "upload" && (
@@ -444,6 +457,8 @@ export default function Page(): JSX.Element {
             </p>
           </section>
         )}
+
+        </div>{/* end animated container */}
 
       </div>
     </main>
