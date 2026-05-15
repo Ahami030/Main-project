@@ -36,12 +36,14 @@ export default function EditPage() {
   const [chats, setChats] = useState<ChatMsg[]>([]);
   const [chatUsers, setChatUsers] = useState<ChatUser[]>([]);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
-  const [loadingUsers, setLoadingUsers] = useState(true);
-  const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
+  const [, setLoadingUsers] = useState(true);
   const [showNewMsgBtn, setShowNewMsgBtn] = useState(false);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const justSwitchedUser = useRef(false);
   const switchTimeRef = useRef<number>(0);
+  // Refs avoid stale-closure bugs inside interval callbacks
+  const shouldAutoScrollRef = useRef(true);
+  const prevChatsLengthRef = useRef(0);
 
   // ── Fetch RFQ ──────────────────────────────────────────────
   useEffect(() => {
@@ -53,6 +55,7 @@ export default function EditPage() {
         const data = await res.json();
         if (!data.line_items) data.line_items = [];
         setForm(data);
+        if (data.USER_ID) setSelectedUserId(data.USER_ID);
       } catch (err: any) {
         setError(err.message);
       } finally {
@@ -74,7 +77,6 @@ export default function EditPage() {
         const res = await fetch("/api/chat/users", { cache: "no-store" });
         const data = await res.json();
         setChatUsers(data);
-        if (data.length > 0 && !selectedUserId) setSelectedUserId(data[0].userId);
       } catch {}
       finally { setLoadingUsers(false); }
     };
@@ -90,21 +92,25 @@ export default function EditPage() {
 
   // Reset on user switch
   useEffect(() => {
-    setShouldAutoScroll(true);
+    shouldAutoScrollRef.current = true;
+    prevChatsLengthRef.current = 0;
     setShowNewMsgBtn(false);
     setChats([]);
     justSwitchedUser.current = true;
     switchTimeRef.current = Date.now();
   }, [selectedUserId]);
 
-  // ── Fetch chat messages (poll 1s) ──────────────────────────
+  // ── Fetch chat messages (poll 2s) ──────────────────────────
+  // Returns `prev` unchanged when nothing new arrived → React skips re-render → no jitter
   const loadChats = async () => {
     if (!selectedUserId) return;
     try {
       const res = await fetch(`/api/chat/${selectedUserId}`, { cache: "no-store" });
-      const data = await res.json();
+      const data: ChatMsg[] = await res.json();
       setChats((prev) => {
-        if (data.length > prev.length && !shouldAutoScroll) setShowNewMsgBtn(true);
+        const lastIdSame = data[data.length - 1]?._id === prev[prev.length - 1]?._id;
+        if (data.length === prev.length && lastIdSame) return prev; // identical — skip re-render
+        if (data.length > prev.length && !shouldAutoScrollRef.current) setShowNewMsgBtn(true);
         return data;
       });
     } catch {}
@@ -113,32 +119,38 @@ export default function EditPage() {
   useEffect(() => {
     if (!selectedUserId) return;
     loadChats();
-    const iv = setInterval(loadChats, 1000);
+    const iv = setInterval(loadChats, 2000);
     return () => clearInterval(iv);
   }, [selectedUserId]);
 
-  // Auto-scroll
+  // Auto-scroll — only fires when message count actually increases
   useEffect(() => {
-    if (!shouldAutoScroll) return;
+    const newCount = chats.length;
+    const isNewMessages = newCount > prevChatsLengthRef.current;
+    prevChatsLengthRef.current = newCount;
+
+    if (!isNewMessages && !justSwitchedUser.current) return;
+    if (!shouldAutoScrollRef.current) return;
+
     const el = chatContainerRef.current;
     if (!el) return;
     const timeSince = Date.now() - switchTimeRef.current;
     el.scrollTo({ top: el.scrollHeight, behavior: justSwitchedUser.current || timeSince < 500 ? "instant" : "smooth" });
     justSwitchedUser.current = false;
-  }, [chats, shouldAutoScroll]);
+  }, [chats]);
 
   const handleChatScroll = () => {
     const el = chatContainerRef.current;
     if (!el) return;
     const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 50;
-    setShouldAutoScroll(atBottom);
+    shouldAutoScrollRef.current = atBottom; // update ref only — no re-render
     if (atBottom) setShowNewMsgBtn(false);
   };
 
   const scrollToBottom = () => {
     chatContainerRef.current?.scrollTo({ top: chatContainerRef.current.scrollHeight, behavior: "smooth" });
     setShowNewMsgBtn(false);
-    setShouldAutoScroll(true);
+    shouldAutoScrollRef.current = true;
   };
 
   const sendChatMessage = async () => {
@@ -150,7 +162,7 @@ export default function EditPage() {
         body: JSON.stringify({ userId: selectedUserId, senderRole: "admin", message: chatMessage }),
       });
       setChatMessage("");
-      setShouldAutoScroll(true);
+      shouldAutoScrollRef.current = true;
       setShowNewMsgBtn(false);
       loadChats();
     } catch {}
@@ -355,8 +367,9 @@ export default function EditPage() {
     <div className={`bg-base-100 rounded-2xl border border-base-300 flex flex-col overflow-hidden ${className}`}>
 
       {/* Header + user selector */}
-      <div className="flex items-center justify-between px-4 pt-4 pb-3 border-b border-base-200 shrink-0">
-        <div className="flex items-center gap-2">
+      <div className="flex flex-col gap-2 px-4 pt-4 pb-3 border-b border-base-200 shrink-0">
+        {/* Top row: label + live badge */}
+        <div className="flex items-center justify-between">
           <span className="text-[10px] font-semibold tracking-[0.15em] uppercase text-base-content/40">Messages</span>
           {selectedUserId && (
             <div className="flex items-center gap-1 px-1.5 py-0.5 bg-success/10 rounded-md">
@@ -366,26 +379,36 @@ export default function EditPage() {
           )}
         </div>
 
-        {/* User selector */}
-        {loadingUsers ? (
-          <div className="skeleton h-7 w-32 rounded-lg" />
-        ) : chatUsers.length === 0 ? (
-          <span className="text-[10px] text-base-content/30">No users</span>
-        ) : (
-          <div className="relative">
-            <select
-              className="select select-bordered select-xs h-7 min-h-0 rounded-lg pr-7 pl-2 text-xs bg-base-200 border-base-300 focus:border-primary max-w-45"
-              value={selectedUserId || ""}
-              onChange={(e) => setSelectedUserId(e.target.value)}
-            >
-              {chatUsers.map((u) => (
-                <option key={u.userId} value={u.userId}>
-                  {u.user?.name || u.user?.email || "Unknown"}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
+        {/* User pill — derived from RFQ's USER_ID */}
+        {selectedUserId && (() => {
+          const linked = chatUsers.find((u) => u.userId === selectedUserId);
+          const displayName = linked?.user?.name || linked?.user?.email || selectedUserId;
+          return (
+            <div className="flex items-center gap-2 px-2.5 py-1.5 bg-primary/8 border border-primary/20 rounded-xl">
+              <div className="w-5 h-5 rounded-full bg-primary/15 flex items-center justify-center shrink-0">
+                <svg className="w-3 h-3 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
+              </div>
+              <span className="text-xs font-semibold text-primary truncate flex-1">{displayName}</span>
+              {/* Switch user dropdown — only if there are other users */}
+              {chatUsers.length > 1 && (
+                <select
+                  className="select select-xs h-6 min-h-0 rounded-lg border-0 bg-transparent text-primary text-[10px] font-medium pr-5 pl-0 w-auto cursor-pointer focus:outline-none"
+                  value={selectedUserId}
+                  onChange={(e) => setSelectedUserId(e.target.value)}
+                  title="Switch user"
+                >
+                  {chatUsers.map((u) => (
+                    <option key={u.userId} value={u.userId}>
+                      {u.user?.name || u.user?.email || u.userId}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+          );
+        })()}
       </div>
 
       {/* Messages area */}
