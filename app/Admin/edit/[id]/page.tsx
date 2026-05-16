@@ -17,6 +17,170 @@ type ChatUser = {
   latestMessageTime: string;
 };
 
+const fmtTime = (iso: string) =>
+  new Date(iso).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" });
+
+type ChatPanelProps = {
+  className?: string;
+  selectedUserId: string | null;
+  chatUsers: ChatUser[];
+  setSelectedUserId: (id: string) => void;
+  chats: ChatMsg[];
+  chatContainerRef: React.RefObject<HTMLDivElement | null>;
+  handleChatScroll: () => void;
+  showNewMsgBtn: boolean;
+  scrollToBottom: () => void;
+  chatMessage: string;
+  setChatMessage: (v: string) => void;
+  sendChatMessage: () => void;
+};
+
+function ChatPanel({
+  className = "",
+  selectedUserId,
+  chatUsers,
+  setSelectedUserId,
+  chats,
+  chatContainerRef,
+  handleChatScroll,
+  showNewMsgBtn,
+  scrollToBottom,
+  chatMessage,
+  setChatMessage,
+  sendChatMessage,
+}: ChatPanelProps) {
+  return (
+    <div className={`bg-base-100 rounded-2xl border border-base-300 flex flex-col overflow-hidden ${className}`}>
+
+      {/* Header + user selector */}
+      <div className="flex flex-col gap-2 px-4 pt-4 pb-3 border-b border-base-200 shrink-0">
+        {/* Top row: label + live badge */}
+        <div className="flex items-center justify-between">
+          <span className="text-[10px] font-semibold tracking-[0.15em] uppercase text-base-content/40">Messages</span>
+          {selectedUserId && (
+            <div className="flex items-center gap-1 px-1.5 py-0.5 bg-success/10 rounded-md">
+              <div className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
+              <span className="text-[10px] text-success font-medium">Live</span>
+            </div>
+          )}
+        </div>
+
+        {/* User pill — derived from RFQ's USER_ID */}
+        {selectedUserId && (() => {
+          const linked = chatUsers.find((u) => u.userId === selectedUserId);
+          const displayName = linked?.user?.name || linked?.user?.email || selectedUserId;
+          return (
+            <div className="flex items-center gap-2 px-2.5 py-1.5 bg-primary/8 border border-primary/20 rounded-xl">
+              <div className="w-5 h-5 rounded-full bg-primary/15 flex items-center justify-center shrink-0">
+                <svg className="w-3 h-3 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
+              </div>
+              <span className="text-xs font-semibold text-primary truncate flex-1">{displayName}</span>
+              {chatUsers.length > 1 && (
+                <select
+                  className="select select-xs h-6 min-h-0 rounded-lg border-0 bg-transparent text-primary text-[10px] font-medium pr-5 pl-0 w-auto cursor-pointer focus:outline-none"
+                  value={selectedUserId}
+                  onChange={(e) => setSelectedUserId(e.target.value)}
+                  title="Switch user"
+                >
+                  {chatUsers.map((u) => (
+                    <option key={u.userId} value={u.userId}>
+                      {u.user?.name || u.user?.email || u.userId}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+          );
+        })()}
+      </div>
+
+      {/* Messages area */}
+      {!selectedUserId ? (
+        <div className="flex-1 flex flex-col items-center justify-center gap-2 text-base-content/25">
+          <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+          </svg>
+          <span className="text-xs">Select a user to chat</span>
+        </div>
+      ) : (
+        <>
+          {/* Messages */}
+          <div
+            ref={chatContainerRef}
+            onScroll={handleChatScroll}
+            className="flex-1 overflow-y-auto px-4 py-3 flex flex-col gap-2 min-h-0"
+          >
+            {chats.length === 0 ? (
+              <div className="flex-1 flex flex-col items-center justify-center gap-1.5 text-base-content/25 py-8">
+                <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                </svg>
+                <span className="text-xs">No messages yet</span>
+              </div>
+            ) : (
+              chats.map((chat) => {
+                const isAdmin = chat.senderRole === "admin";
+                return (
+                  <div key={chat._id} className={`flex ${isAdmin ? "justify-end" : "justify-start"}`}>
+                    <div className={`max-w-[82%] flex flex-col gap-0.5 ${isAdmin ? "items-end" : "items-start"}`}>
+                      <div className={`px-3 py-2 rounded-2xl text-xs leading-relaxed ${
+                        isAdmin
+                          ? "bg-primary text-primary-content rounded-tr-sm"
+                          : "bg-base-200 text-base-content/80 rounded-tl-sm"
+                      }`}>
+                        {chat.message}
+                      </div>
+                      <span className="text-[10px] text-base-content/30 px-1">{fmtTime(chat.createdAt)}</span>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+
+            {/* New message button */}
+            {showNewMsgBtn && (
+              <div className="sticky bottom-2 flex justify-center">
+                <button
+                  onClick={scrollToBottom}
+                  className="btn btn-primary btn-xs h-7 min-h-0 rounded-full shadow-lg gap-1 text-xs px-3"
+                >
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                  New message
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Input */}
+          <div className="flex items-center gap-2 px-4 py-3 border-t border-base-200 shrink-0">
+            <input
+              type="text"
+              placeholder="พิมพ์ข้อความ... (Enter ส่ง)"
+              className="input input-bordered input-sm h-8 flex-1 rounded-xl text-xs bg-base-200 border-transparent focus:border-primary focus:bg-base-100 transition-colors"
+              value={chatMessage}
+              onChange={(e) => setChatMessage(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendChatMessage(); } }}
+            />
+            <button
+              className="btn btn-primary btn-sm h-8 min-h-0 rounded-xl px-3"
+              onClick={sendChatMessage}
+              disabled={!chatMessage.trim()}
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+              </svg>
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function EditPage() {
   const { id } = useParams();
   const router = useRouter();
@@ -194,7 +358,6 @@ export default function EditPage() {
   const fmt = (n: number) => new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n || 0);
   const fmtCurrency = (v: number) => (v == null ? "" : fmt(v));
   const parseCurrency = (v: string) => { const n = parseFloat(v.replace(/,/g, "")); return isNaN(n) ? 0 : n; };
-  const fmtTime = (iso: string) => new Date(iso).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" });
 
   const handleChange = (field: string, value: any) => setForm({ ...form, [field]: value });
   const handleLineChange = (i: number, field: string, value: string) => {
@@ -362,139 +525,6 @@ export default function EditPage() {
     </div>
   );
 
-  // ── Real Chat Panel ────────────────────────────────────────
-  const ChatPanel = ({ className = "" }: { className?: string }) => (
-    <div className={`bg-base-100 rounded-2xl border border-base-300 flex flex-col overflow-hidden ${className}`}>
-
-      {/* Header + user selector */}
-      <div className="flex flex-col gap-2 px-4 pt-4 pb-3 border-b border-base-200 shrink-0">
-        {/* Top row: label + live badge */}
-        <div className="flex items-center justify-between">
-          <span className="text-[10px] font-semibold tracking-[0.15em] uppercase text-base-content/40">Messages</span>
-          {selectedUserId && (
-            <div className="flex items-center gap-1 px-1.5 py-0.5 bg-success/10 rounded-md">
-              <div className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
-              <span className="text-[10px] text-success font-medium">Live</span>
-            </div>
-          )}
-        </div>
-
-        {/* User pill — derived from RFQ's USER_ID */}
-        {selectedUserId && (() => {
-          const linked = chatUsers.find((u) => u.userId === selectedUserId);
-          const displayName = linked?.user?.name || linked?.user?.email || selectedUserId;
-          return (
-            <div className="flex items-center gap-2 px-2.5 py-1.5 bg-primary/8 border border-primary/20 rounded-xl">
-              <div className="w-5 h-5 rounded-full bg-primary/15 flex items-center justify-center shrink-0">
-                <svg className="w-3 h-3 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                </svg>
-              </div>
-              <span className="text-xs font-semibold text-primary truncate flex-1">{displayName}</span>
-              {/* Switch user dropdown — only if there are other users */}
-              {chatUsers.length > 1 && (
-                <select
-                  className="select select-xs h-6 min-h-0 rounded-lg border-0 bg-transparent text-primary text-[10px] font-medium pr-5 pl-0 w-auto cursor-pointer focus:outline-none"
-                  value={selectedUserId}
-                  onChange={(e) => setSelectedUserId(e.target.value)}
-                  title="Switch user"
-                >
-                  {chatUsers.map((u) => (
-                    <option key={u.userId} value={u.userId}>
-                      {u.user?.name || u.user?.email || u.userId}
-                    </option>
-                  ))}
-                </select>
-              )}
-            </div>
-          );
-        })()}
-      </div>
-
-      {/* Messages area */}
-      {!selectedUserId ? (
-        <div className="flex-1 flex flex-col items-center justify-center gap-2 text-base-content/25">
-          <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-          </svg>
-          <span className="text-xs">Select a user to chat</span>
-        </div>
-      ) : (
-        <>
-          {/* Messages */}
-          <div
-            ref={chatContainerRef}
-            onScroll={handleChatScroll}
-            className="flex-1 overflow-y-auto px-4 py-3 flex flex-col gap-2 min-h-0"
-          >
-            {chats.length === 0 ? (
-              <div className="flex-1 flex flex-col items-center justify-center gap-1.5 text-base-content/25 py-8">
-                <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                </svg>
-                <span className="text-xs">No messages yet</span>
-              </div>
-            ) : (
-              chats.map((chat) => {
-                const isAdmin = chat.senderRole === "admin";
-                return (
-                  <div key={chat._id} className={`flex ${isAdmin ? "justify-end" : "justify-start"}`}>
-                    <div className={`max-w-[82%] flex flex-col gap-0.5 ${isAdmin ? "items-end" : "items-start"}`}>
-                      <div className={`px-3 py-2 rounded-2xl text-xs leading-relaxed ${
-                        isAdmin
-                          ? "bg-primary text-primary-content rounded-tr-sm"
-                          : "bg-base-200 text-base-content/80 rounded-tl-sm"
-                      }`}>
-                        {chat.message}
-                      </div>
-                      <span className="text-[10px] text-base-content/30 px-1">{fmtTime(chat.createdAt)}</span>
-                    </div>
-                  </div>
-                );
-              })
-            )}
-
-            {/* New message button */}
-            {showNewMsgBtn && (
-              <div className="sticky bottom-2 flex justify-center">
-                <button
-                  onClick={scrollToBottom}
-                  className="btn btn-primary btn-xs h-7 min-h-0 rounded-full shadow-lg gap-1 text-xs px-3"
-                >
-                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                  New message
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* Input */}
-          <div className="flex items-center gap-2 px-4 py-3 border-t border-base-200 shrink-0">
-            <input
-              type="text"
-              placeholder="พิมพ์ข้อความ... (Enter ส่ง)"
-              className="input input-bordered input-sm h-8 flex-1 rounded-xl text-xs bg-base-200 border-transparent focus:border-primary focus:bg-base-100 transition-colors"
-              value={chatMessage}
-              onChange={(e) => setChatMessage(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendChatMessage(); } }}
-            />
-            <button
-              className="btn btn-primary btn-sm h-8 min-h-0 rounded-xl px-3"
-              onClick={sendChatMessage}
-              disabled={!chatMessage.trim()}
-            >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-              </svg>
-            </button>
-          </div>
-        </>
-      )}
-    </div>
-  );
-
   // ── Tab config ─────────────────────────────────────────────
   const tabs = [
     { key: "pdf" as const, label: "PDF", icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg> },
@@ -530,7 +560,22 @@ export default function EditPage() {
         <div className="flex-1 overflow-hidden p-3">
           {mobileTab === "pdf" && <PdfPanel className="h-full" />}
           {mobileTab === "edit" && <div className="h-full overflow-auto"><EditPanel className="min-h-full" /></div>}
-          {mobileTab === "chat" && <ChatPanel className="h-full" />}
+          {mobileTab === "chat" && (
+            <ChatPanel
+              className="h-full"
+              selectedUserId={selectedUserId}
+              chatUsers={chatUsers}
+              setSelectedUserId={setSelectedUserId}
+              chats={chats}
+              chatContainerRef={chatContainerRef}
+              handleChatScroll={handleChatScroll}
+              showNewMsgBtn={showNewMsgBtn}
+              scrollToBottom={scrollToBottom}
+              chatMessage={chatMessage}
+              setChatMessage={setChatMessage}
+              sendChatMessage={sendChatMessage}
+            />
+          )}
         </div>
       </div>
 
@@ -670,7 +715,20 @@ export default function EditPage() {
           </div>
 
           {/* Live Chat */}
-          <ChatPanel className="min-h-0" />
+          <ChatPanel
+            className="min-h-0"
+            selectedUserId={selectedUserId}
+            chatUsers={chatUsers}
+            setSelectedUserId={setSelectedUserId}
+            chats={chats}
+            chatContainerRef={chatContainerRef}
+            handleChatScroll={handleChatScroll}
+            showNewMsgBtn={showNewMsgBtn}
+            scrollToBottom={scrollToBottom}
+            chatMessage={chatMessage}
+            setChatMessage={setChatMessage}
+            sendChatMessage={sendChatMessage}
+          />
         </div>
       </div>
     </>
