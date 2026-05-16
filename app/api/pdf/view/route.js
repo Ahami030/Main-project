@@ -21,20 +21,14 @@ export async function GET(req) {
 
   let pdf = null;
 
-  // 🔥 MODE 1: ใช้ id (เหมือนเดิม)
+  const isAdmin = session.user.role === "admin";
+
   if (id) {
-    pdf = await PDF.findOne({
-      _id: id,
-      userId: session.user.id,
-    });
+    pdf = await PDF.findOne(isAdmin ? { _id: id } : { _id: id, userId: session.user.id });
   }
 
-  // 🔥 MODE 2: ใช้ filename (เพิ่มใหม่)
   if (!pdf && filenameParam) {
-    pdf = await PDF.findOne({
-      filename: filenameParam,
-      userId: session.user.id,
-    });
+    pdf = await PDF.findOne(isAdmin ? { filename: filenameParam } : { filename: filenameParam, userId: session.user.id });
   }
 
   if (!pdf) {
