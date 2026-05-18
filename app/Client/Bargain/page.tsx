@@ -21,6 +21,7 @@ export default function DocumentChatPage() {
   const [showNewButton, setShowNewButton] = useState(false);
   const [rfq, setRfq] = useState<RFQData | null>(null);
   const [rfqLoading, setRfqLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<"doc" | "chat">("doc");
 
   const chatContainerRef = useRef<HTMLDivElement>(null);
 
@@ -158,11 +159,46 @@ export default function DocumentChatPage() {
 
       <div className="print-root h-screen w-screen flex flex-col md:flex-row bg-base-300 overflow-hidden font-sans">
 
+        {/* ── Mobile Tab Bar ── */}
+        <div className="print-hide md:hidden shrink-0 flex bg-base-100 border-b border-base-content/10">
+          <button
+            onClick={() => setActiveTab("doc")}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-medium border-b-2 transition-colors ${
+              activeTab === "doc"
+                ? "border-primary text-primary"
+                : "border-transparent text-base-content/40"
+            }`}
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            เอกสาร
+          </button>
+          <button
+            onClick={() => setActiveTab("chat")}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-medium border-b-2 transition-colors ${
+              activeTab === "chat"
+                ? "border-primary text-primary"
+                : "border-transparent text-base-content/40"
+            }`}
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+            </svg>
+            สนทนา
+            {chats.length > 0 && (
+              <span className="text-[9px] bg-primary/20 text-primary px-1.5 py-0.5 rounded-full font-mono">
+                {chats.length}
+              </span>
+            )}
+          </button>
+        </div>
+
         {/* ══════════════════════════════════════
             LEFT: QUOTATION DOCUMENT (2/3)
         ══════════════════════════════════════ */}
-        <div className="print-doc md:basis-2/3 flex flex-col h-[45vh] md:h-full bg-base-200 border-r border-base-content/10">
-          <div className="print-scroll flex-1 overflow-y-auto py-6 px-2">
+        <div className={`print-doc md:basis-2/3 flex flex-col min-h-0 md:h-full bg-base-200 border-r border-base-content/10 ${activeTab === "doc" ? "flex-1" : "hidden md:flex"}`}>
+          <div className="print-scroll flex-1 min-h-0 overflow-y-auto overflow-x-auto py-6 px-2">
             {rfqLoading ? (
               <div className="flex items-center justify-center h-full">
                 <span className="loading loading-spinner loading-md text-primary" />
@@ -183,7 +219,7 @@ export default function DocumentChatPage() {
         {/* ══════════════════════════════════════
             RIGHT: SIDEBAR (1/3)
         ══════════════════════════════════════ */}
-        <aside className="print-hide md:basis-1/3 flex flex-col h-[55vh] md:h-full bg-base-300 overflow-hidden gap-2 p-3">
+        <aside className={`print-hide md:basis-1/3 flex flex-col md:h-full bg-base-300 overflow-hidden gap-2 p-3 ${activeTab === "chat" ? "flex-1" : "hidden md:flex"}`}>
 
           {/* ── CHAT PANEL ── */}
           <div className="flex flex-col flex-1 min-h-0 border border-base-content/10 rounded-xl overflow-hidden bg-base-200 shadow-inner">
