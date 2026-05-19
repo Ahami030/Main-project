@@ -148,7 +148,6 @@ export default function PrototypePage() {
   const grandTotal = items.reduce((s, it) => s + it.quantity * it.unit_price, 0);
   const vat = grandTotal * 7 / 107;          // แยก VAT ออกจากราคา (7/107)
   const subtotal = grandTotal - vat;         // ราคาก่อน VAT
-  const hasTerms = rfq.terms_and_conditions && Object.keys(rfq.terms_and_conditions).length > 0;
 
   const pageBase = {
     position: "relative" as const,
@@ -239,8 +238,13 @@ export default function PrototypePage() {
                       </div>
                       <div>
                         <p style={{ color: "rgba(255,255,255,0.5)", fontSize: "9px", letterSpacing: "0.15em", textTransform: "uppercase", margin: 0 }}>บริษัท / Company</p>
-                        <p style={{ color: "#ffffff", fontSize: "16px", fontWeight: 700, margin: "2px 0 0" }}>[ชื่อบริษัท]</p>
-                        <p style={{ color: "rgba(255,255,255,0.5)", fontSize: "10px", margin: "1px 0 0" }}>ที่อยู่บริษัท กรุงเทพมหานคร | โทร. 02-XXX-XXXX | เลขภาษี: 0-0000-00000-00-0</p>
+                        <p style={{ color: "#ffffff", fontSize: "16px", fontWeight: 700, margin: "2px 0 0" }}>หจก.แพร่สงวนพาณิชย์</p>
+                        <p style={{ color: "rgba(255,255,255,0.45)", fontSize: "10px", margin: "2px 0 0", lineHeight: "1.6" }}>
+                          38/10 ม.3 ต.ทุ่งกวาว อ.เมือง จ.แพร่ 54000
+                        </p>
+                        <p style={{ color: "rgba(255,255,255,0.35)", fontSize: "9.5px", margin: "1px 0 0", letterSpacing: "0.02em" }}>
+                          โทร. 093-1625696 &nbsp;|&nbsp; เลขภาษี: 0543543000476
+                        </p>
                       </div>
                     </div>
                     <div style={{ textAlign: "right" }}>
@@ -303,7 +307,7 @@ export default function PrototypePage() {
                   marginBottom: "14px", paddingBottom: "10px",
                   borderBottom: "2px solid #1e293b",
                 }}>
-                  <p style={{ fontWeight: 700, color: "#1e293b", margin: 0 }}>[ชื่อบริษัท] — ใบเสนอราคา</p>
+                  <p style={{ fontWeight: 700, color: "#1e293b", margin: 0 }}>หจก.แพร่สงวนพาณิชย์ — ใบเสนอราคา</p>
                   <p style={{ color: "#94a3b8", fontSize: "11px", margin: 0 }}>
                     เลขที่ {rfq.rfq_number} | หน้า {pageIdx + 1}/{totalPages}
                   </p>
@@ -386,32 +390,45 @@ export default function PrototypePage() {
                   </div>
 
                   {/* Conditions */}
-                  <div style={{
-                    backgroundColor: "#f8fafc", border: "1px solid #e2e8f0",
-                    borderRadius: "6px", padding: "10px 14px", marginBottom: "20px",
-                  }}>
-                    <p style={{ color: "#94a3b8", fontSize: "9px", textTransform: "uppercase", letterSpacing: "0.12em", margin: "0 0 6px", fontWeight: 600 }}>
-                      เงื่อนไขและข้อกำหนด
-                    </p>
-                    <ol style={{ margin: 0, paddingLeft: "16px", color: "#475569", fontSize: "11px", lineHeight: "1.8" }}>
-                      {hasTerms
-                        ? Object.entries(rfq.terms_and_conditions).map(([k, v]) => (
-                          <li key={k}><strong>{k}:</strong> {String(v)}</li>
-                        ))
-                        : (
-                          <>
-                            <li>ราคานี้เป็นราคาที่รวมภาษีมูลค่าเพิ่ม รวมทั้งภาษีอื่นและค่าใช้จ่ายทั้งปวงไว้ด้วยแล้ว</li>
-                            <li>ราคาที่ยืนเสนออยู่ได้ภายในกำหนด 15 วัน นับตั้งแต่วันที่ได้ยื่นใบเสนอราคา</li>
-                            <li>กำหนดส่งมอบพัสดุตามรายละเอียดรายการข้างต้นภายใน 7 วัน นับถัดจากวันลงนาม</li>
-                          </>
+                  {(() => {
+                    const tc = rfq.terms_and_conditions as Record<string, string>;
+                    const deliveryTime = tc?.delivery_time || "7 วัน";
+                    const paymentTerms = tc?.payment_terms;
+                    const deliveryLocation = tc?.delivery_location;
+                    return (
+                      <div style={{
+                        backgroundColor: "#f8fafc", border: "1px solid #e2e8f0",
+                        borderRadius: "6px", padding: "12px 16px", marginBottom: "20px",
+                        fontSize: "12px", color: "#475569", lineHeight: "1.9",
+                      }}>
+                        {/* Amount in words */}
+                        <p style={{ margin: "0 0 6px", textAlign: "center", color: "#1e293b", fontWeight: 500 }}>
+                          จำนวนเงินรวมทั้งสิ้น {fmt(grandTotal)} บาท ({thaiNumberToWords(grandTotal)})
+                        </p>
+                        <div style={{ borderTop: "1px solid #e2e8f0", marginBottom: "8px" }} />
+                        {/* Numbered conditions */}
+                        <p style={{ margin: "0 0 2px" }}>
+                          1. ราคานี้เป็นราคาที่รวมภาษีมูลค่าเพิ่ม รวมทั้งภาษีอากรอื่นและค่าใช้จ่ายทั้งปวงไว้ด้วยแล้ว
+                        </p>
+                        {paymentTerms && (
+                          <p style={{ margin: "0 0 2px" }}>
+                            2. เงื่อนไขการชำระเงิน: {paymentTerms}
+                          </p>
                         )}
-                    </ol>
-
-                    {/* Proposal date */}
-                    <p style={{ textAlign: "center", marginTop: "8px", marginBottom: 0, color: "#64748b", fontSize: "11px" }}>
-                      เสนอมา ณ วันที่ {rfq.rfq_date || "......"}
-                    </p>
-                  </div>
+                        <p style={{ margin: "0 0 2px" }}>
+                          {paymentTerms ? "3" : "2"}. ราคาที่ยื่นเสนอยืนอยู่ได้ภายในกำหนด 15 วัน นับตั้งแต่วันที่ได้ยื่นใบเสนอราคา
+                        </p>
+                        <p style={{ margin: "0 0 2px" }}>
+                          {paymentTerms ? "4" : "3"}. กำหนดส่งมอบพัสดุตามรายละเอียดรายการข้างต้นภายใน {deliveryTime} นับถัดจากวันลงนาม
+                          {deliveryLocation && <> ณ {deliveryLocation}</>}
+                        </p>
+                        {/* Proposal date */}
+                        <p style={{ textAlign: "center", marginTop: "10px", marginBottom: 0, color: "#64748b", fontSize: "11px" }}>
+                          เสนอมา ณ วันที่ {rfq.rfq_date || "......"}
+                        </p>
+                      </div>
+                    );
+                  })()}
 
                   {/* Signatures */}
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px" }}>
