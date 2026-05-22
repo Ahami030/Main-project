@@ -106,21 +106,13 @@ export default function DocumentChatPage() {
     <>
       {/* ── Print CSS ── */}
       <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap');
         @media print {
           @page { margin: 0; size: A4; }
 
-          html, body {
-            background: white !important;
+          /* Reset เฉพาะ layout shell — ไม่แตะ content ของเอกสาร */
+          html, body, [data-theme] {
             background-color: white !important;
-            -webkit-print-color-adjust: exact;
-            print-color-adjust: exact;
-          }
-
-          /* Nuclear reset: wipe every dark background DaisyUI injects via CSS vars */
-          * {
-            background: transparent !important;
-            background-color: transparent !important;
-            box-shadow: none !important;
             -webkit-print-color-adjust: exact;
             print-color-adjust: exact;
           }
@@ -133,6 +125,7 @@ export default function DocumentChatPage() {
             height: auto !important;
             overflow: visible !important;
             width: 100% !important;
+            background: white !important;
           }
           .print-doc {
             display: block !important;
@@ -141,19 +134,14 @@ export default function DocumentChatPage() {
             width: 100% !important;
             flex-basis: 100% !important;
             border: none !important;
+            background: transparent !important;
           }
           .print-scroll {
             height: auto !important;
             overflow: visible !important;
             padding: 0 !important;
+            background: transparent !important;
           }
-
-          /* Restore document-specific backgrounds (higher specificity beats * reset) */
-          .print-doc .bg-white,
-          .print-doc [class*="bg-white"] { background-color: white !important; }
-          .print-doc .bg-gray-50  { background-color: #f9fafb !important; }
-          .print-doc .bg-gray-800 { background-color: #1f2937 !important; }
-          .print-doc .text-white  { color: white !important; }
         }
       `}</style>
 
@@ -355,7 +343,7 @@ export default function DocumentChatPage() {
                 {rfq ? (
                   [
                     { label: "เลขที่เอกสาร", value: rfq.rfq_number },
-                    { label: "วันที่", value: rfq.rfq_date },
+                    { label: "เสนอมา ณ วันที่", value: rfq.rfq_date },
                     { label: "ยืนยันภายใน", value: rfq.due_date },
                     { label: "จำนวนรายการ", value: `${rfq.line_items.length} รายการ` },
                   ].map((item, i, arr) => (

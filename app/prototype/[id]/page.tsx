@@ -272,7 +272,7 @@ export default function PrototypePage() {
                     }}>
                       {[
                         { label: "เลขที่", value: rfq.rfq_number },
-                        { label: "วันที่", value: rfq.rfq_date },
+                        { label: "เสนอมา ณ วันที่", value: rfq.rfq_date },
                         { label: "ยืนยันภายใน", value: rfq.due_date },
                       ].map(({ label, value }) => (
                         <div key={label} style={{ display: "flex", justifyContent: "space-between", fontSize: "12px" }}>
