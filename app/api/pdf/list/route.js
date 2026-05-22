@@ -16,9 +16,8 @@ export async function GET() {
 
   await connectMongoDB();
 
-  const pdfs = await PDF.find({
-    userId: session.user.id,
-  }).sort({ uploadDate: -1 });
+  const filter = session.user.role === "admin" ? {} : { userId: session.user.id };
+  const pdfs = await PDF.find(filter).sort({ uploadDate: -1 });
 
   return NextResponse.json(pdfs);
 }
