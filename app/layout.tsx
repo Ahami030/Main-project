@@ -50,10 +50,13 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <SessionProvider>
-          <Navbar />
+          <div className="print:hidden">
+            <Navbar />
+          </div>
           {children}
-          <Footer />
-
+          <div className="print:hidden">
+            <Footer />
+          </div>
         </SessionProvider>
       </body>
     </html>
