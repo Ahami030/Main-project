@@ -185,6 +185,7 @@ export default function EditPage() {
   const { id } = useParams();
   const router = useRouter();
   const pdfRef = useRef<HTMLDivElement | null>(null);
+  const hasScrolledRef = useRef(false);
 
   // ── RFQ state ──────────────────────────────────────────────
   const [form, setForm] = useState<any>(null);
@@ -245,8 +246,11 @@ export default function EditPage() {
   }, [id]);
 
   useEffect(() => {
-    if (!form) return;
-    pdfRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    if (!form || hasScrolledRef.current) return;
+    hasScrolledRef.current = true;
+    setTimeout(() => {
+      pdfRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 100);
   }, [form]);
 
   // ── Fetch chat users (poll 3s) ─────────────────────────────
