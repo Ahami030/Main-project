@@ -45,7 +45,7 @@ export async function PATCH(
   }
 
   const { status } = await req.json();
-  const allowed = ["sent", "reviewing", "completed"];
+  const allowed = ["sent", "reviewing", "completed", "bargaining"];
   if (!allowed.includes(status)) {
     return NextResponse.json({ message: "Invalid status" }, { status: 400 });
   }

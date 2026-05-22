@@ -191,6 +191,10 @@ export default function EditPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+
+  // ── Debug state ────────────────────────────────────────────
+  const [quotationDebug, setQuotationDebug] = useState<{ id: string; status: string } | null>(null);
+  const [debugUpdating, setDebugUpdating] = useState(false);
   const [focusedLineField, setFocusedLineField] = useState<string>("");
   const [mobileTab, setMobileTab] = useState<"pdf" | "edit" | "chat">("pdf");
   const [summaryOpen, setSummaryOpen] = useState(false);
@@ -219,7 +223,15 @@ export default function EditPage() {
         const data = await res.json();
         if (!data.line_items) data.line_items = [];
         setForm(data);
-        if (data.USER_ID) setSelectedUserId(data.USER_ID);
+        if (data.USER_ID) {
+          setSelectedUserId(data.USER_ID);
+          try {
+            const qRes = await fetch("/api/quotation/all");
+            const qData = await qRes.json();
+            const found = (qData.quotations ?? []).find((q: any) => q.userId === data.USER_ID);
+            if (found) setQuotationDebug({ id: found._id, status: found.status });
+          } catch {}
+        }
       } catch (err: any) {
         setError(err.message);
       } finally {
@@ -368,6 +380,21 @@ export default function EditPage() {
   const addItem = () => setForm({ ...form, line_items: [...form.line_items, { item_number: form.line_items.length + 1, description: "", quantity: 1, unit: "", unit_price: 0 }] });
   const removeItem = (i: number) => setForm({ ...form, line_items: form.line_items.filter((_: any, j: number) => j !== i).map((item: any, j: number) => ({ ...item, item_number: j + 1 })) });
 
+  const debugSetStatus = async (status: string) => {
+    if (!quotationDebug) return;
+    setDebugUpdating(true);
+    try {
+      const res = await fetch(`/api/quotation/${quotationDebug.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      });
+      if (res.ok) setQuotationDebug({ ...quotationDebug, status });
+    } finally {
+      setDebugUpdating(false);
+    }
+  };
+
   const handleSubmit = async () => {
     try {
       setSaving(true);
@@ -433,6 +460,35 @@ export default function EditPage() {
           <input type="text" className="input input-bordered input-sm h-9 rounded-xl text-sm bg-base-200 border-base-300 focus:border-primary focus:bg-base-100 transition-colors" value={form.buyer_company_name || ""} onChange={(e) => handleChange("buyer_company_name", e.target.value)} />
         </div>
       </div>
+
+      {/* Debug Panel (mobile only) */}
+      {quotationDebug && (
+        <div className="lg:hidden border border-warning/40 bg-warning/5 rounded-xl p-3 flex flex-col gap-2">
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] font-bold tracking-widest uppercase text-warning">🔧 DEBUG</span>
+            <span className="text-[10px] text-base-content/40">Quotation State</span>
+            <span className={`badge badge-sm ml-auto ${
+              quotationDebug.status === "bargaining" ? "badge-accent" :
+              quotationDebug.status === "completed"  ? "badge-primary" :
+              quotationDebug.status === "reviewing"  ? "badge-warning" : "badge-success"
+            }`}>{quotationDebug.status}</span>
+          </div>
+          <div className="flex flex-wrap gap-1">
+            {(["sent", "reviewing", "completed", "bargaining"] as const).map((s) => (
+              <button
+                key={s}
+                disabled={debugUpdating || quotationDebug.status === s}
+                onClick={() => debugSetStatus(s)}
+                className={`btn btn-xs h-6 min-h-0 rounded-lg text-[10px] font-medium ${
+                  quotationDebug.status === s ? "btn-neutral opacity-60 cursor-default" : "btn-outline"
+                }`}
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Summary dropdown (mobile only) */}
       <div className="lg:hidden">
@@ -712,6 +768,38 @@ export default function EditPage() {
               <span className="text-xs font-semibold text-success/70">Grand Total</span>
               <span className="text-sm font-bold text-success tabular-nums">{fmt(grandTotal)}</span>
             </div>
+
+            {/* ── DEBUG Panel ── */}
+            {quotationDebug && (
+              <div className="border border-warning/40 bg-warning/5 rounded-xl p-3 flex flex-col gap-2">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] font-bold tracking-widest uppercase text-warning">🔧 DEBUG</span>
+                  <span className="text-[10px] text-base-content/40">Quotation State</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] text-base-content/40 truncate max-w-[55%]">{quotationDebug.id}</span>
+                  <span className={`badge badge-sm ${
+                    quotationDebug.status === "bargaining" ? "badge-accent" :
+                    quotationDebug.status === "completed"  ? "badge-primary" :
+                    quotationDebug.status === "reviewing"  ? "badge-warning" : "badge-success"
+                  }`}>{quotationDebug.status}</span>
+                </div>
+                <div className="flex flex-wrap gap-1">
+                  {(["sent", "reviewing", "completed", "bargaining"] as const).map((s) => (
+                    <button
+                      key={s}
+                      disabled={debugUpdating || quotationDebug.status === s}
+                      onClick={() => debugSetStatus(s)}
+                      className={`btn btn-xs h-6 min-h-0 rounded-lg text-[10px] font-medium ${
+                        quotationDebug.status === s ? "btn-neutral opacity-60 cursor-default" : "btn-outline"
+                      }`}
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Live Chat */}

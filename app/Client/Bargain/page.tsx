@@ -2,6 +2,7 @@
 
 import { useSession } from "next-auth/react";
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import QuotationDocument, { RFQData } from "@/components/QuotationDocument";
 
 type ChatType = {
@@ -14,6 +15,7 @@ type ChatType = {
 export default function DocumentChatPage() {
   const { data: session, status } = useSession();
   const USER_ID = (session?.user as any)?.id || session?.user?.email;
+  const router = useRouter();
 
   const [message, setMessage] = useState("");
   const [chats, setChats] = useState<ChatType[]>([]);
@@ -24,6 +26,18 @@ export default function DocumentChatPage() {
   const [activeTab, setActiveTab] = useState<"doc" | "chat">("doc");
 
   const chatContainerRef = useRef<HTMLDivElement>(null);
+
+  // ── Guard: เข้าได้เฉพาะเมื่อ status = "bargaining" ────────
+  useEffect(() => {
+    if (!USER_ID) return;
+    fetch("/api/quotation")
+      .then((r) => r.json())
+      .then((data) => {
+        const list: { status: string }[] = data.quotations ?? [];
+        const allowed = list.some((q) => q.status === "bargaining");
+        if (!allowed) router.replace("/Client/quotation");
+      });
+  }, [USER_ID, router]);
 
   // ── โหลด RFQ ล่าสุดของ user ────────────────────────────────
   useEffect(() => {
