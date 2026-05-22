@@ -31,11 +31,12 @@ export async function PUT(req: Request, { params }: any) {
     const { id } = await params;
     const body = await req.json();
     await connectMongoDB();
-    
+
+    const { version: _v, _id: _id_, __v, createdAt, updatedAt, ...rfqData } = body;
     const updated = await RFQ.findByIdAndUpdate(
       id,
-      body,
-      { new: true }
+      { $set: rfqData, $inc: { version: 1 } },
+      { new: true, strict: false }
     );
     
     if (!updated) {

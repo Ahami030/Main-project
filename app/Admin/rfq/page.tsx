@@ -8,16 +8,24 @@ export default function RFQListPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
+  const [chatUserIds, setChatUserIds] = useState<Set<string>>(new Set());
   const router = useRouter();
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         setLoading(true);
-        const res = await fetch("/api/rfq");
-        if (!res.ok) throw new Error("Failed to fetch");
-        const result = await res.json();
+        const [rfqRes, chatRes] = await Promise.all([
+          fetch("/api/rfq"),
+          fetch("/api/chat/users", { cache: "no-store" }),
+        ]);
+        if (!rfqRes.ok) throw new Error("Failed to fetch");
+        const result = await rfqRes.json();
         setData(Array.isArray(result) ? result : []);
+        if (chatRes.ok) {
+          const chatData = await chatRes.json();
+          setChatUserIds(new Set((chatData as any[]).map((u) => u.userId)));
+        }
       } catch (err: any) {
         setError(err.message);
       } finally {
@@ -197,6 +205,12 @@ export default function RFQListPage() {
                             <span className="text-sm font-semibold text-base-content group-hover:text-primary transition-colors">
                               {item.rfq_number || <span className="text-base-content/30 font-normal">—</span>}
                             </span>
+                            {chatUserIds.has(item.USER_ID) && (
+                              <span className="flex items-center gap-1 px-1.5 py-0.5 bg-primary/10 rounded-md">
+                                <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+                                <span className="text-[9px] text-primary font-medium">Chat</span>
+                              </span>
+                            )}
                           </div>
                         </td>
                         <td className="py-3.5 text-sm text-base-content/70 max-w-[180px] truncate">
@@ -240,9 +254,14 @@ export default function RFQListPage() {
                       </svg>
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-base-content truncate">
-                        {item.rfq_number || "—"}
-                      </p>
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-sm font-semibold text-base-content truncate">
+                          {item.rfq_number || "—"}
+                        </p>
+                        {chatUserIds.has(item.USER_ID) && (
+                          <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse shrink-0" />
+                        )}
+                      </div>
                       <p className="text-xs text-base-content/50 truncate mt-0.5">
                         {item.buyer_company_name || "No buyer"}
                       </p>

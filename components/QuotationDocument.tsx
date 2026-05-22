@@ -17,6 +17,7 @@ export type RFQData = {
   vendor_company_name: string;
   line_items: LineItem[];
   terms_and_conditions: Record<string, unknown>;
+  version?: number;
 };
 
 const fmt = (n: number) =>
@@ -132,9 +133,79 @@ export default function QuotationDocument({ rfq }: { rfq: RFQData }) {
   const paymentTerms = tc?.payment_terms;
   const deliveryLocation = tc?.delivery_location;
 
+  const version = rfq.version ?? 0;
+
   return (
     <>
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap');`}</style>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap');
+        @media print { .rfq-version-bar { display: none !important; } }
+      `}</style>
+
+      {/* ── Version Banner ── */}
+      <div
+        className="rfq-version-bar"
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: "10px",
+          marginBottom: "14px",
+          padding: "10px 16px",
+          borderRadius: "10px",
+          background: version >= 1
+            ? "linear-gradient(135deg, #92400e 0%, #b45309 100%)"
+            : "linear-gradient(135deg, #1e3a5f 0%, #1e40af 100%)",
+          boxShadow: version >= 1
+            ? "0 2px 12px rgba(180,83,9,0.35)"
+            : "0 2px 12px rgba(30,64,175,0.25)",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          {version >= 1 ? (
+            <div style={{
+              width: "30px", height: "30px", borderRadius: "8px",
+              background: "rgba(255,255,255,0.15)",
+              display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+            }}>
+              <svg width="16" height="16" fill="none" stroke="#fff" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+              </svg>
+            </div>
+          ) : (
+            <div style={{
+              width: "30px", height: "30px", borderRadius: "8px",
+              background: "rgba(255,255,255,0.15)",
+              display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+            }}>
+              <svg width="16" height="16" fill="none" stroke="#fff" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+            </div>
+          )}
+          <div>
+            <p style={{ color: "#ffffff", fontWeight: 700, fontSize: "13px", margin: 0, letterSpacing: "0.01em" }}>
+              {version >= 1 ? "เอกสารได้รับการแก้ไขแล้ว" : "เอกสารต้นฉบับ"}
+            </p>
+            <p style={{ color: "rgba(255,255,255,0.65)", fontSize: "11px", margin: "2px 0 0" }}>
+              {version >= 1
+                ? `ทีมงานได้ปรับปรุงข้อมูล (ครั้งที่ ${version}) เพื่อตอบสนองความต้องการของคุณ`
+                : "เอกสารใบเสนอราคาฉบับเริ่มต้น ยังไม่มีการแก้ไข"}
+            </p>
+          </div>
+        </div>
+        <div style={{
+          flexShrink: 0,
+          padding: "6px 14px",
+          borderRadius: "20px",
+          background: "rgba(255,255,255,0.18)",
+          border: "1px solid rgba(255,255,255,0.25)",
+          textAlign: "center",
+        }}>
+          <p style={{ color: "rgba(255,255,255,0.7)", fontSize: "9px", letterSpacing: "0.15em", textTransform: "uppercase", margin: 0 }}>Version</p>
+          <p style={{ color: "#ffffff", fontSize: "20px", fontWeight: 800, margin: 0, lineHeight: 1.1 }}>{version}</p>
+        </div>
+      </div>
 
       {chunks.map((pageItems, pageIdx) => {
         const isFirst = pageIdx === 0;

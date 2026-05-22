@@ -21,9 +21,13 @@ const RFQSchema = new mongoose.Schema({
     default: []
   },
   terms_and_conditions: Object,
+  version: { type: Number, default: 0 },
 }, {
   collection: "Test_insert",
   timestamps: true
 });
 
-export default mongoose.models.RFQ || mongoose.model("RFQ", RFQSchema);
+if (mongoose.models.RFQ) {
+  delete (mongoose.models as any).RFQ;
+}
+export default mongoose.model("RFQ", RFQSchema);

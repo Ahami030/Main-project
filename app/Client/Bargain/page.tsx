@@ -39,15 +39,19 @@ export default function DocumentChatPage() {
       });
   }, [USER_ID, router]);
 
-  // ── โหลด RFQ ล่าสุดของ user ────────────────────────────────
+  // ── โหลด RFQ ล่าสุดของ user (poll 10s เพื่อรับ version ใหม่) ──
   useEffect(() => {
     if (!USER_ID) return;
-    fetch(`/api/rfq?userId=${USER_ID}`)
-      .then((r) => r.json())
-      .then((data: RFQData[]) => {
-        if (Array.isArray(data) && data.length > 0) setRfq(data[0]);
-      })
-      .finally(() => setRfqLoading(false));
+    const load = () =>
+      fetch(`/api/rfq?userId=${USER_ID}`, { cache: "no-store" })
+        .then((r) => r.json())
+        .then((data: RFQData[]) => {
+          if (Array.isArray(data) && data.length > 0) setRfq(data[0]);
+        })
+        .finally(() => setRfqLoading(false));
+    load();
+    const iv = setInterval(load, 10000);
+    return () => clearInterval(iv);
   }, [USER_ID]);
 
   // ── Chat ────────────────────────────────────────────────────
@@ -355,20 +359,30 @@ export default function DocumentChatPage() {
             <div className="flex-1 overflow-y-auto px-3 py-2.5 min-h-0">
               <div className="space-y-0 mb-3">
                 {rfq ? (
-                  [
-                    { label: "เลขที่เอกสาร", value: rfq.rfq_number },
-                    { label: "เสนอมา ณ วันที่", value: rfq.rfq_date },
-                    { label: "ยืนยันภายใน", value: rfq.due_date },
-                    { label: "จำนวนรายการ", value: `${rfq.line_items.length} รายการ` },
-                  ].map((item, i, arr) => (
-                    <div
-                      key={item.label}
-                      className={`flex justify-between items-center py-2 ${i < arr.length - 1 ? "border-b border-base-content/5" : ""}`}
-                    >
-                      <span className="text-base-content/40 text-[11px]">{item.label}</span>
-                      <span className="text-[11px] font-medium text-base-content">{item.value || "—"}</span>
+                  <>
+                    {[
+                      { label: "เลขที่เอกสาร", value: rfq.rfq_number },
+                      { label: "เสนอมา ณ วันที่", value: rfq.rfq_date },
+                      { label: "ยืนยันภายใน", value: rfq.due_date },
+                      { label: "จำนวนรายการ", value: `${rfq.line_items.length} รายการ` },
+                    ].map((item) => (
+                      <div
+                        key={item.label}
+                        className="flex justify-between items-center py-2 border-b border-base-content/5"
+                      >
+                        <span className="text-base-content/40 text-[11px]">{item.label}</span>
+                        <span className="text-[11px] font-medium text-base-content">{item.value || "—"}</span>
+                      </div>
+                    ))}
+                    <div className="flex justify-between items-center py-2 border-t-2 border-success/20 mt-1 bg-success/5 rounded-lg px-1">
+                      <span className="text-[11px] font-semibold text-success/80">รวมเงิน</span>
+                      <span className="text-[13px] font-bold text-success tabular-nums">
+                        {new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(
+                          rfq.line_items.reduce((s, it) => s + it.quantity * it.unit_price, 0)
+                        )} ฿
+                      </span>
                     </div>
-                  ))
+                  </>
                 ) : (
                   <p className="text-base-content/30 text-[11px] text-center py-4">ไม่พบข้อมูลเอกสาร</p>
                 )}

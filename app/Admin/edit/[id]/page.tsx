@@ -192,6 +192,9 @@ export default function EditPage() {
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
+  // ── Confirm modal ──────────────────────────────────────────
+  const [showConfirm, setShowConfirm] = useState(false);
+
   // ── Debug state ────────────────────────────────────────────
   const [quotationDebug, setQuotationDebug] = useState<{ id: string; status: string } | null>(null);
   const [debugUpdating, setDebugUpdating] = useState(false);
@@ -396,11 +399,11 @@ export default function EditPage() {
   };
 
   const handleSubmit = async () => {
+    setShowConfirm(false);
     try {
       setSaving(true);
       const res = await fetch(`/api/rfq/${id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) });
       if (!res.ok) throw new Error("Failed to save");
-      alert("บันทึกสำเร็จ!");
       router.push("/Admin/rfq");
     } catch (err: any) { alert(err.message); }
     finally { setSaving(false); }
@@ -445,7 +448,7 @@ export default function EditPage() {
         <span className="text-[10px] font-semibold tracking-[0.15em] uppercase text-base-content/40">RFQ Data</span>
         <div className="flex items-center gap-2">
           <button className="btn btn-outline btn-sm gap-1.5 h-8 min-h-0 rounded-xl text-xs" onClick={() => router.push("/Admin/rfq")}>Cancel</button>
-          <button className="btn btn-primary btn-sm gap-1.5 h-8 min-h-0 rounded-xl text-xs" onClick={handleSubmit} disabled={saving}>
+          <button className="btn btn-primary btn-sm gap-1.5 h-8 min-h-0 rounded-xl text-xs" onClick={() => setShowConfirm(true)} disabled={saving}>
             {saving ? <><span className="loading loading-spinner loading-xs" />Saving...</> : <><svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>Save</>}
           </button>
         </div>
@@ -599,7 +602,7 @@ export default function EditPage() {
             กลับ
           </button>
           <span className="text-xs font-semibold text-base-content/70 truncate max-w-35">{form.rfq_number || "RFQ"}</span>
-          <button className="btn btn-primary btn-xs h-7 min-h-0 rounded-lg gap-1 text-xs" onClick={handleSubmit} disabled={saving}>
+          <button className="btn btn-primary btn-xs h-7 min-h-0 rounded-lg gap-1 text-xs" onClick={() => setShowConfirm(true)} disabled={saving}>
             {saving ? <span className="loading loading-spinner loading-xs" /> : <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>}
             Save
           </button>
@@ -669,7 +672,7 @@ export default function EditPage() {
             <span className="text-[10px] font-semibold tracking-[0.15em] uppercase text-base-content/40">RFQ Data</span>
             <div className="flex items-center gap-2">
               <button className="btn btn-outline btn-sm gap-1.5 h-8 min-h-0 rounded-xl text-xs" onClick={() => router.push("/Admin/rfq")}>Cancel</button>
-              <button className="btn btn-primary btn-sm gap-1.5 h-8 min-h-0 rounded-xl text-xs" onClick={handleSubmit} disabled={saving}>
+              <button className="btn btn-primary btn-sm gap-1.5 h-8 min-h-0 rounded-xl text-xs" onClick={() => setShowConfirm(true)} disabled={saving}>
                 {saving ? <><span className="loading loading-spinner loading-xs" />Saving...</> : <><svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>Save</>}
               </button>
             </div>
@@ -819,6 +822,65 @@ export default function EditPage() {
           />
         </div>
       </div>
+
+      {/* ── Confirm Save Modal ── */}
+      {showConfirm && (
+        <dialog className="modal modal-open">
+          <div className="modal-box max-w-sm rounded-2xl p-6 flex flex-col gap-5">
+
+            {/* Icon + Title */}
+            <div className="flex flex-col items-center gap-3 text-center">
+              <div className="w-12 h-12 rounded-2xl bg-warning/15 flex items-center justify-center">
+                <svg className="w-6 h-6 text-warning" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-base-content">ยืนยันการบันทึก?</h3>
+                <p className="text-xs text-base-content/50 mt-1">การบันทึกจะอัปเดตเอกสารและเพิ่ม version ให้ลูกค้าเห็น</p>
+              </div>
+            </div>
+
+            {/* Summary */}
+            <div className="bg-base-200 rounded-xl px-4 py-3 flex flex-col divide-y divide-base-content/5 text-xs">
+              {[
+                { label: "RFQ Number", value: form.rfq_number || "—" },
+                { label: "Buyer", value: form.buyer_company_name || "—" },
+                { label: "จำนวนรายการ", value: `${form.line_items?.length || 0} รายการ` },
+                { label: "มูลค่ารวม", value: `${fmt(grandTotal)} ฿` },
+              ].map((row) => (
+                <div key={row.label} className="flex justify-between items-center py-1.5">
+                  <span className="text-base-content/40">{row.label}</span>
+                  <span className="font-medium text-base-content">{row.value}</span>
+                </div>
+              ))}
+            </div>
+
+            {/* Actions */}
+            <div className="flex gap-2">
+              <button
+                className="flex-1 btn btn-ghost btn-sm rounded-xl text-xs h-9 min-h-0"
+                onClick={() => setShowConfirm(false)}
+                disabled={saving}
+              >
+                ยกเลิก
+              </button>
+              <button
+                className="flex-1 btn btn-primary btn-sm rounded-xl text-xs h-9 min-h-0 gap-1.5"
+                onClick={handleSubmit}
+                disabled={saving}
+              >
+                {saving ? (
+                  <><span className="loading loading-spinner loading-xs" />กำลังบันทึก...</>
+                ) : (
+                  <><svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>ยืนยันบันทึก</>
+                )}
+              </button>
+            </div>
+          </div>
+          <div className="modal-backdrop bg-black/40" onClick={() => !saving && setShowConfirm(false)} />
+        </dialog>
+      )}
     </>
   );
 }
