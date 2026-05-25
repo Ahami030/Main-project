@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { signIn } from "next-auth/react";
+import { signIn, getSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 
 export default function LoginForm() {
@@ -41,7 +41,9 @@ export default function LoginForm() {
         setErrorMessage("Email หรือ Password ไม่ถูกต้อง");
         setLoading(false);
       } else {
-        router.replace("/Client");
+        const session = await getSession();
+        const role = (session?.user as any)?.role;
+        router.replace(role === 'admin' ? '/Admin' : '/Client');
       }
     } catch (error) {
       console.error(error);
