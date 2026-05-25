@@ -1,5 +1,6 @@
 import { connectMongoDB } from "@/lib/mongo";
 import RFQ from "@/app/models/RFQ";
+import Quotation from "@/app/models/Quotation";
 import { NextResponse } from "next/server";
 
 export async function GET(req: Request, { params }: any) {
@@ -30,11 +31,12 @@ export async function PUT(req: Request, { params }: any) {
     const { id } = await params;
     const body = await req.json();
     await connectMongoDB();
-    
+
+    const { version: _v, _id: _id_, __v, createdAt, updatedAt, ...rfqData } = body;
     const updated = await RFQ.findByIdAndUpdate(
       id,
-      body,
-      { new: true }
+      { $set: rfqData, $inc: { version: 1 } },
+      { new: true, strict: false }
     );
     
     if (!updated) {
@@ -43,9 +45,16 @@ export async function PUT(req: Request, { params }: any) {
         { status: 404 }
       );
     }
-    
-    return NextResponse.json(updated, { 
-      headers: { "Content-Type": "application/json" } 
+
+    if (updated.USER_ID) {
+      await Quotation.findOneAndUpdate(
+        { userId: updated.USER_ID },
+        { status: "bargaining" }
+      );
+    }
+
+    return NextResponse.json(updated, {
+      headers: { "Content-Type": "application/json" }
     });
   } catch (error) {
     console.error("PUT /api/rfq/[id] error:", error);

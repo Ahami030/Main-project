@@ -185,12 +185,20 @@ export default function EditPage() {
   const { id } = useParams();
   const router = useRouter();
   const pdfRef = useRef<HTMLDivElement | null>(null);
+  const hasScrolledRef = useRef(false);
 
   // ── RFQ state ──────────────────────────────────────────────
   const [form, setForm] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+
+  // ── Confirm modal ──────────────────────────────────────────
+  const [showConfirm, setShowConfirm] = useState(false);
+
+  // ── Debug state ────────────────────────────────────────────
+  const [quotationDebug, setQuotationDebug] = useState<{ id: string; status: string } | null>(null);
+  const [debugUpdating, setDebugUpdating] = useState(false);
   const [focusedLineField, setFocusedLineField] = useState<string>("");
   const [mobileTab, setMobileTab] = useState<"pdf" | "edit" | "chat">("pdf");
   const [summaryOpen, setSummaryOpen] = useState(false);
@@ -219,7 +227,15 @@ export default function EditPage() {
         const data = await res.json();
         if (!data.line_items) data.line_items = [];
         setForm(data);
-        if (data.USER_ID) setSelectedUserId(data.USER_ID);
+        if (data.USER_ID) {
+          setSelectedUserId(data.USER_ID);
+          try {
+            const qRes = await fetch("/api/quotation/all");
+            const qData = await qRes.json();
+            const found = (qData.quotations ?? []).find((q: any) => q.userId === data.USER_ID);
+            if (found) setQuotationDebug({ id: found._id, status: found.status });
+          } catch {}
+        }
       } catch (err: any) {
         setError(err.message);
       } finally {
@@ -230,8 +246,11 @@ export default function EditPage() {
   }, [id]);
 
   useEffect(() => {
-    if (!form) return;
-    pdfRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    if (!form || hasScrolledRef.current) return;
+    hasScrolledRef.current = true;
+    setTimeout(() => {
+      pdfRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 100);
   }, [form]);
 
   // ── Fetch chat users (poll 3s) ─────────────────────────────
@@ -368,12 +387,27 @@ export default function EditPage() {
   const addItem = () => setForm({ ...form, line_items: [...form.line_items, { item_number: form.line_items.length + 1, description: "", quantity: 1, unit: "", unit_price: 0 }] });
   const removeItem = (i: number) => setForm({ ...form, line_items: form.line_items.filter((_: any, j: number) => j !== i).map((item: any, j: number) => ({ ...item, item_number: j + 1 })) });
 
+  const debugSetStatus = async (status: string) => {
+    if (!quotationDebug) return;
+    setDebugUpdating(true);
+    try {
+      const res = await fetch(`/api/quotation/${quotationDebug.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      });
+      if (res.ok) setQuotationDebug({ ...quotationDebug, status });
+    } finally {
+      setDebugUpdating(false);
+    }
+  };
+
   const handleSubmit = async () => {
+    setShowConfirm(false);
     try {
       setSaving(true);
       const res = await fetch(`/api/rfq/${id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) });
       if (!res.ok) throw new Error("Failed to save");
-      alert("บันทึกสำเร็จ!");
       router.push("/Admin/rfq");
     } catch (err: any) { alert(err.message); }
     finally { setSaving(false); }
@@ -418,7 +452,7 @@ export default function EditPage() {
         <span className="text-[10px] font-semibold tracking-[0.15em] uppercase text-base-content/40">RFQ Data</span>
         <div className="flex items-center gap-2">
           <button className="btn btn-outline btn-sm gap-1.5 h-8 min-h-0 rounded-xl text-xs" onClick={() => router.push("/Admin/rfq")}>Cancel</button>
-          <button className="btn btn-primary btn-sm gap-1.5 h-8 min-h-0 rounded-xl text-xs" onClick={handleSubmit} disabled={saving}>
+          <button className="btn btn-primary btn-sm gap-1.5 h-8 min-h-0 rounded-xl text-xs" onClick={() => setShowConfirm(true)} disabled={saving}>
             {saving ? <><span className="loading loading-spinner loading-xs" />Saving...</> : <><svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>Save</>}
           </button>
         </div>
@@ -433,6 +467,35 @@ export default function EditPage() {
           <input type="text" className="input input-bordered input-sm h-9 rounded-xl text-sm bg-base-200 border-base-300 focus:border-primary focus:bg-base-100 transition-colors" value={form.buyer_company_name || ""} onChange={(e) => handleChange("buyer_company_name", e.target.value)} />
         </div>
       </div>
+
+      {/* Debug Panel (mobile only) */}
+      {quotationDebug && (
+        <div className="lg:hidden border border-warning/40 bg-warning/5 rounded-xl p-3 flex flex-col gap-2">
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] font-bold tracking-widest uppercase text-warning">🔧 DEBUG</span>
+            <span className="text-[10px] text-base-content/40">Quotation State</span>
+            <span className={`badge badge-sm ml-auto ${
+              quotationDebug.status === "bargaining" ? "badge-accent" :
+              quotationDebug.status === "completed"  ? "badge-primary" :
+              quotationDebug.status === "reviewing"  ? "badge-warning" : "badge-success"
+            }`}>{quotationDebug.status}</span>
+          </div>
+          <div className="flex flex-wrap gap-1">
+            {(["sent", "reviewing", "completed", "bargaining"] as const).map((s) => (
+              <button
+                key={s}
+                disabled={debugUpdating || quotationDebug.status === s}
+                onClick={() => debugSetStatus(s)}
+                className={`btn btn-xs h-6 min-h-0 rounded-lg text-[10px] font-medium ${
+                  quotationDebug.status === s ? "btn-neutral opacity-60 cursor-default" : "btn-outline"
+                }`}
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Summary dropdown (mobile only) */}
       <div className="lg:hidden">
@@ -543,7 +606,7 @@ export default function EditPage() {
             กลับ
           </button>
           <span className="text-xs font-semibold text-base-content/70 truncate max-w-35">{form.rfq_number || "RFQ"}</span>
-          <button className="btn btn-primary btn-xs h-7 min-h-0 rounded-lg gap-1 text-xs" onClick={handleSubmit} disabled={saving}>
+          <button className="btn btn-primary btn-xs h-7 min-h-0 rounded-lg gap-1 text-xs" onClick={() => setShowConfirm(true)} disabled={saving}>
             {saving ? <span className="loading loading-spinner loading-xs" /> : <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>}
             Save
           </button>
@@ -613,7 +676,7 @@ export default function EditPage() {
             <span className="text-[10px] font-semibold tracking-[0.15em] uppercase text-base-content/40">RFQ Data</span>
             <div className="flex items-center gap-2">
               <button className="btn btn-outline btn-sm gap-1.5 h-8 min-h-0 rounded-xl text-xs" onClick={() => router.push("/Admin/rfq")}>Cancel</button>
-              <button className="btn btn-primary btn-sm gap-1.5 h-8 min-h-0 rounded-xl text-xs" onClick={handleSubmit} disabled={saving}>
+              <button className="btn btn-primary btn-sm gap-1.5 h-8 min-h-0 rounded-xl text-xs" onClick={() => setShowConfirm(true)} disabled={saving}>
                 {saving ? <><span className="loading loading-spinner loading-xs" />Saving...</> : <><svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>Save</>}
               </button>
             </div>
@@ -712,6 +775,38 @@ export default function EditPage() {
               <span className="text-xs font-semibold text-success/70">Grand Total</span>
               <span className="text-sm font-bold text-success tabular-nums">{fmt(grandTotal)}</span>
             </div>
+
+            {/* ── DEBUG Panel ── */}
+            {quotationDebug && (
+              <div className="border border-warning/40 bg-warning/5 rounded-xl p-3 flex flex-col gap-2">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] font-bold tracking-widest uppercase text-warning">🔧 DEBUG</span>
+                  <span className="text-[10px] text-base-content/40">Quotation State</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] text-base-content/40 truncate max-w-[55%]">{quotationDebug.id}</span>
+                  <span className={`badge badge-sm ${
+                    quotationDebug.status === "bargaining" ? "badge-accent" :
+                    quotationDebug.status === "completed"  ? "badge-primary" :
+                    quotationDebug.status === "reviewing"  ? "badge-warning" : "badge-success"
+                  }`}>{quotationDebug.status}</span>
+                </div>
+                <div className="flex flex-wrap gap-1">
+                  {(["sent", "reviewing", "completed", "bargaining"] as const).map((s) => (
+                    <button
+                      key={s}
+                      disabled={debugUpdating || quotationDebug.status === s}
+                      onClick={() => debugSetStatus(s)}
+                      className={`btn btn-xs h-6 min-h-0 rounded-lg text-[10px] font-medium ${
+                        quotationDebug.status === s ? "btn-neutral opacity-60 cursor-default" : "btn-outline"
+                      }`}
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Live Chat */}
@@ -731,6 +826,65 @@ export default function EditPage() {
           />
         </div>
       </div>
+
+      {/* ── Confirm Save Modal ── */}
+      {showConfirm && (
+        <dialog className="modal modal-open">
+          <div className="modal-box max-w-sm rounded-2xl p-6 flex flex-col gap-5">
+
+            {/* Icon + Title */}
+            <div className="flex flex-col items-center gap-3 text-center">
+              <div className="w-12 h-12 rounded-2xl bg-warning/15 flex items-center justify-center">
+                <svg className="w-6 h-6 text-warning" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-base-content">ยืนยันการบันทึก?</h3>
+                <p className="text-xs text-base-content/50 mt-1">การบันทึกจะอัปเดตเอกสารและเพิ่ม version ให้ลูกค้าเห็น</p>
+              </div>
+            </div>
+
+            {/* Summary */}
+            <div className="bg-base-200 rounded-xl px-4 py-3 flex flex-col divide-y divide-base-content/5 text-xs">
+              {[
+                { label: "RFQ Number", value: form.rfq_number || "—" },
+                { label: "Buyer", value: form.buyer_company_name || "—" },
+                { label: "จำนวนรายการ", value: `${form.line_items?.length || 0} รายการ` },
+                { label: "มูลค่ารวม", value: `${fmt(grandTotal)} ฿` },
+              ].map((row) => (
+                <div key={row.label} className="flex justify-between items-center py-1.5">
+                  <span className="text-base-content/40">{row.label}</span>
+                  <span className="font-medium text-base-content">{row.value}</span>
+                </div>
+              ))}
+            </div>
+
+            {/* Actions */}
+            <div className="flex gap-2">
+              <button
+                className="flex-1 btn btn-ghost btn-sm rounded-xl text-xs h-9 min-h-0"
+                onClick={() => setShowConfirm(false)}
+                disabled={saving}
+              >
+                ยกเลิก
+              </button>
+              <button
+                className="flex-1 btn btn-primary btn-sm rounded-xl text-xs h-9 min-h-0 gap-1.5"
+                onClick={handleSubmit}
+                disabled={saving}
+              >
+                {saving ? (
+                  <><span className="loading loading-spinner loading-xs" />กำลังบันทึก...</>
+                ) : (
+                  <><svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>ยืนยันบันทึก</>
+                )}
+              </button>
+            </div>
+          </div>
+          <div className="modal-backdrop bg-black/40" onClick={() => !saving && setShowConfirm(false)} />
+        </dialog>
+      )}
     </>
   );
 }

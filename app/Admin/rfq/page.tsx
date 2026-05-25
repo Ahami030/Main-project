@@ -8,16 +8,37 @@ export default function RFQListPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
+  // userId → ISO timestamp ของข้อความล่าสุด
+  const [chatTimes, setChatTimes] = useState<Record<string, string>>({});
+  // userId → ms timestamp ที่ admin เคยกดเข้าไปดูล่าสุด
+  const [seenAt, setSeenAt] = useState<Record<string, number>>({});
   const router = useRouter();
+
+  // โหลด "เคยดูแล้ว" จาก localStorage
+  useEffect(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem("admin_seen_chats") || "{}");
+      setSeenAt(stored);
+    } catch {}
+  }, []);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         setLoading(true);
-        const res = await fetch("/api/rfq");
-        if (!res.ok) throw new Error("Failed to fetch");
-        const result = await res.json();
+        const [rfqRes, chatRes] = await Promise.all([
+          fetch("/api/rfq"),
+          fetch("/api/chat/users", { cache: "no-store" }),
+        ]);
+        if (!rfqRes.ok) throw new Error("Failed to fetch");
+        const result = await rfqRes.json();
         setData(Array.isArray(result) ? result : []);
+        if (chatRes.ok) {
+          const chatData = await chatRes.json();
+          const times: Record<string, string> = {};
+          (chatData as any[]).forEach((u) => { times[u.userId] = u.latestMessageTime; });
+          setChatTimes(times);
+        }
       } catch (err: any) {
         setError(err.message);
       } finally {
@@ -26,6 +47,19 @@ export default function RFQListPage() {
     };
     fetchData();
   }, []);
+
+  const hasNewChat = (userId: string) => {
+    if (!chatTimes[userId]) return false;
+    const seen = seenAt[userId] ?? 0;
+    return new Date(chatTimes[userId]).getTime() > seen;
+  };
+
+  const markSeen = (userId: string) => {
+    if (!userId) return;
+    const updated = { ...seenAt, [userId]: Date.now() };
+    setSeenAt(updated);
+    try { localStorage.setItem("admin_seen_chats", JSON.stringify(updated)); } catch {}
+  };
 
   const filtered = data.filter((item) => {
     const q = search.toLowerCase();
@@ -181,7 +215,7 @@ export default function RFQListPage() {
                       <tr
                         key={item._id}
                         className="border-b border-base-200 last:border-0 hover:bg-base-50 cursor-pointer transition-colors group"
-                        onClick={() => router.push(`/Admin/edit/${item._id}`)}
+                        onClick={() => { markSeen(item.USER_ID); router.push(`/Admin/edit/${item._id}`); }}
                       >
                         <td className="pl-5 py-3.5 text-xs font-semibold text-base-content/30 tabular-nums w-10">
                           {idx + 1}
@@ -197,6 +231,12 @@ export default function RFQListPage() {
                             <span className="text-sm font-semibold text-base-content group-hover:text-primary transition-colors">
                               {item.rfq_number || <span className="text-base-content/30 font-normal">—</span>}
                             </span>
+                            {hasNewChat(item.USER_ID) && (
+                              <span className="flex items-center gap-1 px-1.5 py-0.5 bg-primary/10 rounded-md">
+                                <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+                                <span className="text-[9px] text-primary font-medium">Chat</span>
+                              </span>
+                            )}
                           </div>
                         </td>
                         <td className="py-3.5 text-sm text-base-content/70 max-w-[180px] truncate">
@@ -231,7 +271,7 @@ export default function RFQListPage() {
                   <div
                     key={item._id}
                     className="flex items-center gap-3 px-4 py-3.5 hover:bg-base-50 active:bg-base-200 cursor-pointer transition-colors"
-                    onClick={() => router.push(`/Admin/edit/${item._id}`)}
+                    onClick={() => { markSeen(item.USER_ID); router.push(`/Admin/edit/${item._id}`); }}
                   >
                     <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
                       <svg className="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -240,9 +280,14 @@ export default function RFQListPage() {
                       </svg>
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-base-content truncate">
-                        {item.rfq_number || "—"}
-                      </p>
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-sm font-semibold text-base-content truncate">
+                          {item.rfq_number || "—"}
+                        </p>
+                        {hasNewChat(item.USER_ID) && (
+                          <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse shrink-0" />
+                        )}
+                      </div>
                       <p className="text-xs text-base-content/50 truncate mt-0.5">
                         {item.buyer_company_name || "No buyer"}
                       </p>

@@ -1,10 +1,11 @@
 "use client";
 import React, { JSX, useCallback, useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 type UploadStatus = "idle" | "uploading" | "success" | "error";
-type QuotationStatus = "sent" | "reviewing" | "completed";
+type QuotationStatus = "sent" | "reviewing" | "completed" | "bargaining";
 type View = "upload" | "history";
 
 interface Quotation {
@@ -22,15 +23,17 @@ const N8N_WEBHOOK_URL =
   "http://localhost:5678/webhook-test/pdf-test";
 
 const STEPS: { key: QuotationStatus; label: string; sublabel: string }[] = [
-  { key: "sent",      label: "ส่งไฟล์แล้ว",        sublabel: "ระบบได้รับเอกสารของคุณแล้ว" },
-  { key: "reviewing", label: "ตรวจสอบ / จัดทำราย", sublabel: "ทีมงานกำลังตรวจสอบเอกสาร" },
-  { key: "completed", label: "ดำเนินการเสร็จสิ้น",  sublabel: "ใบเสนอราคาพร้อมแล้ว" },
+  { key: "sent",        label: "ส่งไฟล์แล้ว",        sublabel: "ระบบได้รับเอกสารของคุณแล้ว" },
+  { key: "reviewing",   label: "ตรวจสอบ / จัดทำราย", sublabel: "ทีมงานกำลังตรวจสอบเอกสาร" },
+  { key: "completed",   label: "ดำเนินการเสร็จสิ้น",  sublabel: "ใบเสนอราคาพร้อมแล้ว" },
+  { key: "bargaining",  label: "พร้อมต่อรองราคา",     sublabel: "เอกสารพร้อมแล้ว กดเพื่อต่อรอง" },
 ];
 
 const STATUS_ORDER: Record<QuotationStatus, number> = {
   sent: 0,
   reviewing: 1,
   completed: 2,
+  bargaining: 3,
 };
 
 // ─── Status Stepper ───────────────────────────────────────────────────────────
@@ -59,6 +62,7 @@ function StatusStepper({ status }: { status: QuotationStatus }) {
 
 // ─── Quotation Card ───────────────────────────────────────────────────────────
 function QuotationCard({ q }: { q: Quotation }) {
+  const router = useRouter();
   const date = new Date(q.createdAt).toLocaleDateString("th-TH", {
     year: "numeric",
     month: "short",
@@ -80,6 +84,14 @@ function QuotationCard({ q }: { q: Quotation }) {
           <StatusBadge status={q.status} />
         </div>
         <StatusStepper status={q.status} />
+        {q.status === "bargaining" && (
+          <button
+            onClick={() => router.push("/Client/Bargain")}
+            className="btn btn-accent w-full text-sm font-medium"
+          >
+            ไปยังหน้าต่อรองราคา →
+          </button>
+        )}
       </div>
     </div>
   );
@@ -87,9 +99,10 @@ function QuotationCard({ q }: { q: Quotation }) {
 
 function StatusBadge({ status }: { status: QuotationStatus }) {
   const map: Record<QuotationStatus, { cls: string; label: string }> = {
-    sent:      { cls: "badge-success",  label: "ส่งแล้ว" },
-    reviewing: { cls: "badge-warning",  label: "กำลังดำเนินการ" },
-    completed: { cls: "badge-primary",  label: "เสร็จสิ้น" },
+    sent:       { cls: "badge-success", label: "ส่งแล้ว" },
+    reviewing:  { cls: "badge-warning", label: "กำลังดำเนินการ" },
+    completed:  { cls: "badge-primary", label: "เสร็จสิ้น" },
+    bargaining: { cls: "badge-accent",  label: "พร้อมต่อรอง" },
   };
   const { cls, label } = map[status];
   return <span className={`badge ${cls} badge-sm`}>{label}</span>;

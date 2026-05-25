@@ -1,7 +1,7 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
 
-type QuotationStatus = 'sent' | 'reviewing' | 'completed';
+type QuotationStatus = 'sent' | 'reviewing' | 'completed' | 'bargaining';
 
 interface Quotation {
   _id: string;
@@ -12,21 +12,24 @@ interface Quotation {
 }
 
 const STATUS_LABELS: Record<QuotationStatus, string> = {
-  sent:      'ส่งแล้ว',
-  reviewing: 'กำลังดำเนินการ',
-  completed: 'เสร็จสิ้น',
+  sent:       'ส่งแล้ว',
+  reviewing:  'กำลังดำเนินการ',
+  completed:  'เสร็จสิ้น',
+  bargaining: 'พร้อมต่อรอง',
 };
 
 const STATUS_BADGE: Record<QuotationStatus, string> = {
-  sent:      'badge-success',
-  reviewing: 'badge-warning',
-  completed: 'badge-primary',
+  sent:       'badge-success',
+  reviewing:  'badge-warning',
+  completed:  'badge-primary',
+  bargaining: 'badge-accent',
 };
 
 const NEXT_STATUS: Record<QuotationStatus, QuotationStatus | null> = {
-  sent:      'reviewing',
-  reviewing: 'completed',
-  completed: null,
+  sent:       'reviewing',
+  reviewing:  'completed',
+  completed:  'bargaining',
+  bargaining: null,
 };
 
 export default function AdminPage() {
