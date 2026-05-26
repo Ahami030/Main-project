@@ -61,11 +61,11 @@ function StatusStepper({ status }: { status: QuotationStatus }) {
 }
 
 // ─── Quotation Card ───────────────────────────────────────────────────────────
-const STATUS_STYLE: Record<QuotationStatus, { spotlight: string; dot: string }> = {
-  sent:       { spotlight: "border-success/30 bg-success/5",   dot: "bg-success" },
-  reviewing:  { spotlight: "border-warning/30 bg-warning/5",   dot: "bg-warning" },
-  completed:  { spotlight: "border-primary/30 bg-primary/5",   dot: "bg-primary" },
-  bargaining: { spotlight: "border-accent/30  bg-accent/5",    dot: "bg-accent"  },
+const STATUS_STYLE: Record<QuotationStatus, { spotlight: string; dot: string; bar: string }> = {
+  sent:       { spotlight: "border-success/25 bg-success/5",  dot: "bg-success", bar: "from-success to-success/30"  },
+  reviewing:  { spotlight: "border-warning/25 bg-warning/5",  dot: "bg-warning", bar: "from-warning to-warning/30"  },
+  completed:  { spotlight: "border-primary/25 bg-primary/5",  dot: "bg-primary", bar: "from-primary to-primary/30"  },
+  bargaining: { spotlight: "border-accent/25  bg-accent/5",   dot: "bg-accent",  bar: "from-accent  to-accent/30"   },
 };
 
 function QuotationCard({ q }: { q: Quotation }) {
@@ -78,32 +78,42 @@ function QuotationCard({ q }: { q: Quotation }) {
     minute: "2-digit",
   });
 
-  const currentStep = STEPS.find((s) => s.key === q.status)!;
-  const nextStep    = STEPS[STATUS_ORDER[q.status] + 1] ?? null;
+  const currentStep  = STEPS.find((s) => s.key === q.status)!;
+  const nextStep     = STEPS[STATUS_ORDER[q.status] + 1] ?? null;
   const isInProgress = q.status === "sent" || q.status === "reviewing";
-  const { spotlight, dot } = STATUS_STYLE[q.status];
+  const { spotlight, dot, bar } = STATUS_STYLE[q.status];
 
   return (
-    <div className="card bg-base-100 border border-base-300 shadow-sm">
-      <div className="card-body space-y-5">
+    <div className="card bg-base-100 border border-base-300 shadow-sm overflow-hidden">
+      <div className={`h-1 bg-gradient-to-r ${bar}`} />
+      <div className="card-body gap-5 pt-5">
 
         {/* Header */}
         <div className="flex items-start justify-between gap-4">
-          <div>
-            <p className="font-semibold text-sm truncate max-w-70">{q.filename}</p>
-            <p className="text-xs text-base-content/50 mt-0.5">{date}</p>
+          <div className="flex items-start gap-3">
+            <div className="w-9 h-9 rounded-xl bg-base-200 flex items-center justify-center shrink-0 text-base-content/35">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                <path d="M3 3.5A1.5 1.5 0 0 1 4.5 2h6.879a1.5 1.5 0 0 1 1.06.44l2.122 2.12a1.5 1.5 0 0 1 .439 1.061V15.5A1.5 1.5 0 0 1 13.5 17h-9A1.5 1.5 0 0 1 3 15.5v-12Z" />
+              </svg>
+            </div>
+            <div className="min-w-0">
+              <p className="font-semibold text-sm leading-snug truncate max-w-xs">{q.filename}</p>
+              <p className="text-xs text-base-content/40 mt-0.5">{date}</p>
+            </div>
           </div>
           <StatusBadge status={q.status} />
         </div>
 
+        <div className="divider my-0" />
+
         {/* Status spotlight */}
-        <div className={`rounded-xl border px-4 py-3 flex items-center gap-3 ${spotlight}`}>
-          <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${dot} ${isInProgress ? "animate-pulse" : ""}`} />
+        <div className={`rounded-2xl border px-5 py-4 flex items-center gap-4 ${spotlight}`}>
+          <span className={`w-3 h-3 rounded-full shrink-0 ${dot} ${isInProgress ? "animate-pulse" : ""}`} />
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium">{currentStep.label}</p>
-            <p className="text-xs text-base-content/60 mt-0.5">{currentStep.sublabel}</p>
+            <p className="font-semibold text-sm">{currentStep.label}</p>
+            <p className="text-xs text-base-content/50 mt-0.5">{currentStep.sublabel}</p>
           </div>
-          {isInProgress && <span className="loading loading-dots loading-xs opacity-40" />}
+          {isInProgress && <span className="loading loading-dots loading-sm opacity-30" />}
         </div>
 
         {/* Stepper */}
@@ -111,9 +121,9 @@ function QuotationCard({ q }: { q: Quotation }) {
 
         {/* Next step hint */}
         {nextStep && q.status !== "bargaining" && (
-          <div className="flex items-center gap-2 text-xs text-base-content/35">
+          <div className="flex items-center gap-3 text-xs text-base-content/30">
             <div className="flex-1 h-px bg-base-300" />
-            <span>ขั้นถัดไป: {nextStep.label}</span>
+            <span>ขั้นถัดไป · {nextStep.label}</span>
             <div className="flex-1 h-px bg-base-300" />
           </div>
         )}
@@ -122,9 +132,9 @@ function QuotationCard({ q }: { q: Quotation }) {
         {q.status === "bargaining" && (
           <button
             onClick={() => router.push("/Client/Bargain")}
-            className="btn btn-accent w-full text-sm font-semibold gap-2"
+            className="btn btn-accent w-full font-semibold gap-2 shadow-lg shadow-accent/20"
           >
-            <span>ไปยังหน้าต่อรองราคา</span>
+            ไปยังหน้าต่อรองราคา
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
               <path fillRule="evenodd" d="M3 10a.75.75 0 0 1 .75-.75h10.638L10.23 5.29a.75.75 0 1 1 1.04-1.08l5.5 5.25a.75.75 0 0 1 0 1.08l-5.5 5.25a.75.75 0 1 1-1.04-1.08l4.158-3.96H3.75A.75.75 0 0 1 3 10Z" clipRule="evenodd" />
             </svg>
@@ -144,7 +154,7 @@ function StatusBadge({ status }: { status: QuotationStatus }) {
     bargaining: { cls: "badge-accent",  label: "พร้อมต่อรอง" },
   };
   const { cls, label } = map[status];
-  return <span className={`badge ${cls} badge-sm`}>{label}</span>;
+  return <span className={`badge ${cls} badge-sm shrink-0`}>{label}</span>;
 }
 
 // ─── Upload Badge ─────────────────────────────────────────────────────────────
@@ -463,23 +473,6 @@ export default function Page(): JSX.Element {
               </div>
             </section>
 
-            <section className="grid md:grid-cols-3 gap-4">
-              {[
-                { title: "อัปโหลดเอกสาร",   desc: "แนบไฟล์รายการสินค้า หรือใบสั่งซื้อ" },
-                { title: "ระบบประมวลผล",    desc: "AI อ่านและจัดโครงสร้างข้อมูลอัตโนมัติ" },
-                { title: "ออกใบเสนอราคา",   desc: "ทีมงานนำข้อมูลไปจัดทำราคาได้ทันที" },
-              ].map((s, i) => (
-                <div key={i} className="card bg-base-100 border border-base-300 shadow-sm">
-                  <div className="card-body space-y-2">
-                    <div className="text-sm text-primary font-semibold">
-                      STEP {String(i + 1).padStart(2, "0")}
-                    </div>
-                    <p className="font-medium">{s.title}</p>
-                    <p className="text-sm text-base-content/60">{s.desc}</p>
-                  </div>
-                </div>
-              ))}
-            </section>
           </>
         )}
 
