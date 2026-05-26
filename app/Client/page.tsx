@@ -92,23 +92,35 @@ export default function Page(): JSX.Element {
   const isInProgress = latest?.status === "sent" || latest?.status === "reviewing";
   const name  = session?.user?.name  ?? "ผู้ใช้";
   const email = session?.user?.email ?? "";
+  const uid   = (session?.user as { id?: string })?.id ?? "";
 
   return (
     <main className="min-h-screen bg-base-200 text-base-content">
-      <div className="max-w-3xl mx-auto px-4 md:px-6 py-10 space-y-4">
+      <div className="max-w-6xl mx-auto px-4 md:px-8 py-10 space-y-4">
 
         {/* ── User Card ─────────────────────────────────────────── */}
         <div className="card bg-base-100 border border-base-300 shadow-sm">
-          <div className="card-body py-4 px-5">
-            <div className="flex items-center gap-3">
-              <div className="avatar placeholder shrink-0">
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-accent text-primary-content font-bold text-base flex items-center justify-center">
-                  <span>{name[0].toUpperCase()}</span>
+          <div className="card-body py-5 px-6">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-4">
+                <div className="avatar placeholder shrink-0">
+                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary to-accent text-primary-content font-bold text-lg flex items-center justify-center">
+                    <span>{name[0].toUpperCase()}</span>
+                  </div>
                 </div>
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="font-semibold text-sm leading-snug truncate">{name}</p>
-                <p className="text-xs text-base-content/45 truncate">{email}</p>
+                <div>
+                  <h2 className="font-semibold text-base leading-snug">
+                    Welcome &ldquo;{name}&rdquo;
+                  </h2>
+                  <p className="text-sm text-base-content/55 mt-0.5">
+                    You are logged in as {email}
+                  </p>
+                  {uid && (
+                    <p className="text-xs text-base-content/35 mt-0.5">
+                      Your id is: {uid}
+                    </p>
+                  )}
+                </div>
               </div>
               <div className="flex items-center gap-1.5 text-xs text-success font-medium shrink-0">
                 <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
@@ -133,16 +145,19 @@ export default function Page(): JSX.Element {
           /* ── Status Card ── */
           <div className="card bg-base-100 border border-base-300 shadow-sm overflow-hidden">
             <div className={`h-1 bg-gradient-to-r ${meta.bar}`} />
-            <div className="card-body gap-5 pt-5">
+            <div className="card-body gap-5 pt-5 px-8">
 
               {/* File header */}
               <div className="flex items-start justify-between gap-4">
                 <div className="flex items-start gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-base-200 flex items-center justify-center shrink-0 text-base-content/35">
+                  <div className="w-10 h-10 rounded-xl bg-base-200 flex items-center justify-center shrink-0 text-base-content/35">
                     <IconDoc />
                   </div>
                   <div className="min-w-0">
-                    <p className="font-semibold text-sm leading-snug truncate max-w-xs">
+                    <p className="text-xs tracking-widest uppercase text-primary/60 font-medium mb-0.5">
+                      Quotation Request
+                    </p>
+                    <p className="font-semibold leading-snug truncate max-w-lg">
                       {latest.filename}
                     </p>
                     <p className="text-xs text-base-content/40 mt-0.5">
@@ -153,57 +168,73 @@ export default function Page(): JSX.Element {
                     </p>
                   </div>
                 </div>
-                <span className={`badge badge-sm shrink-0 ${meta.badge}`}>{meta.label}</span>
+                <span className={`badge shrink-0 ${meta.badge}`}>{meta.label}</span>
               </div>
 
-              {/* Divider */}
               <div className="divider my-0" />
 
-              {/* Status spotlight */}
-              <div className={`rounded-2xl border px-5 py-4 flex items-center gap-4 ${meta.spotlight}`}>
-                <span className={`w-3 h-3 rounded-full shrink-0 ${meta.dot} ${isInProgress ? "animate-pulse" : ""}`} />
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-sm">{currentStep.label}</p>
-                  <p className="text-xs text-base-content/50 mt-0.5">{currentStep.sublabel}</p>
-                </div>
-                {isInProgress && <span className="loading loading-dots loading-sm opacity-30" />}
-              </div>
+              {/* Two-column on wide screens */}
+              <div className="flex flex-col md:flex-row gap-6">
 
-              {/* Stepper */}
-              <ul className="steps steps-horizontal w-full text-xs">
-                {STEPS.map((step, i) => {
-                  const done = i <= STATUS_ORDER[latest.status];
-                  return (
-                    <li
-                      key={step.key}
-                      className={`step ${done ? "step-primary" : ""}`}
-                      data-content={done ? "✓" : String(i + 1)}
+                {/* Left: spotlight + next step / CTA */}
+                <div className="flex-1 flex flex-col gap-4">
+                  <div className={`rounded-2xl border px-5 py-5 flex items-center gap-4 ${meta.spotlight}`}>
+                    <span className={`w-3 h-3 rounded-full shrink-0 ${meta.dot} ${isInProgress ? "animate-pulse" : ""}`} />
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold">{currentStep.label}</p>
+                      <p className="text-sm text-base-content/50 mt-0.5">{currentStep.sublabel}</p>
+                    </div>
+                    {isInProgress && <span className="loading loading-dots loading-sm opacity-30" />}
+                  </div>
+
+                  {nextStep && latest.status !== "bargaining" && (
+                    <div className="flex items-center gap-3 text-xs text-base-content/30">
+                      <div className="flex-1 h-px bg-base-300" />
+                      <span>ขั้นถัดไป · {nextStep.label}</span>
+                      <div className="flex-1 h-px bg-base-300" />
+                    </div>
+                  )}
+                  {latest.status === "bargaining" && (
+                    <button
+                      onClick={() => router.push("/Client/Bargain")}
+                      className="btn btn-accent w-full font-semibold gap-2 shadow-lg shadow-accent/20"
                     >
-                      <span className={done ? "font-medium" : "text-base-content/30"}>
-                        {step.label}
-                      </span>
-                    </li>
-                  );
-                })}
-              </ul>
-
-              {/* Next step / Bargain CTA */}
-              {nextStep && latest.status !== "bargaining" && (
-                <div className="flex items-center gap-3 text-xs text-base-content/30">
-                  <div className="flex-1 h-px bg-base-300" />
-                  <span>ขั้นถัดไป · {nextStep.label}</span>
-                  <div className="flex-1 h-px bg-base-300" />
+                      ไปยังหน้าต่อรองราคา
+                      <IconArrow />
+                    </button>
+                  )}
                 </div>
-              )}
-              {latest.status === "bargaining" && (
-                <button
-                  onClick={() => router.push("/Client/Bargain")}
-                  className="btn btn-accent w-full font-semibold gap-2 shadow-lg shadow-accent/20"
-                >
-                  ไปยังหน้าต่อรองราคา
-                  <IconArrow />
-                </button>
-              )}
+
+                {/* Right: all 4 steps timeline */}
+                <div className="md:w-64 shrink-0 flex flex-col gap-0">
+                  {STEPS.map((step, i) => {
+                    const done    = i <= STATUS_ORDER[latest.status];
+                    const current = i === STATUS_ORDER[latest.status];
+                    return (
+                      <div key={step.key} className="flex gap-3">
+                        <div className="flex flex-col items-center">
+                          <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 transition-colors
+                            ${done ? "bg-primary text-primary-content" : "bg-base-200 text-base-content/30"}`}>
+                            {done ? "✓" : i + 1}
+                          </div>
+                          {i < STEPS.length - 1 && (
+                            <div className={`w-px flex-1 my-1 ${done ? "bg-primary/40" : "bg-base-300"}`} />
+                          )}
+                        </div>
+                        <div className="pb-4 pt-1 min-w-0">
+                          <p className={`text-sm font-medium leading-tight ${current ? "text-base-content" : done ? "text-base-content/70" : "text-base-content/30"}`}>
+                            {step.label}
+                          </p>
+                          {current && (
+                            <p className="text-xs text-base-content/45 mt-0.5">{step.sublabel}</p>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+              </div>
 
             </div>
           </div>
@@ -213,39 +244,61 @@ export default function Page(): JSX.Element {
           /* ── Hero CTA ── */
           <div className="card bg-base-100 border border-base-300 shadow-sm overflow-hidden">
             <div className="h-1 bg-gradient-to-r from-primary to-accent" />
-            <div className="card-body py-14 md:py-20 gap-0">
+            <div className="card-body py-10 px-8 gap-0">
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-10">
 
-              <span className="inline-flex w-fit items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-medium text-primary mb-6">
-                <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
-                Quotation Request System
-              </span>
+                {/* Left: text */}
+                <div className="flex-1">
+                  <span className="inline-flex w-fit items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-medium text-primary mb-6">
+                    <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+                    Quotation Request System
+                  </span>
+                  <h1 className="text-4xl md:text-5xl font-bold tracking-tight leading-[1.2] mb-4">
+                    ส่งเอกสาร<br />
+                    เพื่อจัดทำ<span className="text-primary">ใบเสนอราคา</span>
+                  </h1>
+                  <p className="text-base text-base-content/50 leading-relaxed max-w-md mb-8">
+                    อัปโหลดไฟล์รายการสินค้า ทีมงานจะจัดทำใบเสนอราคา
+                    และพร้อมต่อรองกับคุณในทุกขั้นตอน
+                  </p>
+                  <div className="flex flex-wrap gap-3">
+                    <button
+                      onClick={() => router.push("/Client/quotation")}
+                      className="btn btn-primary btn-lg gap-2 shadow-lg shadow-primary/20"
+                    >
+                      เริ่มต้นเลย
+                      <IconArrow />
+                    </button>
+                    <button
+                      onClick={() => setLearnMore(true)}
+                      className="btn btn-outline btn-lg"
+                    >
+                      ดูขั้นตอน
+                    </button>
+                  </div>
+                </div>
 
-              <h1 className="text-4xl md:text-5xl font-bold tracking-tight leading-[1.2] mb-4">
-                ส่งเอกสาร<br />
-                เพื่อจัดทำ<span className="text-primary">ใบเสนอราคา</span>
-              </h1>
+                {/* Right: decorative stats panel */}
+                <div className="hidden md:flex flex-col gap-3 w-72 shrink-0">
+                  {[
+                    { label: "อัปโหลดเอกสาร",   sub: "รองรับ PDF สูงสุด 10 MB" },
+                    { label: "ระบบประมวลผล AI",  sub: "แปลงข้อมูลอัตโนมัติ" },
+                    { label: "ออกใบเสนอราคา",   sub: "ทีมงานจัดทำให้ทันที" },
+                    { label: "ต่อรองราคาออนไลน์", sub: "Chat โดยตรงกับทีมงาน" },
+                  ].map((item, i) => (
+                    <div key={i} className="flex items-center gap-3 rounded-xl bg-base-200 px-4 py-3">
+                      <div className="w-6 h-6 rounded-full bg-primary/15 text-primary text-xs font-bold flex items-center justify-center shrink-0">
+                        {i + 1}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold leading-tight">{item.label}</p>
+                        <p className="text-xs text-base-content/40 mt-0.5">{item.sub}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
 
-              <p className="text-base text-base-content/50 leading-relaxed max-w-md mb-8">
-                อัปโหลดไฟล์รายการสินค้า ทีมงานจะจัดทำใบเสนอราคา
-                และพร้อมต่อรองกับคุณในทุกขั้นตอน
-              </p>
-
-              <div className="flex flex-wrap gap-3">
-                <button
-                  onClick={() => router.push("/Client/quotation")}
-                  className="btn btn-primary btn-lg gap-2 shadow-lg shadow-primary/20"
-                >
-                  เริ่มต้นเลย
-                  <IconArrow />
-                </button>
-                <button
-                  onClick={() => setLearnMore(true)}
-                  className="btn btn-outline btn-lg"
-                >
-                  ดูขั้นตอน
-                </button>
               </div>
-
             </div>
           </div>
         )}

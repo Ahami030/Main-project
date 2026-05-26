@@ -1,5 +1,6 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import InlineChatPanel from '@/components/admin/InlineChatPanel';
 
 type QuotationStatus = 'sent' | 'reviewing' | 'completed' | 'bargaining';
@@ -34,13 +35,30 @@ const NEXT_STATUS: Record<QuotationStatus, QuotationStatus | null> = {
 };
 
 export default function AdminPage() {
+  const router = useRouter();
   const [quotations, setQuotations] = useState<Quotation[]>([]);
   const [loading, setLoading] = useState(false);
   const [updating, setUpdating] = useState<string | null>(null);
+  const [newRfqCount, setNewRfqCount] = useState(0);
 
   useEffect(() => {
     const savedTheme = localStorage.getItem('theme') || 'light';
     document.documentElement.setAttribute('data-theme', savedTheme);
+  }, []);
+
+  useEffect(() => {
+    const fetchRfqCount = async () => {
+      try {
+        const res = await fetch('/api/rfq');
+        if (!res.ok) return;
+        const data = await res.json();
+        const rfqs: any[] = Array.isArray(data) ? data : [];
+        const lastSeen = parseInt(localStorage.getItem('admin_rfq_last_seen') || '0');
+        const count = rfqs.filter((r) => new Date(r.createdAt).getTime() > lastSeen).length;
+        setNewRfqCount(count);
+      } catch {}
+    };
+    fetchRfqCount();
   }, []);
 
   const fetchQuotations = useCallback(async () => {
@@ -93,18 +111,39 @@ export default function AdminPage() {
               <div className="card-body p-5">
                 <div className="flex items-start justify-between">
                   <div>
-                    <p className="text-xs text-base-content/50 font-medium uppercase tracking-wider">Users</p>
-                    <h2 className="text-lg font-bold text-base-content mt-1">Manage users</h2>
+                    <p className="text-xs text-base-content/50 font-medium uppercase tracking-wider">RFQ</p>
+                    <h2 className="text-lg font-bold text-base-content mt-1">Manage RFQ</h2>
                   </div>
-                  <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
-                    <svg className="w-4.5 h-4.5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                        d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
+                  <div className="relative">
+                    <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                      <svg className="w-4.5 h-4.5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                          d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                    </div>
+                    {newRfqCount > 0 && (
+                      <span className="absolute -top-1.5 -right-1.5 min-w-4.5 h-4.5 px-1 rounded-full bg-error text-error-content text-[9px] font-bold flex items-center justify-center animate-bounce">
+                        {newRfqCount > 99 ? '99+' : newRfqCount}
+                      </span>
+                    )}
                   </div>
                 </div>
                 <div className="card-actions mt-3">
-                  <button className="btn btn-primary btn-sm rounded-lg w-full">View</button>
+                  <button
+                    className="btn btn-primary btn-sm rounded-lg w-full gap-2"
+                    onClick={() => {
+                      localStorage.setItem('admin_rfq_last_seen', Date.now().toString());
+                      setNewRfqCount(0);
+                      router.push('/Admin/rfq');
+                    }}
+                  >
+                    View
+                    {newRfqCount > 0 && (
+                      <span className="badge badge-error badge-sm text-[10px] font-bold">
+                        {newRfqCount > 99 ? '99+' : newRfqCount} ใหม่
+                      </span>
+                    )}
+                  </button>
                 </div>
               </div>
             </div>

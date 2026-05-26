@@ -20,6 +20,7 @@ export default function RFQListPage() {
       const stored = JSON.parse(localStorage.getItem("admin_seen_chats") || "{}");
       setSeenAt(stored);
     } catch {}
+    localStorage.setItem("admin_rfq_last_seen", Date.now().toString());
   }, []);
 
   useEffect(() => {
