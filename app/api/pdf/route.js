@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { writeFile } from "fs/promises";
+import { writeFile, unlink } from "fs/promises";
 import path from "path";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
@@ -52,4 +52,27 @@ export async function POST(req) {
     pdfId: pdf._id.toString(),
     pdfPath: `/PDF/${filename}`,
   });
+}
+
+export async function DELETE(req) {
+  const session = await getServerSession(authOptions);
+  if (!session) {
+    return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  }
+
+  const { searchParams } = new URL(req.url);
+  const pdfId = searchParams.get("pdfId");
+  if (!pdfId) {
+    return NextResponse.json({ message: "pdfId required" }, { status: 400 });
+  }
+
+  await connectMongoDB();
+  const record = await PDF.findByIdAndDelete(pdfId);
+
+  if (record?.path) {
+    const filePath = path.join(process.cwd(), record.path.replace(/^\//, ""));
+    try { await unlink(filePath); } catch {}
+  }
+
+  return NextResponse.json({ message: "Deleted" });
 }

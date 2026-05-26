@@ -307,17 +307,18 @@ export default function Page(): JSX.Element {
     setUploadStatus("uploading");
     setUploadMessage("กำลังบันทึกไฟล์…");
 
+    let pdfData: { pdfId?: string; pdfPath?: string } = {};
     try {
       const pdfFormData = new FormData();
       pdfFormData.append("file", pdfFile);
-      const pdfRes  = await fetch("/api/pdf", { method: "POST", body: pdfFormData });
-      const pdfData = pdfRes.ok ? await pdfRes.json() : {};
+      const pdfRes = await fetch("/api/pdf", { method: "POST", body: pdfFormData });
+      pdfData = pdfRes.ok ? await pdfRes.json() : {};
 
       setUploadMessage("กำลังส่งข้อมูลไปยัง n8n…");
       const storedFilename = (pdfData.pdfPath ?? pdfFile.name).replace(/^\/PDF\//, "");
       formData.append("filename", storedFilename);
       const res = await fetch(N8N_WEBHOOK_URL, { method: "POST", body: formData });
-      if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+      if (!res.ok) throw new Error(`ส่ง n8n ไม่สำเร็จ (HTTP ${res.status})`);
 
       const saveRes  = await fetch("/api/quotation", {
         method: "POST",
@@ -337,6 +338,10 @@ export default function Page(): JSX.Element {
       resetPdf();
       switchView("history");
     } catch (err) {
+      // ลบไฟล์และ PDF record ออกเพราะส่ง n8n ไม่สำเร็จ
+      if (pdfData.pdfId) {
+        try { await fetch(`/api/pdf?pdfId=${pdfData.pdfId}`, { method: "DELETE" }); } catch {}
+      }
       setUploadStatus("error");
       setUploadMessage(`เกิดข้อผิดพลาด: ${(err as Error).message}`);
     }

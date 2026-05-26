@@ -3,6 +3,7 @@
 import { JSX, useCallback, useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import ChatNotificationBubble from "@/components/client/ChatNotificationBubble";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type QuotationStatus = "sent" | "reviewing" | "completed" | "bargaining";
@@ -304,6 +305,8 @@ export default function Page(): JSX.Element {
         )}
 
       </div>
+
+      <ChatNotificationBubble />
 
       {/* ── Learn More Modal ──────────────────────────────────── */}
       {learnMore && (
