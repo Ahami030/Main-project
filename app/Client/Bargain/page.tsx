@@ -27,6 +27,11 @@ export default function DocumentChatPage() {
 
   const chatContainerRef = useRef<HTMLDivElement>(null);
 
+  // ── Mark chats as read เมื่อเข้าหน้านี้ ────────────────────
+  useEffect(() => {
+    localStorage.setItem("client_chat_last_seen", Date.now().toString());
+  }, []);
+
   // ── Guard: เข้าได้เฉพาะเมื่อ status = "bargaining" ────────
   useEffect(() => {
     if (!USER_ID) return;

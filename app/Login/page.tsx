@@ -8,7 +8,8 @@ export default async function LoginPage() {
 
   // ✅ ถ้า login แล้ว → redirect ทันที (ไม่มี flash)
   if (session) {
-    redirect("/Client");
+    const role = (session.user as any)?.role;
+    redirect(role === 'admin' ? '/Admin' : '/Client');
   }
 
   return <LoginForm />;

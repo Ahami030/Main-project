@@ -1,8 +1,9 @@
 "use client";
 
 import React, { useState } from "react";
-import { signIn } from "next-auth/react";
+import { signIn, getSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 export default function LoginForm() {
   const router = useRouter();
@@ -41,7 +42,9 @@ export default function LoginForm() {
         setErrorMessage("Email หรือ Password ไม่ถูกต้อง");
         setLoading(false);
       } else {
-        router.replace("/Client");
+        const session = await getSession();
+        const role = (session?.user as any)?.role;
+        router.replace(role === 'admin' ? '/Admin' : '/Client');
       }
     } catch (error) {
       console.error(error);
@@ -132,6 +135,18 @@ export default function LoginForm() {
           </button>
 
         </form>
+
+        {/* Divider */}
+        <div className="divider text-xs text-base-content/30 my-5">หรือ</div>
+
+        {/* Link to Register */}
+        <p className="text-center text-sm text-base-content/60">
+          ยังไม่มีบัญชี?{' '}
+          <Link href="/register" className="text-primary font-semibold hover:underline">
+            สมัครสมาชิก
+          </Link>
+        </p>
+
       </div>
     </main>
   );
