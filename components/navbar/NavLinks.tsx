@@ -1,0 +1,41 @@
+import Link from "next/link";
+import type { Session } from "next-auth";
+
+const adminLinks = [
+  { href: "/Admin",      label: "Dashboard" },
+  { href: "/Admin/rfq",  label: "จัดการ RFQ" },
+  { href: "/Admin/chat", label: "แชท" },
+];
+
+const linkClass = "text-sm text-base-content/70 hover:text-base-content transition-colors";
+
+interface Props {
+  session: Session | null;
+  latestStatus: string | null;
+}
+
+export default function NavLinks({ session, latestStatus }: Props) {
+  const role = (session?.user as any)?.role as string | undefined;
+
+  return (
+    <div className="hidden md:flex items-center gap-6">
+      <Link href="/" className={linkClass}>Home</Link>
+
+      {role === "user" && (
+        <>
+          <Link href="/Client" className={linkClass}>Dashboard</Link>
+          {latestStatus !== "bargaining" && (
+            <Link href="/Client/quotation" className={linkClass}>ส่งใบเสนอราคา</Link>
+          )}
+          <Link href="/Client/Bargain" className={linkClass}>ต่อรองราคา</Link>
+        </>
+      )}
+
+      {role === "admin" && adminLinks.map((link) => (
+        <Link key={link.href} href={link.href} className={linkClass}>
+          {link.label}
+        </Link>
+      ))}
+    </div>
+  );
+}
