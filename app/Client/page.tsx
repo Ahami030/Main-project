@@ -41,6 +41,13 @@ const STATUS_META: Record<QuotationStatus, {
   confirmed:  { spotlight: "border-success/40 bg-success/10", dot: "bg-success", bar: "from-success to-success/40",   badge: "badge-success", label: "ยืนยันแล้ว" },
 };
 
+const PROCESS_STEPS = [
+  { step: "01", title: "อัปโหลดเอกสาร",  desc: "แนบไฟล์ PDF รายการสินค้า ใบสั่งซื้อ หรือ BOQ" },
+  { step: "02", title: "ระบบประมวลผล",   desc: "AI อ่านและจัดโครงสร้างข้อมูลอัตโนมัติ พร้อมส่งทีมงาน" },
+  { step: "03", title: "ออกใบเสนอราคา",  desc: "ทีมงานจัดทำใบเสนอราคาตามรายการสินค้า" },
+  { step: "04", title: "ต่อรองราคา",     desc: "พูดคุยและต่อรองราคากับทีมงานได้โดยตรง" },
+];
+
 // ─── Icons ────────────────────────────────────────────────────────────────────
 function IconArrow() {
   return (
@@ -66,6 +73,7 @@ export default function Page(): JSX.Element {
   // ── Page state ───────────────────────────────────────────────────────────
   const [loading, setLoading] = useState(true);
   const [quotations, setQuotations] = useState<Quotation[]>([]);
+  const [learnMore, setLearnMore]   = useState(false);
   const [modalQuotation, setModalQuotation] = useState<Quotation | null>(null);
   const [rfqForModal, setRfqForModal]             = useState<RFQData | null>(null);
   const [rfqForModalLoading, setRfqForModalLoading] = useState(false);
@@ -405,63 +413,64 @@ export default function Page(): JSX.Element {
 
         ) : (
 
-          /* ── Landing Section (ยังไม่มี quotation) ── */
-          <div className="rounded-2xl overflow-hidden" style={{ background: "linear-gradient(135deg, #111827 0%, #1e2a3a 50%, #0f2040 100%)" }}>
-            <div className="px-6 py-10 md:px-12 md:py-14 flex flex-col md:flex-row gap-8 md:gap-12 items-center">
+          /* ── Hero CTA (ยังไม่มี quotation) ── */
+          <div className="card bg-base-100 border border-base-300 shadow-sm overflow-hidden">
+            <div className="h-1 bg-gradient-to-r from-primary to-accent" />
+            <div className="card-body py-10 px-8 gap-0">
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-10">
 
-              {/* Left: copy + CTAs */}
-              <div className="flex-1 min-w-0">
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold mb-5"
-                  style={{ background: "rgba(251,191,36,0.15)", color: "#fbbf24", border: "1px solid rgba(251,191,36,0.3)" }}>
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
-                  Quotation Request System
-                </span>
-                <h2 className="text-3xl md:text-4xl font-bold leading-tight mb-4 text-white">
-                  ส่งเอกสาร<br />เพื่อจัดทำ<span style={{ color: "#fbbf24" }}>ใบเสนอราคา</span>
-                </h2>
-                <p className="text-sm leading-relaxed mb-8 max-w-sm" style={{ color: "rgba(255,255,255,0.55)" }}>
-                  อัปโหลดไฟล์รายการสินค้า ทีมงานจะจัดทำใบเสนอราคา และพร้อมต่อรองกับคุณในทุกขั้นตอน
-                </p>
-                <div className="flex flex-wrap gap-3">
-                  <button
-                    onClick={() => router.push("/Client/quotation")}
-                    className="btn gap-2 font-semibold shadow-lg"
-                    style={{ background: "#f59e0b", borderColor: "#f59e0b", color: "#1a1a1a" }}
-                  >
-                    เริ่มต้นเลย <IconArrow />
-                  </button>
-                  <button
-                    onClick={() => document.getElementById("how-it-works")?.scrollIntoView({ behavior: "smooth" })}
-                    className="btn btn-ghost font-semibold"
-                    style={{ color: "rgba(255,255,255,0.7)", border: "1px solid rgba(255,255,255,0.2)" }}
-                  >
-                    ดูขั้นตอน
-                  </button>
-                </div>
-              </div>
-
-              {/* Right: steps */}
-              <div id="how-it-works" className="flex flex-col gap-3 w-full md:w-72 shrink-0">
-                {[
-                  { n: 1, title: "อัปโหลดเอกสาร",       sub: "รองรับ PDF สูงสุด 10 MB" },
-                  { n: 2, title: "ระบบประมวลผล AI",      sub: "แปลงข้อมูลอัตโนมัติ" },
-                  { n: 3, title: "ออกใบเสนอราคา",        sub: "ทีมงานจัดทำให้ทันที" },
-                  { n: 4, title: "ต่อรองราคาออนไลน์",   sub: "Chat โดยตรงกับทีมงาน" },
-                ].map(({ n, title, sub }) => (
-                  <div key={n} className="flex items-center gap-3 rounded-xl px-4 py-3"
-                    style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)" }}>
-                    <div className="w-8 h-8 rounded-lg flex items-center justify-center font-bold text-sm shrink-0"
-                      style={{ background: "#f59e0b", color: "#1a1a1a" }}>
-                      {n}
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold text-white">{title}</p>
-                      <p className="text-xs" style={{ color: "rgba(255,255,255,0.45)" }}>{sub}</p>
-                    </div>
+                {/* Left: text */}
+                <div className="flex-1">
+                  <span className="inline-flex w-fit items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-medium text-primary mb-6">
+                    <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+                    Quotation Request System
+                  </span>
+                  <h1 className="text-4xl md:text-5xl font-bold tracking-tight leading-[1.2] mb-4">
+                    ส่งเอกสาร<br />
+                    เพื่อจัดทำ<span className="text-primary">ใบเสนอราคา</span>
+                  </h1>
+                  <p className="text-base text-base-content/50 leading-relaxed max-w-md mb-8">
+                    อัปโหลดไฟล์รายการสินค้า ทีมงานจะจัดทำใบเสนอราคา
+                    และพร้อมต่อรองกับคุณในทุกขั้นตอน
+                  </p>
+                  <div className="flex flex-wrap gap-3">
+                    <button
+                      onClick={() => router.push("/Client/quotation")}
+                      className="btn btn-primary btn-lg gap-2 shadow-lg shadow-primary/20"
+                    >
+                      เริ่มต้นเลย
+                      <IconArrow />
+                    </button>
+                    <button
+                      onClick={() => setLearnMore(true)}
+                      className="btn btn-outline btn-lg"
+                    >
+                      ดูขั้นตอน
+                    </button>
                   </div>
-                ))}
-              </div>
+                </div>
 
+                {/* Right: step list */}
+                <div className="hidden md:flex flex-col gap-3 w-72 shrink-0">
+                  {[
+                    { label: "อัปโหลดเอกสาร",    sub: "รองรับ PDF สูงสุด 10 MB" },
+                    { label: "ระบบประมวลผล AI",   sub: "แปลงข้อมูลอัตโนมัติ" },
+                    { label: "ออกใบเสนอราคา",    sub: "ทีมงานจัดทำให้ทันที" },
+                    { label: "ต่อรองราคาออนไลน์", sub: "Chat โดยตรงกับทีมงาน" },
+                  ].map((item, i) => (
+                    <div key={i} className="flex items-center gap-3 rounded-xl bg-base-200 px-4 py-3">
+                      <div className="w-6 h-6 rounded-full bg-primary/15 text-primary text-xs font-bold flex items-center justify-center shrink-0">
+                        {i + 1}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold leading-tight">{item.label}</p>
+                        <p className="text-xs text-base-content/40 mt-0.5">{item.sub}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+              </div>
             </div>
           </div>
 
@@ -470,6 +479,54 @@ export default function Page(): JSX.Element {
       </div>
 
       <ChatNotificationBubble />
+
+      {/* ── Learn More Modal ──────────────────────────────────── */}
+      {learnMore && (
+        <div className="modal modal-open modal-bottom sm:modal-middle">
+          <div className="modal-box max-w-lg overflow-hidden p-0">
+            <div className="bg-base-200 px-6 py-5 border-b border-base-300">
+              <button
+                onClick={() => setLearnMore(false)}
+                className="btn btn-sm btn-circle btn-ghost absolute right-4 top-4"
+              >✕</button>
+              <p className="text-xs font-semibold text-primary uppercase tracking-widest mb-1">How it works</p>
+              <h3 className="font-bold text-lg">ขั้นตอนการใช้งาน</h3>
+              <p className="text-sm text-base-content/50 mt-0.5">ระบบออกใบเสนอราคาทำงานอย่างไร</p>
+            </div>
+            <div className="px-6 py-6 space-y-0">
+              {PROCESS_STEPS.map((s, i) => (
+                <div key={s.step} className="flex gap-4">
+                  <div className="flex flex-col items-center">
+                    <div className="w-9 h-9 rounded-full border-2 border-primary/30 bg-primary/10 text-primary text-xs font-bold flex items-center justify-center shrink-0">
+                      {s.step}
+                    </div>
+                    {i < PROCESS_STEPS.length - 1 && (
+                      <div className="w-px flex-1 bg-base-300 my-1.5" />
+                    )}
+                  </div>
+                  <div className="pb-6 pt-1.5 min-w-0">
+                    <p className="font-semibold text-sm">{s.title}</p>
+                    <p className="text-sm text-base-content/50 mt-0.5">{s.desc}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="border-t border-base-300 px-6 py-4 flex gap-3 justify-end">
+              <button onClick={() => setLearnMore(false)} className="btn btn-ghost btn-sm">
+                ปิด
+              </button>
+              <button
+                onClick={() => { setLearnMore(false); router.push("/Client/quotation"); }}
+                className="btn btn-primary btn-sm gap-2"
+              >
+                เริ่มต้นเลย
+                <IconArrow />
+              </button>
+            </div>
+          </div>
+          <div className="modal-backdrop" onClick={() => setLearnMore(false)} />
+        </div>
+      )}
 
       {/* ── Print styles + print-only area ─────────────────────── */}
       {(modalQuotation || printReady) && (
