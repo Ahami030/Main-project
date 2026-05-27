@@ -215,6 +215,7 @@ export default function QuotationDocument({ rfq, confirmed = false }: { rfq: RFQ
         return (
           <div
             key={pageIdx}
+            data-pdf-page={pageIdx}
             style={{
               ...pageBase,
               marginLeft: "auto",

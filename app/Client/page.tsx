@@ -245,8 +245,9 @@ export default function Page(): JSX.Element {
       .finally(() => setRfqForModalLoading(false));
   }, [modalQuotation, userId]);
 
-  const [printReady, setPrintReady]           = useState(false);
-  const [printConfirmed, setPrintConfirmed]   = useState(false);
+  const [printReady, setPrintReady]         = useState(false);
+  const [downloadReady, setDownloadReady]   = useState(false);
+  const [printConfirmed, setPrintConfirmed] = useState(false);
 
   const handlePrint = () => {
     if (!rfqForModal) return;
@@ -266,6 +267,24 @@ export default function Page(): JSX.Element {
     } catch {}
   };
 
+  const handleDownloadPdf = () => {
+    if (!rfqForModal) return;
+    setPrintConfirmed(modalQuotation?.status === "confirmed");
+    setDownloadReady(true);
+  };
+
+  const handleDirectDownload = async () => {
+    if (!userId || userId === "ไม่พบข้อมูล" || !latest) return;
+    try {
+      const res  = await fetch(`/api/rfq?userId=${userId}`, { cache: "no-store" });
+      const data: RFQData[] = await res.json();
+      if (!Array.isArray(data) || data.length === 0) return;
+      setRfqForModal(data[0]);
+      setPrintConfirmed(latest.status === "confirmed");
+      setDownloadReady(true);
+    } catch {}
+  };
+
   useEffect(() => {
     if (!printReady) return;
     const id = setTimeout(() => {
@@ -277,6 +296,46 @@ export default function Page(): JSX.Element {
     }, 80);
     return () => clearTimeout(id);
   }, [printReady, rfqForModal]);
+
+  useEffect(() => {
+    if (!downloadReady || !rfqForModal) return;
+    const generate = async () => {
+      await new Promise<void>(r => setTimeout(r, 200));
+      try { await document.fonts.ready; } catch {}
+      const container = document.getElementById("quotation-print-area");
+      if (!container) { setDownloadReady(false); return; }
+      const pageEls = container.querySelectorAll<HTMLElement>("[data-pdf-page]");
+      if (pageEls.length === 0) { setDownloadReady(false); return; }
+      try {
+        const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
+          import("html2canvas"),
+          import("jspdf"),
+        ]);
+        const stripStyles = (clonedDoc: Document) => {
+          clonedDoc.querySelectorAll('link[rel="stylesheet"]').forEach(el => el.remove());
+          clonedDoc.querySelectorAll("style").forEach(el => {
+            if (!el.textContent?.includes("fonts.googleapis.com")) el.remove();
+          });
+        };
+        const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+        for (let i = 0; i < pageEls.length; i++) {
+          if (i > 0) pdf.addPage();
+          const canvas = await html2canvas(pageEls[i], {
+            scale: 2,
+            useCORS: true,
+            backgroundColor: "#ffffff",
+            logging: false,
+            onclone: stripStyles,
+          });
+          pdf.addImage(canvas.toDataURL("image/jpeg", 0.92), "JPEG", 0, 0, 210, 297);
+        }
+        pdf.save(`${rfqForModal.rfq_number ?? "quotation"}.pdf`);
+      } finally {
+        setDownloadReady(false);
+      }
+    };
+    generate();
+  }, [downloadReady, rfqForModal]);
 
   // ── Derived state ─────────────────────────────────────────────────────────
   const latest      = quotations[0] ?? null;
@@ -413,13 +472,36 @@ export default function Page(): JSX.Element {
                     </button>
                   )}
                   {latest.status === "confirmed" && (
-                    <button
-                      onClick={handleDirectPrint}
-                      className="btn btn-success w-full font-semibold gap-2 shadow-lg shadow-success/20"
-                    >
-                      ดูเอกสาร / พิมพ์ / ดาวน์โหลด
-                      <IconArrow />
-                    </button>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={handleDirectPrint}
+                        disabled={printReady}
+                        className="btn btn-success flex-1 font-semibold gap-2 shadow-lg shadow-success/20"
+                      >
+                        {printReady ? (
+                          <span className="loading loading-spinner loading-sm" />
+                        ) : (
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                          </svg>
+                        )}
+                        พิมพ์
+                      </button>
+                      <button
+                        onClick={handleDirectDownload}
+                        disabled={downloadReady}
+                        className="btn btn-outline btn-success flex-1 font-semibold gap-2"
+                      >
+                        {downloadReady ? (
+                          <span className="loading loading-spinner loading-sm" />
+                        ) : (
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                          </svg>
+                        )}
+                        ดาวน์โหลด
+                      </button>
+                    </div>
                   )}
                 </div>
 
@@ -598,17 +680,18 @@ export default function Page(): JSX.Element {
         `}</style>
       )}
 
-      {/* ── Print-only area (rendered only when print is triggered) ── */}
-      {printReady && rfqForModal && (
+      {/* ── Print/Download area (rendered on demand) ── */}
+      {(printReady || downloadReady) && rfqForModal && (
         <div
           id="quotation-print-area"
           aria-hidden="true"
-          style={{ position: "fixed", top: "-9999px", left: "-9999px", pointerEvents: "none" }}
+          style={
+            downloadReady
+              ? { position: "fixed", top: 0, left: 0, zIndex: -1, pointerEvents: "none" }
+              : { position: "fixed", top: "-9999px", left: "-9999px", pointerEvents: "none" }
+          }
         >
-          <QuotationDocument
-            rfq={rfqForModal}
-            confirmed={printConfirmed}
-          />
+          <QuotationDocument rfq={rfqForModal} confirmed={printConfirmed} />
         </div>
       )}
 
@@ -641,14 +724,20 @@ export default function Page(): JSX.Element {
                     พิมพ์
                   </button>
                   <button
-                    onClick={handlePrint}
-                    disabled={!rfqForModal || printReady}
+                    onClick={handleDownloadPdf}
+                    disabled={!rfqForModal || downloadReady}
                     className="btn btn-primary btn-sm gap-1.5 text-xs disabled:opacity-40"
                   >
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                    </svg>
-                    ดาวน์โหลด PDF
+                    {downloadReady ? (
+                      <><span className="loading loading-spinner loading-xs" />กำลังสร้าง...</>
+                    ) : (
+                      <>
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                        </svg>
+                        ดาวน์โหลด PDF
+                      </>
+                    )}
                   </button>
                   <button
                     onClick={() => setModalQuotation(null)}
