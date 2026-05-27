@@ -1,13 +1,12 @@
 "use client";
 
-import { JSX, useCallback, useEffect, useRef, useState } from "react";
+import { JSX, useCallback, useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import ChatNotificationBubble from "@/components/client/ChatNotificationBubble";
 import QuotationDocument, { RFQData } from "@/components/QuotationDocument";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-type UploadStatus = "idle" | "uploading" | "success" | "error";
 type QuotationStatus = "sent" | "reviewing" | "completed" | "bargaining" | "confirmed";
 
 interface Quotation {
@@ -20,10 +19,6 @@ interface Quotation {
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-const N8N_WEBHOOK_URL =
-  process.env.NEXT_PUBLIC_N8N_WEBHOOK_URL ??
-  "http://localhost:5678/webhook-test/pdf-test";
-
 const STEPS: { key: QuotationStatus; label: string; sublabel: string }[] = [
   { key: "sent",       label: "ส่งไฟล์แล้ว",        sublabel: "ระบบได้รับเอกสารของคุณแล้ว" },
   { key: "reviewing",  label: "ตรวจสอบ / จัดทำราย", sublabel: "ทีมงานกำลังตรวจสอบเอกสาร" },
@@ -63,39 +58,10 @@ function IconDoc() {
   );
 }
 
-function IconUpload() {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" className="w-10 h-10">
-      <path d="M12 16V4m0 0-4 4m4-4 4 4" />
-      <path d="M3 15v3a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-3" />
-    </svg>
-  );
-}
-
-// ─── Upload Status Badge ──────────────────────────────────────────────────────
-function UploadBadge({ status, message }: { status: UploadStatus; message: string }) {
-  if (status === "idle") return null;
-  const styles: Record<Exclude<UploadStatus, "idle">, string> = {
-    uploading: "alert-info",
-    success:   "alert-success",
-    error:     "alert-error",
-  };
-  return (
-    <div className={`alert ${styles[status as Exclude<UploadStatus, "idle">]} py-2.5 text-sm`}>
-      {message}
-    </div>
-  );
-}
-
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function Page(): JSX.Element {
   const { data: session } = useSession();
   const router = useRouter();
-
-  // ── Upload refs ──────────────────────────────────────────────────────────
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const previewRef   = useRef<HTMLDivElement>(null);
-  const dropZoneRef  = useRef<HTMLDivElement>(null);
 
   // ── Page state ───────────────────────────────────────────────────────────
   const [loading, setLoading] = useState(true);
@@ -103,14 +69,6 @@ export default function Page(): JSX.Element {
   const [modalQuotation, setModalQuotation] = useState<Quotation | null>(null);
   const [rfqForModal, setRfqForModal]             = useState<RFQData | null>(null);
   const [rfqForModalLoading, setRfqForModalLoading] = useState(false);
-
-  // ── Upload state ─────────────────────────────────────────────────────────
-  const [isDragging, setIsDragging]       = useState(false);
-  const [pdfFile, setPdfFile]             = useState<File | null>(null);
-  const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
-  const [fileError, setFileError]         = useState<string | null>(null);
-  const [uploadStatus, setUploadStatus]   = useState<UploadStatus>("idle");
-  const [uploadMessage, setUploadMessage] = useState("");
 
   const userId =
     (session?.user as any)?.id ??
@@ -138,99 +96,6 @@ export default function Page(): JSX.Element {
     const id = setInterval(() => fetchQuotations(true), 5000);
     return () => clearInterval(id);
   }, [fetchQuotations]);
-
-  // ── Upload logic ─────────────────────────────────────────────────────────
-  const handlePdfFile = (file: File) => {
-    const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
-    if (!isPdf)                        { setFileError("รองรับเฉพาะไฟล์ PDF เท่านั้น"); return; }
-    if (file.size > 10 * 1024 * 1024) { setFileError("ไฟล์ต้องมีขนาดไม่เกิน 10MB");  return; }
-    setFileError(null);
-    if (pdfPreviewUrl) URL.revokeObjectURL(pdfPreviewUrl);
-    setPdfFile(file);
-    setPdfPreviewUrl(URL.createObjectURL(file));
-    setUploadStatus("idle");
-    setUploadMessage("");
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-    const file = e.dataTransfer.files?.[0];
-    if (file) handlePdfFile(file);
-  };
-
-  const resetPdf = () => {
-    if (pdfPreviewUrl) URL.revokeObjectURL(pdfPreviewUrl);
-    setPdfFile(null); setPdfPreviewUrl(null);
-    setFileError(null); setUploadStatus("idle"); setUploadMessage("");
-    if (fileInputRef.current) fileInputRef.current.value = "";
-  };
-
-  useEffect(() => {
-    return () => { if (pdfPreviewUrl) URL.revokeObjectURL(pdfPreviewUrl); };
-  }, [pdfPreviewUrl]);
-
-  useEffect(() => {
-    if (!pdfPreviewUrl) return;
-    const t = setTimeout(() => {
-      previewRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-    }, 120);
-    return () => clearTimeout(t);
-  }, [pdfPreviewUrl]);
-
-  const handleSend = async () => {
-    if (!pdfFile) { setUploadStatus("error"); setUploadMessage("กรุณาเลือกไฟล์ PDF ก่อน"); return; }
-
-    const uid2 =
-      (session as any)?.id ??
-      (session as any)?.sessionId ??
-      (session?.user as any)?.id ??
-      "anonymous";
-
-    const formData = new FormData();
-    formData.append("file", pdfFile);
-    formData.append("userId", uid2);
-
-    setUploadStatus("uploading");
-    setUploadMessage("กำลังบันทึกไฟล์…");
-
-    let pdfData: { pdfId?: string; pdfPath?: string } = {};
-    try {
-      const pdfFormData = new FormData();
-      pdfFormData.append("file", pdfFile);
-      const pdfRes = await fetch("/api/pdf", { method: "POST", body: pdfFormData });
-      pdfData = pdfRes.ok ? await pdfRes.json() : {};
-
-      setUploadMessage("กำลังส่งข้อมูลไปยัง n8n…");
-      const storedFilename = (pdfData.pdfPath ?? pdfFile.name).replace(/^\/PDF\//, "");
-      formData.append("filename", storedFilename);
-      const res = await fetch(N8N_WEBHOOK_URL, { method: "POST", body: formData });
-      if (!res.ok) throw new Error(`ส่ง n8n ไม่สำเร็จ (HTTP ${res.status})`);
-
-      const saveRes  = await fetch("/api/quotation", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ filename: pdfFile.name, pdfId: pdfData.pdfId ?? null, pdfPath: pdfData.pdfPath ?? null }),
-      });
-      const saveData = await saveRes.json();
-
-      const optimistic: Quotation = saveData.quotation ?? {
-        _id: `temp-${Date.now()}`, filename: pdfFile.name,
-        status: "sent", createdAt: new Date().toISOString(),
-        pdfId: null, pdfPath: null,
-      };
-      setQuotations([optimistic]);
-      setUploadStatus("success");
-      setUploadMessage("ส่งสำเร็จ!");
-      resetPdf();
-    } catch (err) {
-      if (pdfData.pdfId) {
-        try { await fetch(`/api/pdf?pdfId=${pdfData.pdfId}`, { method: "DELETE" }); } catch {}
-      }
-      setUploadStatus("error");
-      setUploadMessage(`เกิดข้อผิดพลาด: ${(err as Error).message}`);
-    }
-  };
 
   // ── Fetch RFQ when document modal opens ─────────────────────────────────
   useEffect(() => {
@@ -540,108 +405,62 @@ export default function Page(): JSX.Element {
 
         ) : (
 
-          /* ── Upload Card (ไม่มี quotation — หลัง admin reset หรือใหม่) ── */
-          <div className="card bg-base-100 border border-base-300 shadow-sm overflow-hidden">
-            <div className="h-1 bg-gradient-to-r from-primary to-accent" />
-            <div className="card-body gap-5 px-4 sm:px-6 md:px-8 flex flex-col">
+          /* ── Landing Section (ยังไม่มี quotation) ── */
+          <div className="rounded-2xl overflow-hidden" style={{ background: "linear-gradient(135deg, #111827 0%, #1e2a3a 50%, #0f2040 100%)" }}>
+            <div className="px-6 py-10 md:px-12 md:py-14 flex flex-col md:flex-row gap-8 md:gap-12 items-center">
 
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs tracking-widest uppercase text-primary/60 font-medium mb-1">
-                    Quotation Request System
-                  </p>
-                  <p className="font-semibold text-base">อัปโหลดเอกสารเพื่อขอใบเสนอราคา</p>
+              {/* Left: copy + CTAs */}
+              <div className="flex-1 min-w-0">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold mb-5"
+                  style={{ background: "rgba(251,191,36,0.15)", color: "#fbbf24", border: "1px solid rgba(251,191,36,0.3)" }}>
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                  Quotation Request System
+                </span>
+                <h2 className="text-3xl md:text-4xl font-bold leading-tight mb-4 text-white">
+                  ส่งเอกสาร<br />เพื่อจัดทำ<span style={{ color: "#fbbf24" }}>ใบเสนอราคา</span>
+                </h2>
+                <p className="text-sm leading-relaxed mb-8 max-w-sm" style={{ color: "rgba(255,255,255,0.55)" }}>
+                  อัปโหลดไฟล์รายการสินค้า ทีมงานจะจัดทำใบเสนอราคา และพร้อมต่อรองกับคุณในทุกขั้นตอน
+                </p>
+                <div className="flex flex-wrap gap-3">
+                  <button
+                    onClick={() => router.push("/Client/quotation")}
+                    className="btn gap-2 font-semibold shadow-lg"
+                    style={{ background: "#f59e0b", borderColor: "#f59e0b", color: "#1a1a1a" }}
+                  >
+                    เริ่มต้นเลย <IconArrow />
+                  </button>
+                  <button
+                    onClick={() => document.getElementById("how-it-works")?.scrollIntoView({ behavior: "smooth" })}
+                    className="btn btn-ghost font-semibold"
+                    style={{ color: "rgba(255,255,255,0.7)", border: "1px solid rgba(255,255,255,0.2)" }}
+                  >
+                    ดูขั้นตอน
+                  </button>
                 </div>
-                <span className="badge badge-outline badge-sm">PDF only</span>
               </div>
 
-              {/* Drop zone or preview */}
-              {!pdfPreviewUrl ? (
-                <div
-                  ref={dropZoneRef}
-                  onClick={() => fileInputRef.current?.click()}
-                  onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-                  onDragLeave={() => setIsDragging(false)}
-                  onDrop={handleDrop}
-                  className={`
-                    flex flex-col items-center justify-center gap-3
-                    min-h-64 rounded-2xl border-2 border-dashed cursor-pointer
-                    transition-all duration-200
-                    ${isDragging
-                      ? "border-primary bg-primary/10 scale-[1.01]"
-                      : "border-base-300 hover:border-primary/50 hover:bg-base-200/60"
-                    }
-                  `}
-                >
-                  <div className={`transition-colors ${isDragging ? "text-primary" : "text-base-content/25"}`}>
-                    <IconUpload />
-                  </div>
-                  <div className="text-center space-y-1">
-                    <p className="font-medium text-sm">
-                      <span className="hidden sm:inline">ลากไฟล์มาวาง หรือ </span>
-                      <span className="text-primary underline underline-offset-2">
-                        <span className="sm:hidden">แตะ</span>
-                        <span className="hidden sm:inline">คลิก</span>เพื่ออัปโหลด
-                      </span>
-                    </p>
-                    <p className="text-xs text-base-content/40">รองรับเฉพาะ PDF • ขนาดไม่เกิน 10 MB</p>
-                  </div>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="application/pdf"
-                    hidden
-                    onChange={(e) => { const file = e.target.files?.[0]; if (file) handlePdfFile(file); }}
-                  />
-                </div>
-              ) : (
-                <div ref={previewRef} className="flex flex-col gap-3">
-                  <div className="flex flex-col sm:flex-row sm:items-center gap-2 bg-base-200 rounded-xl px-4 py-3">
-                    <div className="flex items-center gap-3 min-w-0 flex-1">
-                      <span className="badge badge-neutral badge-sm shrink-0">PDF</span>
-                      <span className="text-sm font-medium truncate">{pdfFile?.name}</span>
-                      <span className="text-xs text-base-content/40 shrink-0">
-                        {((pdfFile?.size ?? 0) / 1024 / 1024).toFixed(2)} MB
-                      </span>
+              {/* Right: steps */}
+              <div id="how-it-works" className="flex flex-col gap-3 w-full md:w-72 shrink-0">
+                {[
+                  { n: 1, title: "อัปโหลดเอกสาร",       sub: "รองรับ PDF สูงสุด 10 MB" },
+                  { n: 2, title: "ระบบประมวลผล AI",      sub: "แปลงข้อมูลอัตโนมัติ" },
+                  { n: 3, title: "ออกใบเสนอราคา",        sub: "ทีมงานจัดทำให้ทันที" },
+                  { n: 4, title: "ต่อรองราคาออนไลน์",   sub: "Chat โดยตรงกับทีมงาน" },
+                ].map(({ n, title, sub }) => (
+                  <div key={n} className="flex items-center gap-3 rounded-xl px-4 py-3"
+                    style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)" }}>
+                    <div className="w-8 h-8 rounded-lg flex items-center justify-center font-bold text-sm shrink-0"
+                      style={{ background: "#f59e0b", color: "#1a1a1a" }}>
+                      {n}
                     </div>
-                    <button onClick={resetPdf} className="btn btn-outline btn-sm w-full sm:w-auto">
-                      เปลี่ยนไฟล์
-                    </button>
+                    <div>
+                      <p className="text-sm font-semibold text-white">{title}</p>
+                      <p className="text-xs" style={{ color: "rgba(255,255,255,0.45)" }}>{sub}</p>
+                    </div>
                   </div>
-                  <div className="rounded-xl overflow-hidden border border-base-300 h-[55vh] sm:h-[75vh]">
-                    <iframe src={pdfPreviewUrl} className="w-full h-full" title="PDF Preview" />
-                  </div>
-                </div>
-              )}
-
-              {fileError && (
-                <div className="alert alert-error py-2.5 text-sm">{fileError}</div>
-              )}
-
-              <div className="divider my-0" />
-
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div className="flex items-center gap-2 text-sm">
-                  <span className="text-base-content/45">ผู้ส่ง</span>
-                  <div className="flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-success shrink-0" />
-                    <code className="text-xs bg-base-200 px-2 py-1 rounded font-mono truncate max-w-[150px] sm:max-w-none">{userId}</code>
-                  </div>
-                </div>
-                <button
-                  onClick={handleSend}
-                  disabled={!pdfFile || uploadStatus === "uploading"}
-                  className="btn btn-primary gap-2 sm:w-auto w-full shadow-lg shadow-primary/20"
-                >
-                  {uploadStatus === "uploading" ? (
-                    <><span className="loading loading-spinner loading-sm" />กำลังส่งเอกสาร...</>
-                  ) : (
-                    <>ส่งเอกสารเพื่อออกใบเสนอราคา <IconArrow /></>
-                  )}
-                </button>
+                ))}
               </div>
-
-              <UploadBadge status={uploadStatus} message={uploadMessage} />
 
             </div>
           </div>
