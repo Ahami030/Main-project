@@ -40,12 +40,11 @@ export async function PATCH(
   }
 
   const role = (session as any)?.user?.role ?? (session as any)?.role;
-  if (role !== "admin") {
-    return NextResponse.json({ message: "Forbidden" }, { status: 403 });
-  }
+  const sessionUserId = (session.user as any)?.id ?? (session as any)?.id ?? "";
+  const isAdmin = role === "admin";
 
   const { status } = await req.json();
-  const allowed = ["sent", "reviewing", "completed", "bargaining"];
+  const allowed = ["sent", "reviewing", "completed", "bargaining", "confirmed"];
   if (!allowed.includes(status)) {
     return NextResponse.json({ message: "Invalid status" }, { status: 400 });
   }
@@ -53,15 +52,22 @@ export async function PATCH(
   await connectMongoDB();
 
   const { id } = await params;
-  const updated = await Quotation.findByIdAndUpdate(
-    id,
-    { status },
-    { new: true }
-  );
-
-  if (!updated) {
+  const quotation = await Quotation.findById(id);
+  if (!quotation) {
     return NextResponse.json({ message: "Not found" }, { status: 404 });
   }
 
-  return NextResponse.json({ quotation: updated });
+  const isClientConfirm =
+    quotation.userId === sessionUserId &&
+    status === "confirmed" &&
+    quotation.status === "bargaining";
+
+  if (!isAdmin && !isClientConfirm) {
+    return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+  }
+
+  quotation.status = status;
+  await quotation.save();
+
+  return NextResponse.json({ quotation });
 }

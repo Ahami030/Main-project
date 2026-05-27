@@ -1,6 +1,6 @@
 import mongoose from "mongoose";
 
-export type QuotationStatus = "sent" | "reviewing" | "completed" | "bargaining";
+export type QuotationStatus = "sent" | "reviewing" | "completed" | "bargaining" | "confirmed";
 
 const QuotationSchema = new mongoose.Schema(
   {
@@ -10,7 +10,7 @@ const QuotationSchema = new mongoose.Schema(
     pdfPath: { type: String, default: null },
     status: {
       type: String,
-      enum: ["sent", "reviewing", "completed", "bargaining"],
+      enum: ["sent", "reviewing", "completed", "bargaining", "confirmed"],
       default: "sent",
     },
   },

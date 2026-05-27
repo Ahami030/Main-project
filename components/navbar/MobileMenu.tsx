@@ -25,10 +25,9 @@ export default function MobileMenu({ session, latestStatus, onClose }: Props) {
       {role === "user" && (
         <>
           <Link href="/Client" className={linkClass} onClick={onClose}>Dashboard</Link>
-          {latestStatus !== "bargaining" && (
-            <Link href="/Client/quotation" className={linkClass} onClick={onClose}>ส่งใบเสนอราคา</Link>
+          {(latestStatus === "bargaining" || latestStatus === "confirmed") && (
+            <Link href="/Client/Bargain" className={linkClass} onClick={onClose}>ต่อรองราคา</Link>
           )}
-          <Link href="/Client/Bargain" className={linkClass} onClick={onClose}>ต่อรองราคา</Link>
         </>
       )}
 

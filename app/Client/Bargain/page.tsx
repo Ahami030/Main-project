@@ -24,6 +24,9 @@ export default function DocumentChatPage() {
   const [rfq, setRfq] = useState<RFQData | null>(null);
   const [rfqLoading, setRfqLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"doc" | "chat">("doc");
+  const [quotationId, setQuotationId] = useState<string | null>(null);
+  const [isConfirmed, setIsConfirmed] = useState(false);
+  const [confirmLoading, setConfirmLoading] = useState(false);
 
   const chatContainerRef = useRef<HTMLDivElement>(null);
 
@@ -32,15 +35,19 @@ export default function DocumentChatPage() {
     localStorage.setItem("client_chat_last_seen", Date.now().toString());
   }, []);
 
-  // ── Guard: เข้าได้เฉพาะเมื่อ status = "bargaining" ────────
+  // ── Guard: เข้าได้เฉพาะเมื่อ status = "bargaining" หรือ "confirmed" ────────
   useEffect(() => {
     if (!USER_ID) return;
     fetch("/api/quotation")
       .then((r) => r.json())
       .then((data) => {
-        const list: { status: string }[] = data.quotations ?? [];
-        const allowed = list.some((q) => q.status === "bargaining");
-        if (!allowed) router.replace("/Client/quotation");
+        const list: { _id: string; status: string }[] = data.quotations ?? [];
+        const active = list.find((q) => q.status === "bargaining" || q.status === "confirmed");
+        if (!active) router.replace("/Client/quotation");
+        else {
+          setQuotationId(active._id);
+          setIsConfirmed(active.status === "confirmed");
+        }
       });
   }, [USER_ID, router]);
 
@@ -106,6 +113,25 @@ export default function DocumentChatPage() {
     chatContainerRef.current?.scrollTo({ top: chatContainerRef.current.scrollHeight, behavior: "smooth" });
     setShowNewButton(false);
     setShouldAutoScroll(true);
+  };
+
+  const handleConfirm = async () => {
+    if (!quotationId) return;
+    setConfirmLoading(true);
+    await fetch(`/api/quotation/${quotationId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "confirmed" }),
+    });
+    setIsConfirmed(true);
+    setConfirmLoading(false);
+  };
+
+  const handleDownload = () => {
+    const orig = document.title;
+    document.title = rfq?.rfq_number ?? "quotation";
+    window.print();
+    setTimeout(() => { document.title = orig; }, 500);
   };
 
   if (status === "loading")
@@ -215,7 +241,7 @@ export default function DocumentChatPage() {
                 <span className="loading loading-spinner loading-md text-primary" />
               </div>
             ) : rfq ? (
-              <QuotationDocument rfq={rfq} />
+              <QuotationDocument rfq={rfq} confirmed={isConfirmed} />
             ) : (
               <div className="flex flex-col items-center justify-center h-full gap-2 text-base-content/30">
                 <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -408,14 +434,52 @@ export default function DocumentChatPage() {
                 <button
                   onClick={() => window.print()}
                   disabled={!rfq}
-                  className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-primary hover:bg-primary/80 disabled:opacity-40 disabled:cursor-not-allowed text-primary-content text-[11px] font-medium rounded-lg transition-colors"
+                  className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-base-100 border border-base-content/10 hover:bg-base-200 disabled:opacity-40 disabled:cursor-not-allowed text-base-content text-[11px] font-medium rounded-lg transition-colors"
                 >
                   <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
                   </svg>
                   พิมพ์
                 </button>
+                <button
+                  onClick={handleDownload}
+                  disabled={!rfq}
+                  className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-primary hover:bg-primary/80 disabled:opacity-40 disabled:cursor-not-allowed text-primary-content text-[11px] font-medium rounded-lg transition-colors"
+                >
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+                  ดาวน์โหลด
+                </button>
               </div>
+
+              <button
+                onClick={handleConfirm}
+                disabled={isConfirmed || confirmLoading || !quotationId}
+                className={`w-full flex items-center justify-center gap-1.5 py-2 text-[11px] font-medium rounded-lg transition-colors ${
+                  isConfirmed
+                    ? "bg-success/20 text-success cursor-default border border-success/30"
+                    : "bg-success hover:bg-success/80 disabled:opacity-40 disabled:cursor-not-allowed text-success-content"
+                }`}
+              >
+                {confirmLoading ? (
+                  <span className="loading loading-spinner loading-xs" />
+                ) : isConfirmed ? (
+                  <>
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                    </svg>
+                    ยืนยันแล้ว
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    ยืนยันรับราคา
+                  </>
+                )}
+              </button>
             </div>
           </div>
 

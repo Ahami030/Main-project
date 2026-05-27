@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 type UploadStatus = "idle" | "uploading" | "success" | "error";
-type QuotationStatus = "sent" | "reviewing" | "completed" | "bargaining";
+type QuotationStatus = "sent" | "reviewing" | "completed" | "bargaining" | "confirmed";
 type View = "upload" | "history";
 
 interface Quotation {
@@ -27,10 +27,11 @@ const STEPS: { key: QuotationStatus; label: string; sublabel: string }[] = [
   { key: "reviewing",  label: "ตรวจสอบ / จัดทำราย", sublabel: "ทีมงานกำลังตรวจสอบเอกสาร" },
   { key: "completed",  label: "ดำเนินการเสร็จสิ้น",  sublabel: "ใบเสนอราคาพร้อมแล้ว" },
   { key: "bargaining", label: "พร้อมต่อรองราคา",     sublabel: "เอกสารพร้อมแล้ว กดเพื่อต่อรอง" },
+  { key: "confirmed",  label: "ยืนยันแล้ว",          sublabel: "ลูกค้ายืนยันรับราคาเรียบร้อย" },
 ];
 
 const STATUS_ORDER: Record<QuotationStatus, number> = {
-  sent: 0, reviewing: 1, completed: 2, bargaining: 3,
+  sent: 0, reviewing: 1, completed: 2, bargaining: 3, confirmed: 4,
 };
 
 const STATUS_STYLE: Record<QuotationStatus, { spotlight: string; dot: string; bar: string; badge: string; label: string }> = {
@@ -38,6 +39,7 @@ const STATUS_STYLE: Record<QuotationStatus, { spotlight: string; dot: string; ba
   reviewing:  { spotlight: "border-warning/25 bg-warning/5",  dot: "bg-warning", bar: "from-warning to-warning/30", badge: "badge-warning", label: "กำลังดำเนินการ" },
   completed:  { spotlight: "border-primary/25 bg-primary/5",  dot: "bg-primary", bar: "from-primary to-primary/30", badge: "badge-primary", label: "เสร็จสิ้น" },
   bargaining: { spotlight: "border-accent/25  bg-accent/5",   dot: "bg-accent",  bar: "from-accent  to-accent/30",  badge: "badge-accent",  label: "พร้อมต่อรอง" },
+  confirmed:  { spotlight: "border-success/40 bg-success/10", dot: "bg-success", bar: "from-success to-success/40", badge: "badge-success", label: "ยืนยันแล้ว" },
 };
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
@@ -67,7 +69,7 @@ function IconUpload() {
 }
 
 // ─── Quotation Card ───────────────────────────────────────────────────────────
-function QuotationCard({ q }: { q: Quotation }) {
+function QuotationCard({ q, onSpotlightClick }: { q: Quotation; onSpotlightClick?: () => void }) {
   const router = useRouter();
   const date = new Date(q.createdAt).toLocaleDateString("th-TH", {
     year: "numeric", month: "short", day: "numeric",
@@ -108,16 +110,24 @@ function QuotationCard({ q }: { q: Quotation }) {
 
           {/* Left: spotlight + hint / CTA */}
           <div className="flex-1 flex flex-col gap-4">
-            <div className={`rounded-2xl border px-5 py-5 flex items-center gap-4 ${spotlight}`}>
+            <div
+              onClick={onSpotlightClick}
+              className={`rounded-2xl border px-5 py-5 flex items-center gap-4 ${spotlight} ${onSpotlightClick ? "cursor-pointer hover:opacity-90 transition-opacity" : ""}`}
+            >
               <span className={`w-3 h-3 rounded-full shrink-0 ${dot} ${isInProgress ? "animate-pulse" : ""}`} />
               <div className="flex-1 min-w-0">
                 <p className="font-semibold">{currentStep.label}</p>
                 <p className="text-sm text-base-content/50 mt-0.5">{currentStep.sublabel}</p>
               </div>
               {isInProgress && <span className="loading loading-dots loading-sm opacity-30" />}
+              {onSpotlightClick && !isInProgress && (
+                <svg className="w-4 h-4 text-base-content/30 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              )}
             </div>
 
-            {nextStep && q.status !== "bargaining" && (
+            {nextStep && q.status !== "bargaining" && q.status !== "confirmed" && (
               <div className="flex items-center gap-3 text-xs text-base-content/30">
                 <div className="flex-1 h-px bg-base-300" />
                 <span>ขั้นถัดไป · {nextStep.label}</span>
@@ -130,6 +140,15 @@ function QuotationCard({ q }: { q: Quotation }) {
                 className="btn btn-accent w-full font-semibold gap-2 shadow-lg shadow-accent/20"
               >
                 ไปยังหน้าต่อรองราคา
+                <IconArrow />
+              </button>
+            )}
+            {q.status === "confirmed" && (
+              <button
+                onClick={() => router.push("/Client/Bargain")}
+                className="btn btn-success w-full font-semibold gap-2 shadow-lg shadow-success/20"
+              >
+                ดูเอกสาร / พิมพ์ / ดาวน์โหลด
                 <IconArrow />
               </button>
             )}
@@ -189,6 +208,7 @@ function UploadBadge({ status, message }: { status: UploadStatus; message: strin
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function Page(): JSX.Element {
   const { data: session } = useSession();
+  const router          = useRouter();
   const fileInputRef    = useRef<HTMLInputElement>(null);
   const previewRef      = useRef<HTMLDivElement>(null);
   const dropZoneRef     = useRef<HTMLDivElement>(null);
@@ -202,6 +222,8 @@ export default function Page(): JSX.Element {
     setVisible(false);
     setTimeout(() => { setView(next); setVisible(true); }, 220);
   }, []);
+
+  const [modalQuotation, setModalQuotation] = useState<Quotation | null>(null);
 
   const [isDragging, setIsDragging]       = useState(false);
   const [pdfFile, setPdfFile]             = useState<File | null>(null);
@@ -509,7 +531,17 @@ export default function Page(): JSX.Element {
                   </div>
                 </div>
               ) : (
-                quotations.map((q) => <QuotationCard key={q._id} q={q} />)
+                quotations.map((q) => (
+                  <QuotationCard
+                    key={q._id}
+                    q={q}
+                    onSpotlightClick={
+                      q.status === "bargaining" || q.status === "confirmed"
+                        ? () => setModalQuotation(q)
+                        : undefined
+                    }
+                  />
+                ))
               )}
 
               {lastUpdated && (
@@ -522,6 +554,56 @@ export default function Page(): JSX.Element {
 
         </div>
       </div>
+
+      {/* ── Document Detail Modal ── */}
+      {modalQuotation && (() => {
+        const mq = modalQuotation;
+        const mqDate = new Date(mq.createdAt).toLocaleDateString("th-TH", {
+          year: "numeric", month: "long", day: "numeric",
+          hour: "2-digit", minute: "2-digit",
+        });
+        const { badge, label } = STATUS_STYLE[mq.status];
+        return (
+          <dialog className="modal modal-open">
+            <div className="modal-box max-w-sm">
+              <h3 className="font-bold text-base mb-1">รายละเอียดเอกสาร</h3>
+              <p className="text-xs text-base-content/40 mb-4">กดปุ่มด้านล่างเพื่อพิมพ์หรือดาวน์โหลด PDF</p>
+
+              <div className="space-y-2 text-sm mb-5">
+                <div className="flex justify-between items-start gap-2">
+                  <span className="text-base-content/50 shrink-0">ชื่อไฟล์</span>
+                  <span className="font-medium text-right break-all">{mq.filename}</span>
+                </div>
+                <div className="flex justify-between items-center gap-2">
+                  <span className="text-base-content/50">วันที่ส่ง</span>
+                  <span className="font-medium">{mqDate}</span>
+                </div>
+                <div className="flex justify-between items-center gap-2">
+                  <span className="text-base-content/50">สถานะ</span>
+                  <span className={`badge badge-sm ${badge}`}>{label}</span>
+                </div>
+              </div>
+
+              <div className="modal-action flex-col gap-2 mt-0">
+                {(mq.status === "bargaining" || mq.status === "confirmed") && (
+                  <button
+                    onClick={() => { setModalQuotation(null); router.push("/Client/Bargain"); }}
+                    className="btn btn-primary w-full gap-2"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    ดูเอกสาร / พิมพ์ / ดาวน์โหลด
+                  </button>
+                )}
+                <button onClick={() => setModalQuotation(null)} className="btn btn-ghost w-full">ปิด</button>
+              </div>
+            </div>
+            <div className="modal-backdrop" onClick={() => setModalQuotation(null)} />
+          </dialog>
+        );
+      })()}
+
     </main>
   );
 }

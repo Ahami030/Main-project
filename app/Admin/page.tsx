@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import InlineChatPanel from '@/components/admin/InlineChatPanel';
 
-type QuotationStatus = 'sent' | 'reviewing' | 'completed' | 'bargaining';
+type QuotationStatus = 'sent' | 'reviewing' | 'completed' | 'bargaining' | 'confirmed';
 
 interface Quotation {
   _id: string;
@@ -18,6 +18,7 @@ const STATUS_LABELS: Record<QuotationStatus, string> = {
   reviewing:  'กำลังดำเนินการ',
   completed:  'เสร็จสิ้น',
   bargaining: 'พร้อมต่อรอง',
+  confirmed:  'ยืนยันแล้ว',
 };
 
 const STATUS_BADGE: Record<QuotationStatus, string> = {
@@ -25,6 +26,7 @@ const STATUS_BADGE: Record<QuotationStatus, string> = {
   reviewing:  'badge-warning',
   completed:  'badge-primary',
   bargaining: 'badge-accent',
+  confirmed:  'badge-success',
 };
 
 const NEXT_STATUS: Record<QuotationStatus, QuotationStatus | null> = {
@@ -32,6 +34,7 @@ const NEXT_STATUS: Record<QuotationStatus, QuotationStatus | null> = {
   reviewing:  'completed',
   completed:  'bargaining',
   bargaining: null,
+  confirmed:  null,
 };
 
 export default function AdminPage() {
@@ -39,6 +42,7 @@ export default function AdminPage() {
   const [quotations, setQuotations] = useState<Quotation[]>([]);
   const [loading, setLoading] = useState(false);
   const [updating, setUpdating] = useState<string | null>(null);
+  const [resetting, setResetting] = useState<string | null>(null);
   const [newRfqCount, setNewRfqCount] = useState(0);
 
   useEffect(() => {
@@ -97,6 +101,22 @@ export default function AdminPage() {
       setQuotations((prev) => prev.filter((q) => q._id !== id));
     } finally {
       setUpdating(null);
+    }
+  };
+
+  const handleReset = async (q: Quotation) => {
+    if (!confirm(`Reset session ของ ${q.userId}?\n\nสิ่งที่จะเกิดขึ้น:\n• แชทและข้อมูล RFQ จะถูกสำรองไว้ใน archived_chats / archived_rfqs\n• ไฟล์ PDF, quotation, chats, และ RFQ จะถูกลบออก`)) return;
+    setResetting(q._id);
+    try {
+      const res = await fetch('/api/admin/reset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: q.userId }),
+      });
+      if (!res.ok) { alert('Reset ล้มเหลว กรุณาลองใหม่'); return; }
+      setQuotations((prev) => prev.filter((x) => x._id !== q._id));
+    } finally {
+      setResetting(null);
     }
   };
 
@@ -291,15 +311,29 @@ export default function AdminPage() {
                                 )}
                               </td>
                               <td>
-                                <button
-                                  onClick={() => deleteQuotation(q._id)}
-                                  disabled={updating === q._id}
-                                  className="btn btn-xs btn-error btn-outline rounded-lg"
-                                >
-                                  {updating === q._id
-                                    ? <span className="loading loading-spinner loading-xs" />
-                                    : 'ลบ / รีเซ็ต'}
-                                </button>
+                                <div className="flex gap-1.5">
+                                  <button
+                                    onClick={() => deleteQuotation(q._id)}
+                                    disabled={updating === q._id || resetting === q._id}
+                                    className="btn btn-xs btn-error btn-outline rounded-lg"
+                                  >
+                                    {updating === q._id
+                                      ? <span className="loading loading-spinner loading-xs" />
+                                      : 'ลบ'}
+                                  </button>
+                                  {(q.status === 'bargaining' || q.status === 'confirmed') && (
+                                    <button
+                                      onClick={() => handleReset(q)}
+                                      disabled={resetting === q._id || updating === q._id}
+                                      className="btn btn-xs btn-warning rounded-lg"
+                                      title="Archive แชท+RFQ แล้วลบทุกอย่าง เพื่อเริ่มใหม่"
+                                    >
+                                      {resetting === q._id
+                                        ? <span className="loading loading-spinner loading-xs" />
+                                        : 'Reset'}
+                                    </button>
+                                  )}
+                                </div>
                               </td>
                             </tr>
                           );

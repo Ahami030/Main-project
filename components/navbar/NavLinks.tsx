@@ -24,10 +24,9 @@ export default function NavLinks({ session, latestStatus }: Props) {
       {role === "user" && (
         <>
           <Link href="/Client" className={linkClass}>Dashboard</Link>
-          {latestStatus !== "bargaining" && (
-            <Link href="/Client/quotation" className={linkClass}>ส่งใบเสนอราคา</Link>
+          {(latestStatus === "bargaining" || latestStatus === "confirmed") && (
+            <Link href="/Client/Bargain" className={linkClass}>ต่อรองราคา</Link>
           )}
-          <Link href="/Client/Bargain" className={linkClass}>ต่อรองราคา</Link>
         </>
       )}
 

@@ -117,7 +117,7 @@ const pageBase: React.CSSProperties = {
   boxSizing: "border-box",
 };
 
-export default function QuotationDocument({ rfq }: { rfq: RFQData }) {
+export default function QuotationDocument({ rfq, confirmed = false }: { rfq: RFQData; confirmed?: boolean }) {
   const items = rfq.line_items;
   const chunks: LineItem[][] = [];
   for (let i = 0; i < Math.max(items.length, 1); i += ITEMS_PER_PAGE)
@@ -224,7 +224,7 @@ export default function QuotationDocument({ rfq }: { rfq: RFQData }) {
             }}
             className={!isLast ? "break-after-page print:mb-0" : ""}
           >
-            <Watermark />
+            {!confirmed && <Watermark />}
 
             {/* ── หน้าแรก: Header banner + meta ── */}
             {isFirst && (
