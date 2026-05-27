@@ -17,10 +17,11 @@ export async function GET(req: Request) {
     // For each userId, get the latest message and user info
     const usersWithChats = await Promise.all(
       userIds.map(async (userId) => {
-        // Get latest message from this user
-        const latestChat = await Chat.findOne({ userId }).sort({
-          createdAt: -1,
-        });
+        // Get latest message overall (for display)
+        const latestChat = await Chat.findOne({ userId }).sort({ createdAt: -1 });
+
+        // Get latest message sent by user only (for unread badge)
+        const latestUserChat = await Chat.findOne({ userId, senderRole: "user" }).sort({ createdAt: -1 });
 
         // Get user info
         const user = await User.findById(userId).lean();
@@ -30,6 +31,7 @@ export async function GET(req: Request) {
           user: user ? { name: user.name, email: user.email } : null,
           latestMessage: latestChat?.message || "",
           latestMessageTime: latestChat?.createdAt || new Date(),
+          latestUserMessageTime: latestUserChat?.createdAt || null,
         };
       })
     );

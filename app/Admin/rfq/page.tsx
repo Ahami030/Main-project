@@ -37,7 +37,7 @@ export default function RFQListPage() {
         if (chatRes.ok) {
           const chatData = await chatRes.json();
           const times: Record<string, string> = {};
-          (chatData as any[]).forEach((u) => { times[u.userId] = u.latestMessageTime; });
+          (chatData as any[]).forEach((u) => { if (u.latestUserMessageTime) times[u.userId] = u.latestUserMessageTime; });
           setChatTimes(times);
         }
       } catch (err: any) {

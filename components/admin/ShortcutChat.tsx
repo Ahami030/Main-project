@@ -7,6 +7,7 @@ type UserWithChat = {
   user: { name: string; email: string } | null;
   latestMessage: string;
   latestMessageTime: string;
+  latestUserMessageTime?: string | null;
 };
 
 type ChatMsg = {
@@ -133,8 +134,8 @@ export default function ShortcutChat() {
   // ── Helpers ──
 
   const isUnread = (u: UserWithChat) => {
-    if (!u.latestMessageTime) return false;
-    return new Date(u.latestMessageTime).getTime() > (seenAt[u.userId] ?? 0);
+    if (!u.latestUserMessageTime) return false;
+    return new Date(u.latestUserMessageTime).getTime() > (seenAt[u.userId] ?? 0);
   };
 
   const unreadCount = users.filter(isUnread).length;
