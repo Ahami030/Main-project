@@ -28,6 +28,8 @@ export default function DocumentChatPage() {
   const [isConfirmed, setIsConfirmed] = useState(false);
   const [confirmLoading, setConfirmLoading] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [downloadReady, setDownloadReady] = useState(false);
+  const [pdfLoading, setPdfLoading] = useState(false);
 
   const chatContainerRef = useRef<HTMLDivElement>(null);
 
@@ -132,11 +134,50 @@ export default function DocumentChatPage() {
 
   const handleDownload = () => {
     if (!rfq) return;
-    const orig = document.title;
-    document.title = rfq.rfq_number ?? "quotation";
-    window.print();
-    setTimeout(() => { document.title = orig; }, 500);
+    setDownloadReady(true);
   };
+
+  useEffect(() => {
+    if (!downloadReady || !rfq) return;
+    const generate = async () => {
+      setPdfLoading(true);
+      await new Promise<void>(r => setTimeout(r, 200));
+      try { await document.fonts.ready; } catch {}
+      const container = document.getElementById("quotation-print-area");
+      if (!container) { setDownloadReady(false); setPdfLoading(false); return; }
+      const pageEls = container.querySelectorAll<HTMLElement>("[data-pdf-page]");
+      if (pageEls.length === 0) { setDownloadReady(false); setPdfLoading(false); return; }
+      try {
+        const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
+          import("html2canvas"),
+          import("jspdf"),
+        ]);
+        const stripStyles = (clonedDoc: Document) => {
+          clonedDoc.querySelectorAll('link[rel="stylesheet"]').forEach(el => el.remove());
+          clonedDoc.querySelectorAll("style").forEach(el => {
+            if (!el.textContent?.includes("fonts.googleapis.com")) el.remove();
+          });
+        };
+        const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+        for (let i = 0; i < pageEls.length; i++) {
+          if (i > 0) pdf.addPage();
+          const canvas = await html2canvas(pageEls[i], {
+            scale: 2,
+            useCORS: true,
+            backgroundColor: "#ffffff",
+            logging: false,
+            onclone: stripStyles,
+          });
+          pdf.addImage(canvas.toDataURL("image/jpeg", 0.92), "JPEG", 0, 0, 210, 297);
+        }
+        pdf.save(`${rfq.rfq_number ?? "quotation"}.pdf`);
+      } finally {
+        setDownloadReady(false);
+        setPdfLoading(false);
+      }
+    };
+    generate();
+  }, [downloadReady, rfq]);
 
   if (status === "loading")
     return (
@@ -239,7 +280,7 @@ export default function DocumentChatPage() {
             LEFT: QUOTATION DOCUMENT (2/3)
         ══════════════════════════════════════ */}
         <div className={`print-doc md:basis-2/3 flex flex-col min-h-0 md:h-full bg-base-200 border-r border-base-content/10 ${activeTab === "doc" ? "flex-1" : "hidden md:flex"}`}>
-          <div className="print-scroll flex-1 min-h-0 overflow-y-auto overflow-x-auto py-6 px-2">
+          <div id="quotation-print-area" className="print-scroll flex-1 min-h-0 overflow-y-auto overflow-x-auto py-6 px-2">
             {rfqLoading ? (
               <div className="flex items-center justify-center h-full">
                 <span className="loading loading-spinner loading-md text-primary" />
@@ -447,13 +488,17 @@ export default function DocumentChatPage() {
                 </button>
                 <button
                   onClick={handleDownload}
-                  disabled={!rfq}
+                  disabled={!rfq || pdfLoading}
                   className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-primary hover:bg-primary/80 disabled:opacity-40 disabled:cursor-not-allowed text-primary-content text-[11px] font-medium rounded-lg transition-colors"
                 >
-                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                  </svg>
-                  ดาวน์โหลด
+                  {pdfLoading ? (
+                    <span className="loading loading-spinner loading-xs" />
+                  ) : (
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                  )}
+                  {pdfLoading ? "กำลังสร้าง PDF..." : "ดาวน์โหลด PDF"}
                 </button>
               </div>
 

@@ -66,8 +66,19 @@ const ITEMS_PER_PAGE = 15;
 function Watermark() {
   return (
     <div
-      className="pointer-events-none absolute inset-0 flex items-center justify-center overflow-hidden"
       aria-hidden="true"
+      style={{
+        pointerEvents: "none",
+        position: "absolute",
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        overflow: "hidden",
+      }}
     >
       <span style={{
         transform: "rotate(-45deg)",
@@ -139,7 +150,21 @@ export default function QuotationDocument({ rfq, confirmed = false }: { rfq: RFQ
     <>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap');
-        @media print { .rfq-version-bar { display: none !important; } }
+        .rfq-page, .rfq-page *, .rfq-page *::before, .rfq-page *::after { box-sizing: border-box; }
+        .rfq-empty-row { display: none; }
+        .rfq-page { padding: 10mm 14mm !important; }
+        .rfq-header { padding: 12px 16px !important; margin-bottom: 10px !important; }
+        .rfq-meta { margin-bottom: 8px !important; }
+        .rfq-meta > div { padding: 7px 12px !important; }
+        .rfq-intro { padding: 7px 12px !important; margin-bottom: 8px !important; line-height: 1.6 !important; }
+        .rfq-table { margin-bottom: 10px !important; }
+        .rfq-summary { margin-bottom: 10px !important; }
+        .rfq-conditions { line-height: 1.6 !important; padding: 8px 12px !important; margin-bottom: 10px !important; }
+        .rfq-sig-label { margin-bottom: 12px !important; }
+        @media print {
+          .rfq-version-bar { display: none !important; }
+          .rfq-page { box-shadow: none !important; }
+        }
       `}</style>
 
       {/* ── Version Banner ── */}
@@ -223,14 +248,14 @@ export default function QuotationDocument({ rfq, confirmed = false }: { rfq: RFQ
               boxShadow: "0 4px 24px rgba(0,0,0,0.12)",
               marginBottom: isLast ? 0 : "24px",
             }}
-            className={!isLast ? "break-after-page print:mb-0" : ""}
+            className={`rfq-page${!isLast ? " break-after-page print:mb-0" : ""}`}
           >
             {!confirmed && <Watermark />}
 
             {/* ── หน้าแรก: Header banner + meta ── */}
             {isFirst && (
               <>
-                <div style={{
+                <div className="rfq-header" style={{
                   background: "linear-gradient(135deg, #1e293b 0%, #334155 100%)",
                   borderRadius: "8px",
                   padding: "16px 20px",
@@ -264,7 +289,7 @@ export default function QuotationDocument({ rfq, confirmed = false }: { rfq: RFQ
                   </div>
                 </div>
 
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "14px" }}>
+                <div className="rfq-meta" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "14px" }}>
                   <div style={{ border: "1px solid #e2e8f0", borderRadius: "6px", padding: "10px 14px", backgroundColor: "#f8fafc" }}>
                     <p style={{ color: "#94a3b8", fontSize: "9px", textTransform: "uppercase", letterSpacing: "0.12em", margin: "0 0 4px" }}>เรียน / To</p>
                     <p style={{ color: "#1e293b", fontWeight: 600, fontSize: "13px", margin: 0 }}>{rfq.buyer_company_name || "—"}</p>
@@ -283,7 +308,7 @@ export default function QuotationDocument({ rfq, confirmed = false }: { rfq: RFQ
                   </div>
                 </div>
 
-                <div style={{ backgroundColor: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "6px", padding: "10px 14px", marginBottom: "14px", fontSize: "12px", lineHeight: "1.8", color: "#475569" }}>
+                <div className="rfq-intro" style={{ backgroundColor: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "6px", padding: "10px 14px", marginBottom: "14px", fontSize: "12px", lineHeight: "1.8", color: "#475569" }}>
                   <p style={{ margin: "0 0 4px" }}>
                     ข้าพเจ้า <strong style={{ color: "#1e293b" }}>{rfq.vendor_company_name || "[ชื่อบริษัทผู้เสนอ]"}</strong>{" "}
                     ขอเสนอราคาสินค้ารวมทั้งบริการและกำหนดเวลาส่งมอบตามรายการดังต่อไปนี้
@@ -306,7 +331,7 @@ export default function QuotationDocument({ rfq, confirmed = false }: { rfq: RFQ
             )}
 
             {/* ── ตาราง ── */}
-            <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "16px" }}>
+            <table className="rfq-table" style={{ width: "100%", borderCollapse: "collapse", marginBottom: "16px" }}>
               <TableHead />
               <tbody>
                 {pageItems.map((item, idx) => {
@@ -335,7 +360,7 @@ export default function QuotationDocument({ rfq, confirmed = false }: { rfq: RFQ
                 })}
                 {isFirst && isLast && pageItems.length < 8 &&
                   Array.from({ length: 8 - pageItems.length }).map((_, i) => (
-                    <tr key={`e${i}`} style={{ backgroundColor: (pageItems.length + i) % 2 === 0 ? "#ffffff" : "#f8fafc" }}>
+                    <tr key={`e${i}`} className="rfq-empty-row" style={{ backgroundColor: (pageItems.length + i) % 2 === 0 ? "#ffffff" : "#f8fafc" }}>
                       {[0, 1, 2, 3, 4].map((_, j) => (
                         <td key={j} style={{ padding: "9px 8px", borderBottom: "1px solid #f1f5f9", borderRight: j < 4 ? "1px solid #f1f5f9" : undefined }}>&nbsp;</td>
                       ))}
@@ -348,7 +373,7 @@ export default function QuotationDocument({ rfq, confirmed = false }: { rfq: RFQ
             {isLast && (
               <>
                 {/* Summary */}
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "16px", gap: "16px" }}>
+                <div className="rfq-summary" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "16px", gap: "16px" }}>
                   <div style={{ flex: 1, fontSize: "11px", color: "#64748b", paddingTop: "4px", fontStyle: "italic" }}>
                     ({grandTotal > 0 ? thaiNumberToWords(grandTotal) : "—"})
                   </div>
@@ -369,7 +394,7 @@ export default function QuotationDocument({ rfq, confirmed = false }: { rfq: RFQ
                 </div>
 
                 {/* Conditions */}
-                <div style={{ backgroundColor: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "6px", padding: "12px 16px", marginBottom: "20px", fontSize: "12px", color: "#475569", lineHeight: "1.9" }}>
+                <div className="rfq-conditions" style={{ backgroundColor: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "6px", padding: "12px 16px", marginBottom: "20px", fontSize: "12px", color: "#475569", lineHeight: "1.9" }}>
                   <p style={{ margin: "0 0 6px", textAlign: "center", color: "#1e293b", fontWeight: 500 }}>
                     จำนวนเงินรวมทั้งสิ้น {fmt(grandTotal)} บาท ({thaiNumberToWords(grandTotal)})
                   </p>
@@ -393,7 +418,7 @@ export default function QuotationDocument({ rfq, confirmed = false }: { rfq: RFQ
                 {/* Signatures */}
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px" }}>
                   <div style={{ textAlign: "center" }}>
-                    <p style={{ fontSize: "11px", color: "#64748b", margin: "0 0 24px" }}>ผู้ต่อรองราคา / Negotiator</p>
+                    <p className="rfq-sig-label" style={{ fontSize: "11px", color: "#64748b", margin: "0 0 24px" }}>ผู้ต่อรองราคา / Negotiator</p>
                     <div style={{ borderTop: "1px solid #94a3b8", paddingTop: "8px" }}>
                       <p style={{ fontSize: "11px", color: "#475569", margin: "0 0 2px" }}>ลงชื่อ .............................................</p>
                       <p style={{ fontSize: "11px", color: "#94a3b8", margin: "2px 0" }}>( {rfq.buyer_company_name || "................................."} )</p>
@@ -401,7 +426,7 @@ export default function QuotationDocument({ rfq, confirmed = false }: { rfq: RFQ
                     </div>
                   </div>
                   <div style={{ textAlign: "center" }}>
-                    <p style={{ fontSize: "11px", color: "#64748b", margin: "0 0 24px" }}>ผู้เสนอราคา / Authorized by</p>
+                    <p className="rfq-sig-label" style={{ fontSize: "11px", color: "#64748b", margin: "0 0 24px" }}>ผู้เสนอราคา / Authorized by</p>
                     <div style={{ borderTop: "1px solid #94a3b8", paddingTop: "8px" }}>
                       <p style={{ fontSize: "11px", color: "#475569", margin: "0 0 2px" }}>ลงชื่อ .............................................</p>
                       <p style={{ fontSize: "11px", color: "#94a3b8", margin: "2px 0" }}>( {rfq.vendor_company_name || "................................."} )</p>
