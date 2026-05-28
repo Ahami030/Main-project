@@ -161,36 +161,41 @@ export default function AdminPage() {
 
           {/* Summary cards */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="card bg-base-100 border border-base-300 shadow-sm hover:shadow-md transition-shadow">
+
+            {/* ── Manage RFQ ── */}
+            <div className="card bg-base-100 border border-base-300 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 overflow-hidden">
+              <div className="h-0.5 bg-linear-to-r from-primary/50 to-primary rounded-t-2xl" />
               <div className="card-body p-5">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <p className="text-xs text-base-content/50 font-medium uppercase tracking-wider">RFQ</p>
-                    <h2 className="text-lg font-bold text-base-content mt-1">Manage RFQ</h2>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-[10px] text-base-content/40 font-semibold uppercase tracking-widest">RFQ</p>
+                    <h2 className="text-base font-bold text-base-content mt-1">Manage RFQ</h2>
+                    <p className="text-[11px] text-base-content/40 mt-0.5">ดูและจัดการใบเสนอราคา</p>
                   </div>
-                  <div className="relative">
-                    <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
-                      <svg className="w-4.5 h-4.5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  <div className="relative shrink-0">
+                    <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                      <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75}
                           d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                       </svg>
                     </div>
                     {newRfqCount > 0 && (
-                      <span className="absolute -top-1.5 -right-1.5 min-w-4.5 h-4.5 px-1 rounded-full bg-error text-error-content text-[9px] font-bold flex items-center justify-center animate-bounce">
+                      <span className="absolute -top-1.5 -right-1.5 min-w-5 h-5 px-1 rounded-full bg-error text-white text-[10px] font-bold flex items-center justify-center animate-pulse shadow-sm">
                         {newRfqCount > 99 ? '99+' : newRfqCount}
                       </span>
                     )}
                   </div>
                 </div>
-                <div className="card-actions mt-3">
+                <div className="card-actions mt-4">
                   <button
-                    className="btn btn-primary btn-sm rounded-lg w-full gap-2"
+                    className="btn btn-primary btn-sm rounded-lg w-full font-semibold gap-2"
                     onClick={() => router.push('/Admin/rfq')}
                   >
-                    View
+                    ดูทั้งหมด
                     {newRfqCount > 0 && (
-                      <span className="badge badge-error badge-sm text-[10px] font-bold">
-                        {newRfqCount > 99 ? '99+' : newRfqCount} ใหม่
+                      <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-white/20 rounded-full px-2 py-0.5 leading-none">
+                        <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                        {newRfqCount} ใหม่
                       </span>
                     )}
                   </button>
@@ -198,46 +203,67 @@ export default function AdminPage() {
               </div>
             </div>
 
-            <div className="card bg-base-100 border border-base-300 shadow-sm hover:shadow-md transition-shadow">
+            {/* ── Configure system ── */}
+            <div className="card bg-base-100 border border-base-300 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 overflow-hidden">
+              <div className="h-0.5 bg-linear-to-r from-secondary/50 to-secondary rounded-t-2xl" />
               <div className="card-body p-5">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <p className="text-xs text-base-content/50 font-medium uppercase tracking-wider">Settings</p>
-                    <h2 className="text-lg font-bold text-base-content mt-1">Configure system</h2>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-[10px] text-base-content/40 font-semibold uppercase tracking-widest">Settings</p>
+                    <h2 className="text-base font-bold text-base-content mt-1">Configure system</h2>
+                    <p className="text-[11px] text-base-content/40 mt-0.5">จัดการการตั้งค่าระบบ</p>
                   </div>
-                  <div className="w-9 h-9 rounded-xl bg-secondary/10 flex items-center justify-center shrink-0">
-                    <svg className="w-4.5 h-4.5 text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                        d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
+                  <div className="relative shrink-0">
+                    <div className="w-10 h-10 rounded-xl bg-secondary/10 flex items-center justify-center">
+                      <svg className="w-5 h-5 text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75}
+                          d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                    </div>
+                    <span className="absolute -top-1 -right-1 text-[8px] font-bold bg-secondary/15 text-secondary border border-secondary/30 px-1.5 py-0.5 rounded-full leading-none whitespace-nowrap">
+                      เร็วๆ นี้
+                    </span>
                   </div>
                 </div>
-                <div className="card-actions mt-3">
-                  <button className="btn btn-secondary btn-sm rounded-lg w-full">View</button>
+                <div className="card-actions mt-4">
+                  <button className="btn btn-secondary btn-sm rounded-lg w-full font-semibold opacity-50 cursor-not-allowed" disabled>
+                    เร็วๆ นี้
+                  </button>
                 </div>
               </div>
             </div>
 
-            <div className="card bg-base-100 border border-base-300 shadow-sm hover:shadow-md transition-shadow">
+            {/* ── View analytics ── */}
+            <div className="card bg-base-100 border border-base-300 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 overflow-hidden">
+              <div className="h-0.5 bg-linear-to-r from-accent/50 to-accent rounded-t-2xl" />
               <div className="card-body p-5">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <p className="text-xs text-base-content/50 font-medium uppercase tracking-wider">Reports</p>
-                    <h2 className="text-lg font-bold text-base-content mt-1">View analytics</h2>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-[10px] text-base-content/40 font-semibold uppercase tracking-widest">Reports</p>
+                    <h2 className="text-base font-bold text-base-content mt-1">View analytics</h2>
+                    <p className="text-[11px] text-base-content/40 mt-0.5">วิเคราะห์ข้อมูลและรายงาน</p>
                   </div>
-                  <div className="w-9 h-9 rounded-xl bg-accent/10 flex items-center justify-center shrink-0">
-                    <svg className="w-4.5 h-4.5 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                        d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                    </svg>
+                  <div className="relative shrink-0">
+                    <div className="w-10 h-10 rounded-xl bg-accent/10 flex items-center justify-center">
+                      <svg className="w-5 h-5 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75}
+                          d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                      </svg>
+                    </div>
+                    <span className="absolute -top-1 -right-1 text-[8px] font-bold bg-accent/15 text-accent border border-accent/30 px-1.5 py-0.5 rounded-full leading-none whitespace-nowrap">
+                      เร็วๆ นี้
+                    </span>
                   </div>
                 </div>
-                <div className="card-actions mt-3">
-                  <button className="btn btn-accent btn-sm rounded-lg w-full">View</button>
+                <div className="card-actions mt-4">
+                  <button className="btn btn-accent btn-sm rounded-lg w-full font-semibold opacity-50 cursor-not-allowed" disabled>
+                    เร็วๆ นี้
+                  </button>
                 </div>
               </div>
             </div>
+
           </div>
 
           {/* ── Chat panel: desktop only (mobile uses floating button) ── */}
