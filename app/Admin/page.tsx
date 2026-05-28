@@ -1,5 +1,5 @@
 'use client';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import InlineChatPanel from '@/components/admin/InlineChatPanel';
 
@@ -11,6 +11,12 @@ interface Quotation {
   filename: string;
   status: QuotationStatus;
   createdAt: string;
+}
+
+interface ToastNotification {
+  id: number;
+  message: string;
+  count: number;
 }
 
 const STATUS_LABELS: Record<QuotationStatus, string> = {
@@ -44,25 +50,29 @@ export default function AdminPage() {
   const [updating, setUpdating] = useState<string | null>(null);
   const [resetting, setResetting] = useState<string | null>(null);
   const [newRfqCount, setNewRfqCount] = useState(0);
+  const [toasts, setToasts] = useState<ToastNotification[]>([]);
+  const prevRfqCountRef = useRef<number | null>(null);
+  const toastIdRef = useRef(0);
+
+  const dismissToast = (id: number) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  };
+
+  // Called by InlineChatPanel on every 3s chat/users poll — zero extra requests
+  const handleRfqCount = useCallback((count: number) => {
+    setNewRfqCount(count);
+    if (prevRfqCountRef.current !== null && count > prevRfqCountRef.current) {
+      const incoming = count - prevRfqCountRef.current;
+      const id = ++toastIdRef.current;
+      setToasts((prev) => [...prev, { id, message: 'มีงานใหม่เข้ามา', count: incoming }]);
+      setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 5000);
+    }
+    prevRfqCountRef.current = count;
+  }, []);
 
   useEffect(() => {
     const savedTheme = localStorage.getItem('theme') || 'light';
     document.documentElement.setAttribute('data-theme', savedTheme);
-  }, []);
-
-  useEffect(() => {
-    const fetchRfqCount = async () => {
-      try {
-        const res = await fetch('/api/rfq');
-        if (!res.ok) return;
-        const data = await res.json();
-        const rfqs: any[] = Array.isArray(data) ? data : [];
-        const lastSeen = parseInt(localStorage.getItem('admin_rfq_last_seen') || '0');
-        const count = rfqs.filter((r) => new Date(r.createdAt).getTime() > lastSeen).length;
-        setNewRfqCount(count);
-      } catch {}
-    };
-    fetchRfqCount();
   }, []);
 
   const fetchQuotations = useCallback(async () => {
@@ -122,6 +132,30 @@ export default function AdminPage() {
 
   return (
     <div className="min-h-screen bg-base-200">
+      {/* Toast notifications */}
+      {toasts.length > 0 && (
+        <div className="toast toast-top toast-end z-50 gap-2">
+          {toasts.map((t) => (
+            <div key={t.id} className="alert alert-info shadow-lg max-w-xs animate-in slide-in-from-right-4">
+              <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+              </svg>
+              <div className="flex-1">
+                <p className="font-semibold text-sm">{t.message}</p>
+                <p className="text-xs opacity-80">
+                  {t.count} งานใหม่เข้ามาใน RFQ
+                </p>
+              </div>
+              <button
+                className="btn btn-ghost btn-xs"
+                onClick={() => dismissToast(t.id)}
+              >✕</button>
+            </div>
+          ))}
+        </div>
+      )}
+
       <div className="p-4 lg:p-6">
         <main className="flex flex-col gap-5 max-w-5xl mx-auto">
 
@@ -151,11 +185,7 @@ export default function AdminPage() {
                 <div className="card-actions mt-3">
                   <button
                     className="btn btn-primary btn-sm rounded-lg w-full gap-2"
-                    onClick={() => {
-                      localStorage.setItem('admin_rfq_last_seen', Date.now().toString());
-                      setNewRfqCount(0);
-                      router.push('/Admin/rfq');
-                    }}
+                    onClick={() => router.push('/Admin/rfq')}
                   >
                     View
                     {newRfqCount > 0 && (
@@ -212,7 +242,7 @@ export default function AdminPage() {
 
           {/* ── Chat panel: desktop only (mobile uses floating button) ── */}
           <div className="hidden lg:block bg-base-100 border border-base-300 rounded-2xl overflow-hidden shadow-sm" style={{ height: '480px' }}>
-            <InlineChatPanel />
+            <InlineChatPanel onRfqCount={handleRfqCount} />
           </div>
 
           {/* ── จัดการใบเสนอราคา — collapse ── */}

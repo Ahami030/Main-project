@@ -36,9 +36,10 @@ export default function AdminPage() {
       try {
         const res = await fetch("/api/chat/users", { cache: "no-store" });
         const data = await res.json();
-        setUsers(data);
-        if (data.length > 0) {
-          setSelectedUserId(data[0].userId);
+        const users = data.users ?? data;
+        setUsers(users);
+        if (users.length > 0) {
+          setSelectedUserId(users[0].userId);
         }
       } catch (error) {
         console.error("Error loading users:", error);
@@ -53,7 +54,7 @@ export default function AdminPage() {
       try {
         const res = await fetch("/api/chat/users", { cache: "no-store" });
         const data = await res.json();
-        setUsers(data);
+        setUsers(data.users ?? data);
       } catch (error) {
         console.error("Error loading users:", error);
       }
@@ -170,7 +171,7 @@ export default function AdminPage() {
     <div className="flex h-screen bg-gray-50">
       {/* Sidebar - Users List */}
       <div className="w-64 bg-white border-r border-gray-200 flex flex-col">
-        <div className="p-4 bg-gradient-to-r from-blue-600 to-green-600 text-white font-bold">
+        <div className="p-4 bg-linear-to-r from-blue-600 to-green-600 text-white font-bold">
           💬 Messages
         </div>
 
@@ -247,7 +248,7 @@ export default function AdminPage() {
                   <div
                     className={`px-4 py-2 rounded-lg max-w-xs ${
                       chat.senderRole === "admin"
-                        ? "bg-gradient-to-r from-blue-500 to-green-500 text-white rounded-br-none"
+                        ? "bg-linear-to-r from-blue-500 to-green-500 text-white rounded-br-none"
                         : "bg-white border border-gray-200 text-gray-900 rounded-bl-none"
                     }`}
                   >
@@ -273,7 +274,7 @@ export default function AdminPage() {
               {showNewButton && (
                 <button
                   onClick={scrollToBottom}
-                  className="fixed bottom-24 left-1/2 -translate-x-1/2 bg-gradient-to-r from-blue-600 to-green-600 text-white px-4 py-2 rounded-full shadow-lg hover:shadow-xl transition-shadow"
+                  className="fixed bottom-24 left-1/2 -translate-x-1/2 bg-linear-to-r from-blue-600 to-green-600 text-white px-4 py-2 rounded-full shadow-lg hover:shadow-xl transition-shadow"
                 >
                   ↓ New Message
                 </button>
@@ -296,7 +297,7 @@ export default function AdminPage() {
               />
               <button
                 onClick={sendMessage}
-                className="bg-gradient-to-r from-blue-600 to-green-600 text-white px-6 py-2 rounded-lg hover:from-blue-700 hover:to-green-700 transition-all font-semibold"
+                className="bg-linear-to-r from-blue-600 to-green-600 text-white px-6 py-2 rounded-lg hover:from-blue-700 hover:to-green-700 transition-all font-semibold"
               >
                 Send
               </button>

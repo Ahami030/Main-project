@@ -28,7 +28,11 @@ type RfqDoc = {
   line_items: Array<{ quantity: number; unit_price: number; description?: string }>;
 };
 
-export default function InlineChatPanel() {
+interface Props {
+  onRfqCount?: (count: number) => void;
+}
+
+export default function InlineChatPanel({ onRfqCount }: Props) {
   const [activeTab, setActiveTab] = useState<'all' | 'unread'>('all');
   const [activeUser, setActiveUser] = useState<UserWithChat | null>(null);
   const [users, setUsers] = useState<UserWithChat[]>([]);
@@ -53,17 +57,22 @@ export default function InlineChatPanel() {
     } catch {}
   }, []);
 
-  // Poll users every 3s
+  // Poll users every 3s — also piggybacks newRfqCount at zero extra cost
   useEffect(() => {
     const fetchUsers = async () => {
       try {
         const res = await fetch('/api/chat/users', { cache: 'no-store' });
-        if (res.ok) setUsers(await res.json());
+        if (!res.ok) return;
+        const data = await res.json();
+        setUsers(data.users ?? []);
+        if (onRfqCount) onRfqCount(data.newRfqCount ?? 0);
       } catch {}
     };
     fetchUsers();
     const iv = setInterval(fetchUsers, 3000);
     return () => clearInterval(iv);
+  // onRfqCount is intentionally omitted — it's a stable callback ref from parent
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Poll messages every 1s when modal is open

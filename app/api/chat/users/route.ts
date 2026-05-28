@@ -2,10 +2,10 @@
 import { NextResponse } from "next/server";
 import Chat from "@/models/Chat";
 import User from "@/app/models/User";
+import Quotation from "@/app/models/Quotation";
 import { connectMongoDB } from "@/lib/mongo";
-import mongoose from "mongoose";
 
-export async function GET(req: Request) {
+export async function GET() {
   try {
     await connectMongoDB();
 
@@ -43,7 +43,9 @@ export async function GET(req: Request) {
       return timeB - timeA;
     });
 
-    return NextResponse.json(sortedUsers);
+    const newRfqCount = await Quotation.countDocuments({ status: "sent" });
+
+    return NextResponse.json({ users: sortedUsers, newRfqCount });
   } catch (error) {
     console.error("Error fetching users:", error);
     return NextResponse.json(
