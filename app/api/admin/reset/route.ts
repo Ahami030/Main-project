@@ -44,19 +44,19 @@ export async function POST(req: Request) {
   const chats = await Chat.find({ userId });
   const rfq = await RFQ.findOne({ USER_ID: userId });
 
-  // ── Archive chats ──────────────────────────────────────────────────
+  // ── Archive chats (single log document per session) ───────────────
   let archivedChats = 0;
   if (chats.length > 0) {
-    await ArchivedChat.insertMany(
-      chats.map((c: any) => ({
-        userId: c.userId,
+    await ArchivedChat.create({
+      userId,
+      originalQuotationId: quotationId,
+      archivedAt: new Date(),
+      messages: chats.map((c: any) => ({
         senderRole: c.senderRole,
         message: c.message,
         originalCreatedAt: c.createdAt,
-        archivedAt: new Date(),
-        originalQuotationId: quotationId,
-      }))
-    );
+      })),
+    });
     archivedChats = chats.length;
   }
 

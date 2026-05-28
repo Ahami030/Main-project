@@ -27,6 +27,7 @@ export default function DocumentChatPage() {
   const [quotationId, setQuotationId] = useState<string | null>(null);
   const [isConfirmed, setIsConfirmed] = useState(false);
   const [confirmLoading, setConfirmLoading] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
 
   const chatContainerRef = useRef<HTMLDivElement>(null);
 
@@ -117,6 +118,7 @@ export default function DocumentChatPage() {
 
   const handleConfirm = async () => {
     if (!quotationId) return;
+    setShowConfirmModal(false);
     setConfirmLoading(true);
     await fetch(`/api/quotation/${quotationId}`, {
       method: "PATCH",
@@ -125,11 +127,13 @@ export default function DocumentChatPage() {
     });
     setIsConfirmed(true);
     setConfirmLoading(false);
+    router.push("/Client");
   };
 
   const handleDownload = () => {
+    if (!rfq) return;
     const orig = document.title;
-    document.title = rfq?.rfq_number ?? "quotation";
+    document.title = rfq.rfq_number ?? "quotation";
     window.print();
     setTimeout(() => { document.title = orig; }, 500);
   };
@@ -454,9 +458,9 @@ export default function DocumentChatPage() {
               </div>
 
               <button
-                onClick={handleConfirm}
+                onClick={() => setShowConfirmModal(true)}
                 disabled={isConfirmed || confirmLoading || !quotationId}
-                className={`w-full flex items-center justify-center gap-1.5 py-2 text-[11px] font-medium rounded-lg transition-colors ${
+                className={`mt-2 w-full flex items-center justify-center gap-1.5 py-2.5 text-[11px] font-medium rounded-lg transition-colors ${
                   isConfirmed
                     ? "bg-success/20 text-success cursor-default border border-success/30"
                     : "bg-success hover:bg-success/80 disabled:opacity-40 disabled:cursor-not-allowed text-success-content"
@@ -485,6 +489,40 @@ export default function DocumentChatPage() {
 
         </aside>
       </div>
+      {/* ── Confirm Modal ── */}
+      {showConfirmModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-base-100 rounded-2xl shadow-2xl w-full max-w-sm p-6 flex flex-col gap-4 animate-in zoom-in-95 duration-150">
+            <div className="flex flex-col items-center gap-3 text-center">
+              <div className="w-12 h-12 rounded-full bg-success/15 flex items-center justify-center">
+                <svg className="w-6 h-6 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-base-content">ยืนยันรับราคา?</h3>
+                <p className="text-sm text-base-content/50 mt-1 leading-relaxed">
+                  เมื่อยืนยันแล้วจะไม่สามารถแก้ไขได้<br />ระบบจะบันทึกการยอมรับราคานี้
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-3 mt-1">
+              <button
+                onClick={() => setShowConfirmModal(false)}
+                className="flex-1 btn btn-ghost btn-sm rounded-xl border border-base-content/10"
+              >
+                ยกเลิก
+              </button>
+              <button
+                onClick={handleConfirm}
+                className="flex-1 btn btn-success btn-sm rounded-xl text-success-content"
+              >
+                ยืนยัน
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
