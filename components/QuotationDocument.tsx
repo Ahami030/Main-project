@@ -61,7 +61,10 @@ function thaiNumberToWords(amount: number): string {
     : intWords + "บาท" + convertToThaiWords(dec) + "สตางค์";
 }
 
-const ITEMS_PER_PAGE = 15;
+const ITEMS_THRESHOLD_SEPARATE_FOOTER = 5;
+const CAPACITY_FIRST = 14;   // first page: big header takes space
+const CAPACITY_MIDDLE = 20;  // middle pages: mini-header only
+const CAPACITY_LAST = 9;     // last items page: max items ที่ footer ยังพอดี (ceiling ไม่ใช่ floor)
 
 function Watermark() {
   return (
@@ -128,11 +131,117 @@ const pageBase: React.CSSProperties = {
   boxSizing: "border-box",
 };
 
+interface ConditionsAndSignaturesProps {
+  rfq: RFQData;
+  grandTotal: number;
+  deliveryTime: string;
+  paymentTerms: string | undefined;
+  deliveryLocation: string | undefined;
+}
+
+function ConditionsAndSignatures({
+  rfq, grandTotal, deliveryTime, paymentTerms, deliveryLocation,
+}: ConditionsAndSignaturesProps) {
+  return (
+    <>
+      {/* Conditions */}
+      <div
+        className="rfq-conditions"
+        style={{
+          backgroundColor: "#f8fafc",
+          border: "1px solid #e2e8f0",
+          borderRadius: "6px",
+          padding: "12px 16px",
+          marginBottom: "20px",
+          fontSize: "12px",
+          color: "#475569",
+          lineHeight: "1.9",
+        }}
+      >
+        <p style={{ margin: "0 0 6px", textAlign: "center", color: "#1e293b", fontWeight: 500 }}>
+          จำนวนเงินรวมทั้งสิ้น {fmt(grandTotal)} บาท ({thaiNumberToWords(grandTotal)})
+        </p>
+        <div style={{ borderTop: "1px solid #e2e8f0", marginBottom: "8px" }} />
+        <p style={{ margin: "0 0 2px" }}>1. ราคานี้เป็นราคาที่รวมภาษีมูลค่าเพิ่ม รวมทั้งภาษีอากรอื่นและค่าใช้จ่ายทั้งปวงไว้ด้วยแล้ว</p>
+        {paymentTerms && (
+          <p style={{ margin: "0 0 2px" }}>2. เงื่อนไขการชำระเงิน: {paymentTerms}</p>
+        )}
+        <p style={{ margin: "0 0 2px" }}>
+          {paymentTerms ? "3" : "2"}. ราคาที่ยื่นเสนอยืนอยู่ได้ภายในกำหนด 15 วัน นับตั้งแต่วันที่ได้ยื่นใบเสนอราคา
+        </p>
+        <p style={{ margin: "0 0 2px" }}>
+          {paymentTerms ? "4" : "3"}. กำหนดส่งมอบพัสดุตามรายละเอียดรายการข้างต้นภายใน {deliveryTime} นับถัดจากวันลงนาม
+          {deliveryLocation && <> ณ {deliveryLocation}</>}
+        </p>
+        <p style={{ textAlign: "center", marginTop: "10px", marginBottom: 0, color: "#64748b", fontSize: "11px" }}>
+          เสนอมา ณ วันที่ {rfq.rfq_date || "......"}
+        </p>
+      </div>
+
+      {/* Signatures */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "32px" }}>
+        <div style={{ textAlign: "center" }}>
+          <p style={{ fontSize: "11px", color: "#64748b", margin: "0 0 8px" }}>
+            ผู้ต่อรองราคา / Negotiator
+          </p>
+          <div style={{ height: "48px", borderBottom: "1px solid #94a3b8", marginBottom: "8px" }} />
+          <p style={{ fontSize: "11px", color: "#475569", margin: "0 0 4px" }}>
+            ลงชื่อ .............................................
+          </p>
+          <p style={{ fontSize: "11px", color: "#94a3b8", margin: "4px 0" }}>
+            ( {rfq.buyer_company_name || "................................."} )
+          </p>
+          <p style={{ fontSize: "10px", color: "#94a3b8", margin: "6px 0 0" }}>
+            วันที่ ....../....../........
+          </p>
+        </div>
+        <div style={{ textAlign: "center" }}>
+          <p style={{ fontSize: "11px", color: "#64748b", margin: "0 0 8px" }}>
+            ผู้เสนอราคา / Authorized by
+          </p>
+          <div style={{ height: "48px", borderBottom: "1px solid #94a3b8", marginBottom: "8px" }} />
+          <p style={{ fontSize: "11px", color: "#475569", margin: "0 0 4px" }}>
+            ลงชื่อ .............................................
+          </p>
+          <p style={{ fontSize: "11px", color: "#94a3b8", margin: "4px 0" }}>
+            ( {rfq.vendor_company_name || "................................."} )
+          </p>
+          <p style={{ fontSize: "10px", color: "#94a3b8", margin: "6px 0 0" }}>
+            วันที่ ....../....../........
+          </p>
+        </div>
+      </div>
+    </>
+  );
+}
+
 export default function QuotationDocument({ rfq, confirmed = false }: { rfq: RFQData; confirmed?: boolean }) {
   const items = rfq.line_items;
+  const separateFooter = items.length > ITEMS_THRESHOLD_SEPARATE_FOOTER;
+
+  // Three-tier chunking: first / middle / last
+  // Last chunk always has ≤ CAPACITY_LAST items so footer fits inline — no null page needed
   const chunks: LineItem[][] = [];
-  for (let i = 0; i < Math.max(items.length, 1); i += ITEMS_PER_PAGE)
-    chunks.push(items.slice(i, i + ITEMS_PER_PAGE));
+  if (items.length === 0) {
+    chunks.push([]);
+  } else if (!separateFooter) {
+    chunks.push(items.slice(0));
+  } else {
+    chunks.push(items.slice(0, CAPACITY_FIRST));
+    let rest = items.slice(CAPACITY_FIRST);
+
+    if (rest.length > 0) {
+      // Greedy fill: เติม middle pages ให้เต็ม CAPACITY_MIDDLE ก่อน
+      // last page ได้ remainder (1 ถึง CAPACITY_LAST items)
+      while (rest.length > CAPACITY_LAST) {
+        const take = Math.min(CAPACITY_MIDDLE, rest.length - 1); // เหลืออย่างน้อย 1 สำหรับ last page
+        chunks.push(rest.slice(0, take));
+        rest = rest.slice(take);
+      }
+      chunks.push(rest);
+    }
+  }
+
   const totalPages = chunks.length;
 
   const grandTotal = items.reduce((s, it) => s + it.quantity * it.unit_price, 0);
@@ -151,16 +260,13 @@ export default function QuotationDocument({ rfq, confirmed = false }: { rfq: RFQ
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap');
         .rfq-page, .rfq-page *, .rfq-page *::before, .rfq-page *::after { box-sizing: border-box; }
-        .rfq-empty-row { display: none; }
         .rfq-page { padding: 10mm 14mm !important; }
         .rfq-header { padding: 12px 16px !important; margin-bottom: 10px !important; }
         .rfq-meta { margin-bottom: 8px !important; }
         .rfq-meta > div { padding: 7px 12px !important; }
         .rfq-intro { padding: 7px 12px !important; margin-bottom: 8px !important; line-height: 1.6 !important; }
         .rfq-table { margin-bottom: 10px !important; }
-        .rfq-summary { margin-bottom: 10px !important; }
         .rfq-conditions { line-height: 1.6 !important; padding: 8px 12px !important; margin-bottom: 10px !important; }
-        .rfq-sig-label { margin-bottom: 12px !important; }
         @media print {
           .rfq-version-bar { display: none !important; }
           .rfq-page { box-shadow: none !important; }
@@ -235,7 +341,11 @@ export default function QuotationDocument({ rfq, confirmed = false }: { rfq: RFQ
       {chunks.map((pageItems, pageIdx) => {
         const isFirst = pageIdx === 0;
         const isLast = pageIdx === totalPages - 1;
-        const globalStart = pageIdx * ITEMS_PER_PAGE;
+        // คำนวณ offset ของรายการในหน้านี้จากจำนวน items ในหน้าก่อนหน้า
+        const globalStart = chunks.slice(0, pageIdx).reduce((s, c) => s + c.length, 0);
+
+        // last chunk เสมอคือ last items page — แสดง summary + footer
+        const isLastItemsPage = isLast;
 
         return (
           <div
@@ -334,107 +444,97 @@ export default function QuotationDocument({ rfq, confirmed = false }: { rfq: RFQ
             <table className="rfq-table" style={{ width: "100%", borderCollapse: "collapse", marginBottom: "16px" }}>
               <TableHead />
               <tbody>
-                {pageItems.map((item, idx) => {
-                  const globalIdx = globalStart + idx;
-                  const amount = item.quantity * item.unit_price;
-                  const isEven = globalIdx % 2 === 0;
-                  return (
-                    <tr key={globalIdx} style={{ backgroundColor: isEven ? "#ffffff" : "#f8fafc" }}>
-                      <td style={{ padding: "9px 8px", textAlign: "center", borderBottom: "1px solid #f1f5f9", borderRight: "1px solid #f1f5f9", color: "#64748b", fontSize: "12px" }}>
-                        {item.item_number ?? globalIdx + 1}
-                      </td>
-                      <td style={{ padding: "9px 12px", borderBottom: "1px solid #f1f5f9", borderRight: "1px solid #f1f5f9", color: "#1e293b" }}>
-                        {item.description || "—"}
-                      </td>
-                      <td style={{ padding: "9px 8px", textAlign: "center", borderBottom: "1px solid #f1f5f9", borderRight: "1px solid #f1f5f9", color: "#475569", fontSize: "12px" }}>
-                        {item.quantity} {item.unit || ""}
-                      </td>
-                      <td style={{ padding: "9px 10px", textAlign: "right", borderBottom: "1px solid #f1f5f9", borderRight: "1px solid #f1f5f9", color: "#475569" }}>
-                        {fmt(item.unit_price)}
-                      </td>
-                      <td style={{ padding: "9px 10px", textAlign: "right", borderBottom: "1px solid #f1f5f9", color: "#1e293b", fontWeight: 500 }}>
-                        {fmt(amount)}
-                      </td>
-                    </tr>
-                  );
-                })}
-                {isFirst && isLast && pageItems.length < 8 &&
-                  Array.from({ length: 8 - pageItems.length }).map((_, i) => (
-                    <tr key={`e${i}`} className="rfq-empty-row" style={{ backgroundColor: (pageItems.length + i) % 2 === 0 ? "#ffffff" : "#f8fafc" }}>
-                      {[0, 1, 2, 3, 4].map((_, j) => (
-                        <td key={j} style={{ padding: "9px 8px", borderBottom: "1px solid #f1f5f9", borderRight: j < 4 ? "1px solid #f1f5f9" : undefined }}>&nbsp;</td>
-                      ))}
-                    </tr>
-                  ))}
-              </tbody>
-            </table>
+                  {pageItems.map((item, idx) => {
+                    const globalIdx = globalStart + idx;
+                    const amount = item.quantity * item.unit_price;
+                    const isEven = globalIdx % 2 === 0;
+                    return (
+                      <tr key={globalIdx} style={{ backgroundColor: isEven ? "#ffffff" : "#f8fafc" }}>
+                        <td style={{ padding: "9px 8px", textAlign: "center", borderBottom: "1px solid #f1f5f9", borderRight: "1px solid #f1f5f9", color: "#64748b", fontSize: "12px" }}>
+                          {item.item_number ?? globalIdx + 1}
+                        </td>
+                        <td style={{ padding: "9px 12px", borderBottom: "1px solid #f1f5f9", borderRight: "1px solid #f1f5f9", color: "#1e293b" }}>
+                          {item.description || "—"}
+                        </td>
+                        <td style={{ padding: "9px 8px", textAlign: "center", borderBottom: "1px solid #f1f5f9", borderRight: "1px solid #f1f5f9", color: "#475569", fontSize: "12px" }}>
+                          {item.quantity} {item.unit || ""}
+                        </td>
+                        <td style={{ padding: "9px 10px", textAlign: "right", borderBottom: "1px solid #f1f5f9", borderRight: "1px solid #f1f5f9", color: "#475569" }}>
+                          {fmt(item.unit_price)}
+                        </td>
+                        <td style={{ padding: "9px 10px", textAlign: "right", borderBottom: "1px solid #f1f5f9", color: "#1e293b", fontWeight: 500 }}>
+                          {fmt(amount)}
+                        </td>
+                      </tr>
+                    );
+                  })}
 
-            {/* ── หน้าสุดท้าย: Summary + Conditions + Signature ── */}
+                </tbody>
+              </table>
+
+            {/* ── Summary div — ใต้ตารางในหน้าสุดท้ายของรายการ ── */}
+            {isLastItemsPage && (
+              <div className="rfq-summary" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "16px", gap: "16px" }}>
+                <div style={{ flex: 1, fontSize: "11px", color: "#64748b", paddingTop: "4px", fontStyle: "italic" }}>
+                  ({grandTotal > 0 ? thaiNumberToWords(grandTotal) : "—"})
+                </div>
+                <div style={{ width: "220px", border: "1px solid #e2e8f0", borderRadius: "6px", overflow: "hidden", fontSize: "12px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", padding: "9px 12px", backgroundColor: "#1e293b", borderBottom: "1px solid #334155" }}>
+                    <span style={{ color: "#ffffff", fontWeight: 600 }}>รวมเงิน</span>
+                    <span style={{ color: "#ffffff", fontWeight: 700, fontSize: "13px" }}>{fmt(grandTotal)} ฿</span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", padding: "7px 12px", backgroundColor: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
+                    <span style={{ color: "#64748b" }}>ภาษีมูลค่าเพิ่ม 7%</span>
+                    <span style={{ color: "#ef4444", fontWeight: 500 }}>-{fmt(vat)} ฿</span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", padding: "7px 12px", backgroundColor: "#ffffff" }}>
+                    <span style={{ color: "#64748b" }}>ราคาสินค้า</span>
+                    <span style={{ color: "#1e293b", fontWeight: 600 }}>{fmt(subtotal)} ฿</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ── เงื่อนไขและลายเซ็น: อยู่กับ last page เสมอ ── */}
             {isLast && (
-              <>
-                {/* Summary */}
-                <div className="rfq-summary" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "16px", gap: "16px" }}>
-                  <div style={{ flex: 1, fontSize: "11px", color: "#64748b", paddingTop: "4px", fontStyle: "italic" }}>
-                    ({grandTotal > 0 ? thaiNumberToWords(grandTotal) : "—"})
-                  </div>
-                  <div style={{ width: "220px", border: "1px solid #e2e8f0", borderRadius: "6px", overflow: "hidden", fontSize: "12px" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", padding: "9px 12px", backgroundColor: "#1e293b", borderBottom: "1px solid #334155" }}>
-                      <span style={{ color: "#ffffff", fontWeight: 600 }}>รวมเงิน</span>
-                      <span style={{ color: "#ffffff", fontWeight: 700, fontSize: "13px" }}>{fmt(grandTotal)} ฿</span>
-                    </div>
-                    <div style={{ display: "flex", justifyContent: "space-between", padding: "7px 12px", backgroundColor: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
-                      <span style={{ color: "#64748b" }}>ภาษีมูลค่าเพิ่ม 7%</span>
-                      <span style={{ color: "#ef4444", fontWeight: 500 }}>-{fmt(vat)} ฿</span>
-                    </div>
-                    <div style={{ display: "flex", justifyContent: "space-between", padding: "7px 12px", backgroundColor: "#ffffff" }}>
-                      <span style={{ color: "#64748b" }}>ราคาสินค้า</span>
-                      <span style={{ color: "#1e293b", fontWeight: 600 }}>{fmt(subtotal)} ฿</span>
-                    </div>
-                  </div>
-                </div>
+              <ConditionsAndSignatures
+                rfq={rfq}
+                grandTotal={grandTotal}
+                deliveryTime={deliveryTime}
+                paymentTerms={paymentTerms}
+                deliveryLocation={deliveryLocation}
+              />
+            )}
 
-                {/* Conditions */}
-                <div className="rfq-conditions" style={{ backgroundColor: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "6px", padding: "12px 16px", marginBottom: "20px", fontSize: "12px", color: "#475569", lineHeight: "1.9" }}>
-                  <p style={{ margin: "0 0 6px", textAlign: "center", color: "#1e293b", fontWeight: 500 }}>
-                    จำนวนเงินรวมทั้งสิ้น {fmt(grandTotal)} บาท ({thaiNumberToWords(grandTotal)})
-                  </p>
-                  <div style={{ borderTop: "1px solid #e2e8f0", marginBottom: "8px" }} />
-                  <p style={{ margin: "0 0 2px" }}>1. ราคานี้เป็นราคาที่รวมภาษีมูลค่าเพิ่ม รวมทั้งภาษีอากรอื่นและค่าใช้จ่ายทั้งปวงไว้ด้วยแล้ว</p>
-                  {paymentTerms && (
-                    <p style={{ margin: "0 0 2px" }}>2. เงื่อนไขการชำระเงิน: {paymentTerms}</p>
-                  )}
-                  <p style={{ margin: "0 0 2px" }}>
-                    {paymentTerms ? "3" : "2"}. ราคาที่ยื่นเสนอยืนอยู่ได้ภายในกำหนด 15 วัน นับตั้งแต่วันที่ได้ยื่นใบเสนอราคา
-                  </p>
-                  <p style={{ margin: "0 0 2px" }}>
-                    {paymentTerms ? "4" : "3"}. กำหนดส่งมอบพัสดุตามรายละเอียดรายการข้างต้นภายใน {deliveryTime} นับถัดจากวันลงนาม
-                    {deliveryLocation && <> ณ {deliveryLocation}</>}
-                  </p>
-                  <p style={{ textAlign: "center", marginTop: "10px", marginBottom: 0, color: "#64748b", fontSize: "11px" }}>
-                    เสนอมา ณ วันที่ {rfq.rfq_date || "......"}
-                  </p>
-                </div>
-
-                {/* Signatures */}
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px" }}>
-                  <div style={{ textAlign: "center" }}>
-                    <p className="rfq-sig-label" style={{ fontSize: "11px", color: "#64748b", margin: "0 0 24px" }}>ผู้ต่อรองราคา / Negotiator</p>
-                    <div style={{ borderTop: "1px solid #94a3b8", paddingTop: "8px" }}>
-                      <p style={{ fontSize: "11px", color: "#475569", margin: "0 0 2px" }}>ลงชื่อ .............................................</p>
-                      <p style={{ fontSize: "11px", color: "#94a3b8", margin: "2px 0" }}>( {rfq.buyer_company_name || "................................."} )</p>
-                      <p style={{ fontSize: "10px", color: "#94a3b8", margin: "4px 0 0" }}>วันที่ ....../....../........</p>
-                    </div>
-                  </div>
-                  <div style={{ textAlign: "center" }}>
-                    <p className="rfq-sig-label" style={{ fontSize: "11px", color: "#64748b", margin: "0 0 24px" }}>ผู้เสนอราคา / Authorized by</p>
-                    <div style={{ borderTop: "1px solid #94a3b8", paddingTop: "8px" }}>
-                      <p style={{ fontSize: "11px", color: "#475569", margin: "0 0 2px" }}>ลงชื่อ .............................................</p>
-                      <p style={{ fontSize: "11px", color: "#94a3b8", margin: "2px 0" }}>( {rfq.vendor_company_name || "................................."} )</p>
-                      <p style={{ fontSize: "10px", color: "#94a3b8", margin: "4px 0 0" }}>วันที่ ....../....../........</p>
-                    </div>
-                  </div>
-                </div>
-              </>
+            {/* ── Bottom continuation mark: ทุกหน้ายกเว้นหน้าสุดท้าย ── */}
+            {!isLast && (
+              <div style={{
+                position: "absolute",
+                bottom: "14mm",
+                left: "16mm",
+                right: "16mm",
+                borderTop: "1px solid #e2e8f0",
+                paddingTop: "8px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+              }}>
+                <span style={{ color: "#94a3b8", fontSize: "10px", letterSpacing: "0.04em" }}>
+                  {rfq.rfq_number}
+                </span>
+                <span style={{ color: "#94a3b8", fontSize: "10px", display: "flex", alignItems: "center", gap: "6px" }}>
+                  รายการที่ {globalStart + 1}–{globalStart + pageItems.length} จาก {items.length} รายการ
+                  <span style={{
+                    display: "inline-flex", alignItems: "center", gap: "4px",
+                    backgroundColor: "#1e293b", color: "#ffffff",
+                    fontSize: "9px", fontWeight: 600,
+                    padding: "2px 8px", borderRadius: "4px",
+                    letterSpacing: "0.05em",
+                  }}>
+                    ต่อหน้า {pageIdx + 2} →
+                  </span>
+                </span>
+              </div>
             )}
           </div>
         );
