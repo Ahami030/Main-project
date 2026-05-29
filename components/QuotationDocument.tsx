@@ -227,19 +227,19 @@ export default function QuotationDocument({ rfq, confirmed = false }: { rfq: RFQ
   } else if (!separateFooter) {
     chunks.push(items.slice(0));
   } else {
-    chunks.push(items.slice(0, CAPACITY_FIRST));
-    let rest = items.slice(CAPACITY_FIRST);
+    // จำกัด first page ให้เหลืออย่างน้อย 1 item ไว้ที่ last page เสมอ
+    const firstCount = Math.min(CAPACITY_FIRST, items.length - 1);
+    chunks.push(items.slice(0, firstCount));
+    let rest = items.slice(firstCount); // rest.length >= 1 เสมอ
 
-    if (rest.length > 0) {
-      // Greedy fill: เติม middle pages ให้เต็ม CAPACITY_MIDDLE ก่อน
-      // last page ได้ remainder (1 ถึง CAPACITY_LAST items)
-      while (rest.length > CAPACITY_LAST) {
-        const take = Math.min(CAPACITY_MIDDLE, rest.length - 1); // เหลืออย่างน้อย 1 สำหรับ last page
-        chunks.push(rest.slice(0, take));
-        rest = rest.slice(take);
-      }
-      chunks.push(rest);
+    // Greedy fill: เติม middle pages ให้เต็ม CAPACITY_MIDDLE ก่อน
+    // last page ได้ remainder (1 ถึง CAPACITY_LAST items)
+    while (rest.length > CAPACITY_LAST) {
+      const take = Math.min(CAPACITY_MIDDLE, rest.length - 1);
+      chunks.push(rest.slice(0, take));
+      rest = rest.slice(take);
     }
+    chunks.push(rest);
   }
 
   const totalPages = chunks.length;
