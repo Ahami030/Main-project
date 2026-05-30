@@ -58,7 +58,9 @@ export default function ShortcutChat() {
     const fetchUsers = async () => {
       try {
         const res = await fetch('/api/chat/users', { cache: 'no-store' });
-        if (res.ok) setUsers(await res.json());
+        if (!res.ok) return;
+        const data = await res.json();
+        setUsers(data.users ?? []);
       } catch {}
     };
     fetchUsers();
@@ -418,7 +420,7 @@ export default function ShortcutChat() {
                     return (
                       <div key={msg._id} className={`flex ${isAdmin ? 'justify-end' : 'justify-start'}`}>
                         <div className={`max-w-[78%] flex flex-col gap-0.5 ${isAdmin ? 'items-end' : 'items-start'}`}>
-                          <div className={`px-3.5 py-2 rounded-2xl text-sm leading-relaxed break-words ${
+                          <div className={`px-3.5 py-2 rounded-2xl text-sm leading-relaxed wrap-break-word ${
                             isAdmin
                               ? 'bg-primary text-primary-content rounded-tr-sm'
                               : 'bg-base-200 text-base-content/85 rounded-tl-sm'

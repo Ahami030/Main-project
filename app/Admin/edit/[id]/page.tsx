@@ -259,7 +259,7 @@ export default function EditPage() {
       try {
         const res = await fetch("/api/chat/users", { cache: "no-store" });
         const data = await res.json();
-        setChatUsers(data);
+        setChatUsers(data.users ?? data);
       } catch {}
       finally { setLoadingUsers(false); }
     };
@@ -267,7 +267,8 @@ export default function EditPage() {
     const iv = setInterval(async () => {
       try {
         const res = await fetch("/api/chat/users", { cache: "no-store" });
-        setChatUsers(await res.json());
+        const data = await res.json();
+        setChatUsers(data.users ?? data);
       } catch {}
     }, 3000);
     return () => clearInterval(iv);

@@ -1,9 +1,9 @@
 'use client';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import InlineChatPanel from '@/components/admin/InlineChatPanel';
 
-type QuotationStatus = 'sent' | 'reviewing' | 'completed' | 'bargaining';
+type QuotationStatus = 'sent' | 'reviewing' | 'completed' | 'bargaining' | 'confirmed';
 
 interface Quotation {
   _id: string;
@@ -13,11 +13,18 @@ interface Quotation {
   createdAt: string;
 }
 
+interface ToastNotification {
+  id: number;
+  message: string;
+  count: number;
+}
+
 const STATUS_LABELS: Record<QuotationStatus, string> = {
   sent:       'ส่งแล้ว',
   reviewing:  'กำลังดำเนินการ',
   completed:  'เสร็จสิ้น',
   bargaining: 'พร้อมต่อรอง',
+  confirmed:  'ยืนยันแล้ว',
 };
 
 const STATUS_BADGE: Record<QuotationStatus, string> = {
@@ -25,6 +32,7 @@ const STATUS_BADGE: Record<QuotationStatus, string> = {
   reviewing:  'badge-warning',
   completed:  'badge-primary',
   bargaining: 'badge-accent',
+  confirmed:  'badge-success',
 };
 
 const NEXT_STATUS: Record<QuotationStatus, QuotationStatus | null> = {
@@ -32,6 +40,7 @@ const NEXT_STATUS: Record<QuotationStatus, QuotationStatus | null> = {
   reviewing:  'completed',
   completed:  'bargaining',
   bargaining: null,
+  confirmed:  null,
 };
 
 export default function AdminPage() {
@@ -39,26 +48,31 @@ export default function AdminPage() {
   const [quotations, setQuotations] = useState<Quotation[]>([]);
   const [loading, setLoading] = useState(false);
   const [updating, setUpdating] = useState<string | null>(null);
+  const [resetting, setResetting] = useState<string | null>(null);
   const [newRfqCount, setNewRfqCount] = useState(0);
+  const [toasts, setToasts] = useState<ToastNotification[]>([]);
+  const prevRfqCountRef = useRef<number | null>(null);
+  const toastIdRef = useRef(0);
+
+  const dismissToast = (id: number) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  };
+
+  // Called by InlineChatPanel on every 3s chat/users poll — zero extra requests
+  const handleRfqCount = useCallback((count: number) => {
+    setNewRfqCount(count);
+    if (prevRfqCountRef.current !== null && count > prevRfqCountRef.current) {
+      const incoming = count - prevRfqCountRef.current;
+      const id = ++toastIdRef.current;
+      setToasts((prev) => [...prev, { id, message: 'มีงานใหม่เข้ามา', count: incoming }]);
+      setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 5000);
+    }
+    prevRfqCountRef.current = count;
+  }, []);
 
   useEffect(() => {
     const savedTheme = localStorage.getItem('theme') || 'light';
     document.documentElement.setAttribute('data-theme', savedTheme);
-  }, []);
-
-  useEffect(() => {
-    const fetchRfqCount = async () => {
-      try {
-        const res = await fetch('/api/rfq');
-        if (!res.ok) return;
-        const data = await res.json();
-        const rfqs: any[] = Array.isArray(data) ? data : [];
-        const lastSeen = parseInt(localStorage.getItem('admin_rfq_last_seen') || '0');
-        const count = rfqs.filter((r) => new Date(r.createdAt).getTime() > lastSeen).length;
-        setNewRfqCount(count);
-      } catch {}
-    };
-    fetchRfqCount();
   }, []);
 
   const fetchQuotations = useCallback(async () => {
@@ -100,47 +114,88 @@ export default function AdminPage() {
     }
   };
 
+  const handleReset = async (q: Quotation) => {
+    if (!confirm(`Reset session ของ ${q.userId}?\n\nสิ่งที่จะเกิดขึ้น:\n• แชทและข้อมูล RFQ จะถูกสำรองไว้ใน archived_chats / archived_rfqs\n• ไฟล์ PDF, quotation, chats, และ RFQ จะถูกลบออก`)) return;
+    setResetting(q._id);
+    try {
+      const res = await fetch('/api/admin/reset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: q.userId }),
+      });
+      if (!res.ok) { alert('Reset ล้มเหลว กรุณาลองใหม่'); return; }
+      setQuotations((prev) => prev.filter((x) => x._id !== q._id));
+    } finally {
+      setResetting(null);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-base-200">
+      {/* Toast notifications */}
+      {toasts.length > 0 && (
+        <div className="toast toast-top toast-end z-50 gap-2">
+          {toasts.map((t) => (
+            <div key={t.id} className="alert alert-info shadow-lg max-w-xs animate-in slide-in-from-right-4">
+              <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+              </svg>
+              <div className="flex-1">
+                <p className="font-semibold text-sm">{t.message}</p>
+                <p className="text-xs opacity-80">
+                  {t.count} งานใหม่เข้ามาใน RFQ
+                </p>
+              </div>
+              <button
+                className="btn btn-ghost btn-xs"
+                onClick={() => dismissToast(t.id)}
+              >✕</button>
+            </div>
+          ))}
+        </div>
+      )}
+
       <div className="p-4 lg:p-6">
         <main className="flex flex-col gap-5 max-w-5xl mx-auto">
 
           {/* Summary cards */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="card bg-base-100 border border-base-300 shadow-sm hover:shadow-md transition-shadow">
+
+            {/* ── Manage RFQ ── */}
+            <div className="card bg-base-100 border border-base-300 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 overflow-hidden">
+              <div className="h-0.5 bg-linear-to-r from-primary/50 to-primary rounded-t-2xl" />
               <div className="card-body p-5">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <p className="text-xs text-base-content/50 font-medium uppercase tracking-wider">RFQ</p>
-                    <h2 className="text-lg font-bold text-base-content mt-1">Manage RFQ</h2>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-[10px] text-base-content/40 font-semibold uppercase tracking-widest">RFQ</p>
+                    <h2 className="text-base font-bold text-base-content mt-1">Manage RFQ</h2>
+                    <p className="text-[11px] text-base-content/40 mt-0.5">ดูและจัดการใบเสนอราคา</p>
                   </div>
-                  <div className="relative">
-                    <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
-                      <svg className="w-4.5 h-4.5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  <div className="relative shrink-0">
+                    <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                      <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75}
                           d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                       </svg>
                     </div>
                     {newRfqCount > 0 && (
-                      <span className="absolute -top-1.5 -right-1.5 min-w-4.5 h-4.5 px-1 rounded-full bg-error text-error-content text-[9px] font-bold flex items-center justify-center animate-bounce">
+                      <span className="absolute -top-1.5 -right-1.5 min-w-5 h-5 px-1 rounded-full bg-error text-white text-[10px] font-bold flex items-center justify-center animate-pulse shadow-sm">
                         {newRfqCount > 99 ? '99+' : newRfqCount}
                       </span>
                     )}
                   </div>
                 </div>
-                <div className="card-actions mt-3">
+                <div className="card-actions mt-4">
                   <button
-                    className="btn btn-primary btn-sm rounded-lg w-full gap-2"
-                    onClick={() => {
-                      localStorage.setItem('admin_rfq_last_seen', Date.now().toString());
-                      setNewRfqCount(0);
-                      router.push('/Admin/rfq');
-                    }}
+                    className="btn btn-primary btn-sm rounded-lg w-full font-semibold gap-2"
+                    onClick={() => router.push('/Admin/rfq')}
                   >
-                    View
+                    ดูทั้งหมด
                     {newRfqCount > 0 && (
-                      <span className="badge badge-error badge-sm text-[10px] font-bold">
-                        {newRfqCount > 99 ? '99+' : newRfqCount} ใหม่
+                      <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-white/20 rounded-full px-2 py-0.5 leading-none">
+                        <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                        {newRfqCount} ใหม่
                       </span>
                     )}
                   </button>
@@ -148,51 +203,72 @@ export default function AdminPage() {
               </div>
             </div>
 
-            <div className="card bg-base-100 border border-base-300 shadow-sm hover:shadow-md transition-shadow">
+            {/* ── Configure system ── */}
+            <div className="card bg-base-100 border border-base-300 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 overflow-hidden">
+              <div className="h-0.5 bg-linear-to-r from-secondary/50 to-secondary rounded-t-2xl" />
               <div className="card-body p-5">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <p className="text-xs text-base-content/50 font-medium uppercase tracking-wider">Settings</p>
-                    <h2 className="text-lg font-bold text-base-content mt-1">Configure system</h2>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-[10px] text-base-content/40 font-semibold uppercase tracking-widest">Settings</p>
+                    <h2 className="text-base font-bold text-base-content mt-1">Configure system</h2>
+                    <p className="text-[11px] text-base-content/40 mt-0.5">จัดการการตั้งค่าระบบ</p>
                   </div>
-                  <div className="w-9 h-9 rounded-xl bg-secondary/10 flex items-center justify-center shrink-0">
-                    <svg className="w-4.5 h-4.5 text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                        d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
+                  <div className="relative shrink-0">
+                    <div className="w-10 h-10 rounded-xl bg-secondary/10 flex items-center justify-center">
+                      <svg className="w-5 h-5 text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75}
+                          d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                    </div>
+                    <span className="absolute -top-1 -right-1 text-[8px] font-bold bg-secondary/15 text-secondary border border-secondary/30 px-1.5 py-0.5 rounded-full leading-none whitespace-nowrap">
+                      เร็วๆ นี้
+                    </span>
                   </div>
                 </div>
-                <div className="card-actions mt-3">
-                  <button className="btn btn-secondary btn-sm rounded-lg w-full">View</button>
+                <div className="card-actions mt-4">
+                  <button className="btn btn-secondary btn-sm rounded-lg w-full font-semibold opacity-50 cursor-not-allowed" disabled>
+                    เร็วๆ นี้
+                  </button>
                 </div>
               </div>
             </div>
 
-            <div className="card bg-base-100 border border-base-300 shadow-sm hover:shadow-md transition-shadow">
+            {/* ── View analytics ── */}
+            <div className="card bg-base-100 border border-base-300 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 overflow-hidden">
+              <div className="h-0.5 bg-linear-to-r from-accent/50 to-accent rounded-t-2xl" />
               <div className="card-body p-5">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <p className="text-xs text-base-content/50 font-medium uppercase tracking-wider">Reports</p>
-                    <h2 className="text-lg font-bold text-base-content mt-1">View analytics</h2>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-[10px] text-base-content/40 font-semibold uppercase tracking-widest">Reports</p>
+                    <h2 className="text-base font-bold text-base-content mt-1">View analytics</h2>
+                    <p className="text-[11px] text-base-content/40 mt-0.5">วิเคราะห์ข้อมูลและรายงาน</p>
                   </div>
-                  <div className="w-9 h-9 rounded-xl bg-accent/10 flex items-center justify-center shrink-0">
-                    <svg className="w-4.5 h-4.5 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                        d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                    </svg>
+                  <div className="relative shrink-0">
+                    <div className="w-10 h-10 rounded-xl bg-accent/10 flex items-center justify-center">
+                      <svg className="w-5 h-5 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75}
+                          d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                      </svg>
+                    </div>
+                    <span className="absolute -top-1 -right-1 text-[8px] font-bold bg-accent/15 text-accent border border-accent/30 px-1.5 py-0.5 rounded-full leading-none whitespace-nowrap">
+                      เร็วๆ นี้
+                    </span>
                   </div>
                 </div>
-                <div className="card-actions mt-3">
-                  <button className="btn btn-accent btn-sm rounded-lg w-full">View</button>
+                <div className="card-actions mt-4">
+                  <button className="btn btn-accent btn-sm rounded-lg w-full font-semibold opacity-50 cursor-not-allowed" disabled>
+                    เร็วๆ นี้
+                  </button>
                 </div>
               </div>
             </div>
+
           </div>
 
           {/* ── Chat panel: desktop only (mobile uses floating button) ── */}
           <div className="hidden lg:block bg-base-100 border border-base-300 rounded-2xl overflow-hidden shadow-sm" style={{ height: '480px' }}>
-            <InlineChatPanel />
+            <InlineChatPanel onRfqCount={handleRfqCount} />
           </div>
 
           {/* ── จัดการใบเสนอราคา — collapse ── */}
@@ -291,15 +367,29 @@ export default function AdminPage() {
                                 )}
                               </td>
                               <td>
-                                <button
-                                  onClick={() => deleteQuotation(q._id)}
-                                  disabled={updating === q._id}
-                                  className="btn btn-xs btn-error btn-outline rounded-lg"
-                                >
-                                  {updating === q._id
-                                    ? <span className="loading loading-spinner loading-xs" />
-                                    : 'ลบ / รีเซ็ต'}
-                                </button>
+                                <div className="flex gap-1.5">
+                                  <button
+                                    onClick={() => deleteQuotation(q._id)}
+                                    disabled={updating === q._id || resetting === q._id}
+                                    className="btn btn-xs btn-error btn-outline rounded-lg"
+                                  >
+                                    {updating === q._id
+                                      ? <span className="loading loading-spinner loading-xs" />
+                                      : 'ลบ'}
+                                  </button>
+                                  {(q.status === 'bargaining' || q.status === 'confirmed') && (
+                                    <button
+                                      onClick={() => handleReset(q)}
+                                      disabled={resetting === q._id || updating === q._id}
+                                      className="btn btn-xs btn-warning rounded-lg"
+                                      title="Archive แชท+RFQ แล้วลบทุกอย่าง เพื่อเริ่มใหม่"
+                                    >
+                                      {resetting === q._id
+                                        ? <span className="loading loading-spinner loading-xs" />
+                                        : 'Reset'}
+                                    </button>
+                                  )}
+                                </div>
                               </td>
                             </tr>
                           );
