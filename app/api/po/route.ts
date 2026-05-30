@@ -4,6 +4,7 @@ import type { AuthOptions } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { connectMongoDB } from "@/lib/mongo";
 import PurchaseOrder, { generatePONumber } from "@/app/models/PurchaseOrder";
+import "@/app/models/Billing"; // register Billing model for populate
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions as AuthOptions);
@@ -22,7 +23,10 @@ export async function GET(req: NextRequest) {
   if (!isAdmin) query.userId = (session.user as { id?: string }).id;
   if (statusFilter) query.status = statusFilter;
 
-  const orders = await PurchaseOrder.find(query).sort({ createdAt: -1 }).lean();
+  const orders = await PurchaseOrder.find(query)
+    .populate("billingId", "billingNumber poNumbers status")
+    .sort({ createdAt: -1 })
+    .lean();
   return NextResponse.json(orders);
 }
 

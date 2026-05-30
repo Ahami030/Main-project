@@ -20,6 +20,13 @@ interface Quotation {
 
 type POStatus = "pending" | "accepted" | "billed";
 
+interface BillingInfo {
+  _id: string;
+  billingNumber: string;
+  poNumbers: string[];
+  status: string;
+}
+
 interface POOrder {
   _id: string;
   poNumber: string;
@@ -28,6 +35,15 @@ interface POOrder {
   fileMimeType: string;
   createdAt: string;
   billedAt?: string;
+  billingId?: BillingInfo | null;
+}
+
+interface BillingButton {
+  key:      string;
+  label:    string;   // PO number (single) or billing number (group)
+  sublabel: string;   // "ออกใบวางบิลเรียบร้อยแล้ว" or "รวมกับ PO-xxx"
+  isGroup:  boolean;
+  href:     string;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -267,6 +283,46 @@ export default function Page(): JSX.Element {
   const poMeta         = poLatest ? PO_STATUS_META[poLatest.status] : null;
   const poCurrentStep  = poLatest ? PO_STEPS.find((s) => s.key === poLatest.status)! : null;
   const poIsInProgress = poLatest?.status === "pending" || poLatest?.status === "accepted";
+
+  // Derive billing buttons from ALL billed POs (single + group, deduped)
+  const billingButtons: BillingButton[] = (() => {
+    const billedPOs = poOrders.filter((po) => po.status === "billed");
+
+    // Single-PO billing (no billingId)
+    const singles: BillingButton[] = billedPOs
+      .filter((po) => !po.billingId)
+      .map((po) => ({
+        key:      po._id,
+        label:    po.poNumber,
+        sublabel: "ออกใบวางบิลเรียบร้อยแล้ว",
+        isGroup:  false,
+        href:     `/Client/po/${po._id}`,
+      }));
+
+    // Group billing (billingId populated) — deduped by billing _id
+    const seen = new Set<string>();
+    const groups: BillingButton[] = billedPOs
+      .filter((po) => po.billingId)
+      .filter((po) => {
+        const bid = po.billingId!._id;
+        if (seen.has(bid)) return false;
+        seen.add(bid);
+        return true;
+      })
+      .map((po) => {
+        const bi       = po.billingId!;
+        const otherPOs = bi.poNumbers.filter((pn) => pn !== po.poNumber);
+        return {
+          key:      bi._id,
+          label:    bi.billingNumber,
+          sublabel: otherPOs.length > 0 ? `รวมกับ ${otherPOs.join(", ")}` : "ใบวางบิลรวม",
+          isGroup:  true,
+          href:     `/Client/po/${po._id}`,
+        };
+      });
+
+    return [...singles, ...groups];
+  })();
 
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
@@ -570,40 +626,106 @@ export default function Page(): JSX.Element {
 
               <div className="flex flex-col md:flex-row gap-6">
 
-                {/* Left: spotlight + CTA */}
+                {/* Left: spotlight (non-billed) OR billing list (billed) */}
                 <div className="flex-1 flex flex-col gap-4">
-                  <div
-                    onClick={poLatest.status === "billed" ? () => router.push(`/Client/po/${poLatest._id}`) : undefined}
-                    className={`rounded-2xl border px-5 py-5 flex items-center gap-4 ${poMeta.spotlight} ${poLatest.status === "billed" ? "cursor-pointer hover:opacity-90 transition-opacity" : ""}`}
-                  >
-                    <span className={`w-3 h-3 rounded-full shrink-0 ${poMeta.dot} ${poIsInProgress ? "animate-pulse" : ""}`} />
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold">{poCurrentStep.label}</p>
-                      <p className="text-sm text-base-content/50 mt-0.5">{poCurrentStep.sublabel}</p>
-                    </div>
-                    {poIsInProgress && <span className="loading loading-dots loading-sm opacity-30" />}
-                    {poLatest.status === "billed" && (
-                      <svg className="w-4 h-4 text-base-content/30 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                      </svg>
-                    )}
-                  </div>
+                  {poLatest.status === "billed" && billingButtons.length > 0 ? (
 
-                  {PO_STEPS[PO_STATUS_ORDER[poLatest.status] + 1] && (
-                    <div className="flex items-center gap-3 text-xs text-base-content/30">
-                      <div className="flex-1 h-px bg-base-300" />
-                      <span>ขั้นถัดไป · {PO_STEPS[PO_STATUS_ORDER[poLatest.status] + 1].label}</span>
-                      <div className="flex-1 h-px bg-base-300" />
+                    /* ── Billing list card ── */
+                    <div className="rounded-2xl border border-success/30 overflow-hidden shadow-sm">
+
+                      {/* Header */}
+                      <div className={`px-5 py-4 flex items-center gap-3 ${poMeta.spotlight}`}>
+                        <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${poMeta.dot}`} />
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-sm">วางบิลแล้ว</p>
+                          <p className="text-xs text-base-content/50 mt-0.5">
+                            {billingButtons.length > 1
+                              ? `${billingButtons.length} ใบวางบิล พร้อมดูแล้ว`
+                              : "ออกใบวางบิลเรียบร้อยแล้ว"}
+                          </p>
+                        </div>
+                        {billingButtons.length > 1 && (
+                          <span className="badge badge-success badge-sm font-bold tabular-nums">
+                            {billingButtons.length}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Billing rows */}
+                      <div className="divide-y divide-base-200">
+                        {billingButtons.map((btn) => (
+                          <button
+                            key={btn.key}
+                            onClick={() => router.push(btn.href)}
+                            className="w-full px-5 py-4 flex items-center gap-3 bg-base-100 hover:bg-base-200/60 active:bg-base-200 transition-colors text-left group"
+                          >
+                            {/* Icon */}
+                            <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 transition-colors ${
+                              btn.isGroup
+                                ? "bg-primary/10 text-primary group-hover:bg-primary/20"
+                                : "bg-success/10 text-success group-hover:bg-success/20"
+                            }`}>
+                              {btn.isGroup ? (
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                                    d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2" />
+                                </svg>
+                              ) : (
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                </svg>
+                              )}
+                            </div>
+
+                            {/* Info */}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="font-semibold text-sm leading-tight">
+                                  {btn.isGroup ? `ใบวางบิล ${btn.label}` : btn.label}
+                                </span>
+                                {btn.isGroup && (
+                                  <span className="badge badge-primary badge-xs">กลุ่ม</span>
+                                )}
+                              </div>
+                              <p className="text-xs text-base-content/45 mt-0.5 truncate">
+                                {btn.isGroup ? `· ${btn.sublabel}` : btn.sublabel}
+                              </p>
+                            </div>
+
+                            {/* Arrow */}
+                            <svg
+                              className="w-4 h-4 text-base-content/25 group-hover:text-base-content/50 group-hover:translate-x-0.5 transition-all shrink-0"
+                              fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                            >
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                            </svg>
+                          </button>
+                        ))}
+                      </div>
                     </div>
-                  )}
-                  {poLatest.status === "billed" && (
-                    <button
-                      onClick={() => router.push(`/Client/po/${poLatest._id}`)}
-                      className="btn btn-success w-full font-semibold gap-2 shadow-lg shadow-success/20"
-                    >
-                      ดูใบวางบิล
-                      <IconArrow />
-                    </button>
+
+                  ) : (
+
+                    /* ── Normal spotlight (pending / accepted) ── */
+                    <>
+                      <div className={`rounded-2xl border px-5 py-5 flex items-center gap-4 ${poMeta.spotlight}`}>
+                        <span className={`w-3 h-3 rounded-full shrink-0 ${poMeta.dot} ${poIsInProgress ? "animate-pulse" : ""}`} />
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold">{poCurrentStep.label}</p>
+                          <p className="text-sm text-base-content/50 mt-0.5">{poCurrentStep.sublabel}</p>
+                        </div>
+                        {poIsInProgress && <span className="loading loading-dots loading-sm opacity-30" />}
+                      </div>
+                      {PO_STEPS[PO_STATUS_ORDER[poLatest.status] + 1] && (
+                        <div className="flex items-center gap-3 text-xs text-base-content/30">
+                          <div className="flex-1 h-px bg-base-300" />
+                          <span>ขั้นถัดไป · {PO_STEPS[PO_STATUS_ORDER[poLatest.status] + 1].label}</span>
+                          <div className="flex-1 h-px bg-base-300" />
+                        </div>
+                      )}
+                    </>
+
                   )}
                 </div>
 

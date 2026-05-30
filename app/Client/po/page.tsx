@@ -7,6 +7,13 @@ type UploadStatus = "idle" | "uploading" | "success" | "error";
 type POStatus = "pending" | "accepted" | "billed";
 type View = "upload" | "history";
 
+interface BillingInfo {
+  _id: string;
+  billingNumber: string;
+  poNumbers: string[];
+  status: string;
+}
+
 interface PO {
   _id: string;
   poNumber: string;
@@ -15,6 +22,7 @@ interface PO {
   fileMimeType: string;
   createdAt: string;
   billedAt?: string;
+  billingId?: BillingInfo | null;  // populated from Billing collection
 }
 
 const STEPS: { key: POStatus; label: string; sublabel: string }[] = [
@@ -73,6 +81,18 @@ function POCard({ po, onViewBilling }: { po: PO; onViewBilling?: () => void }) {
   const isInProgress = po.status === "pending" || po.status === "accepted";
   const { spotlight, dot, bar, badge, label } = STATUS_STYLE[po.status];
 
+  // Billing group info (populated from Billing collection)
+  const billingGroup    = po.status === "billed" && po.billingId ? po.billingId : null;
+  const otherPoNumbers  = billingGroup
+    ? billingGroup.poNumbers.filter((pn) => pn !== po.poNumber)
+    : [];
+  const isBillingGroup  = Boolean(billingGroup);
+
+  // Override sublabel for billed status based on billing type
+  const billedSublabel = isBillingGroup
+    ? `ใบวางบิล ${billingGroup!.billingNumber}${otherPoNumbers.length > 0 ? ` · รวมกับ ${otherPoNumbers.join(", ")}` : ""}`
+    : "ออกใบวางบิลเรียบร้อยแล้ว";
+
   return (
     <div className="card bg-base-100 border border-base-300 shadow-sm overflow-hidden">
       <div className={`h-1 bg-linear-to-r ${bar}`} />
@@ -94,7 +114,14 @@ function POCard({ po, onViewBilling }: { po: PO; onViewBilling?: () => void }) {
               </p>
             </div>
           </div>
-          <span className={`badge badge-sm shrink-0 ${badge}`}>{label}</span>
+          <div className="flex items-center gap-2 shrink-0">
+            {isBillingGroup && (
+              <span className="badge badge-outline badge-xs text-base-content/40 font-mono hidden sm:inline-flex">
+                {billingGroup!.billingNumber}
+              </span>
+            )}
+            <span className={`badge badge-sm ${badge}`}>{label}</span>
+          </div>
         </div>
 
         <div className="divider my-0" />
@@ -111,7 +138,22 @@ function POCard({ po, onViewBilling }: { po: PO; onViewBilling?: () => void }) {
               <span className={`w-3 h-3 rounded-full shrink-0 ${dot} ${isInProgress ? "animate-pulse" : ""}`} />
               <div className="flex-1 min-w-0">
                 <p className="font-semibold">{currentStep.label}</p>
-                <p className="text-sm text-base-content/50 mt-0.5">{currentStep.sublabel}</p>
+                <p className="text-sm text-base-content/50 mt-0.5 truncate">
+                  {po.status === "billed" ? billedSublabel : currentStep.sublabel}
+                </p>
+                {/* Billing group: show all PO numbers as badges */}
+                {isBillingGroup && billingGroup!.poNumbers.length > 1 && (
+                  <div className="flex flex-wrap gap-1 mt-2">
+                    {billingGroup!.poNumbers.map((pn) => (
+                      <span
+                        key={pn}
+                        className={`badge badge-xs font-mono ${pn === po.poNumber ? "badge-success" : "badge-ghost"}`}
+                      >
+                        {pn}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
               {isInProgress && <span className="loading loading-dots loading-sm opacity-30" />}
               {po.status === "billed" && (
@@ -133,7 +175,7 @@ function POCard({ po, onViewBilling }: { po: PO; onViewBilling?: () => void }) {
                 onClick={onViewBilling}
                 className="btn btn-success w-full font-semibold gap-2 shadow-lg shadow-success/20"
               >
-                ดูใบวางบิล
+                {isBillingGroup ? `ดูใบวางบิล ${billingGroup!.billingNumber}` : "ดูใบวางบิล"}
                 <IconArrow />
               </button>
             )}
@@ -161,7 +203,9 @@ function POCard({ po, onViewBilling }: { po: PO; onViewBilling?: () => void }) {
                       {step.label}
                     </p>
                     {current && (
-                      <p className="text-xs text-base-content/40 mt-0.5">{step.sublabel}</p>
+                      <p className="text-xs text-base-content/40 mt-0.5">
+                        {po.status === "billed" ? billedSublabel : step.sublabel}
+                      </p>
                     )}
                   </div>
                 </div>
