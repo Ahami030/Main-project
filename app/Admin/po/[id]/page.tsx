@@ -25,6 +25,7 @@ interface PO {
   filePath: string;
   taxInvoices: TaxInvoice[];
   billedAt?: string;
+  billingId?: string | null;
   createdAt: string;
 }
 
@@ -193,7 +194,15 @@ export default function AdminPODetailPage() {
       {/* ── Billing note (hidden until printing) ─────── */}
       {po.status === "billed" && showBillingNote && (
         <div className="hidden print:block">
-          <BillingNoteDocument po={{ ...po, billedAt: po.billedAt ?? "" }} />
+          <BillingNoteDocument po={{
+            poNumbers:      [po.poNumber],
+            billingGroupId: po.billingId ?? undefined,
+            userName:       po.userName,
+            userEmail:      po.userEmail,
+            taxInvoices:    po.taxInvoices,
+            billedAt:       po.billedAt,
+            createdAt:      po.createdAt,
+          }} />
         </div>
       )}
 
@@ -356,10 +365,73 @@ export default function AdminPODetailPage() {
                     </button>
                   </div>
                 )}
+
+                {/* Billing navigation */}
+                {po.status === "accepted" && !po.billingId && (
+                  <div className="px-6 pb-6 pt-0">
+                    <div className="divider my-0 mb-4" />
+                    <button
+                      className="btn btn-outline btn-sm w-full gap-2"
+                      onClick={() => router.push(`/Admin/billing/new?preselect=${po._id}`)}
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                          d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      สร้างใบวางบิลรวม
+                    </button>
+                    <p className="text-[10px] text-center text-base-content/35 mt-1.5">
+                      สามารถรวม PO หลายใบของลูกค้าคนเดียวกันได้
+                    </p>
+                  </div>
+                )}
+
+                {po.billingId && (
+                  <div className="px-6 pb-6 pt-0">
+                    <div className="divider my-0 mb-4" />
+                    <button
+                      className="btn btn-ghost btn-sm w-full gap-2 text-primary"
+                      onClick={() => router.push(`/Admin/billing/${encodeURIComponent(po.billingId!)}`)}
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                          d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      ดูใบวางบิล ({po.billingId}) →
+                    </button>
+                  </div>
+                )}
               </div>
 
-              {/* Tax Invoice section */}
-              {(po.status === "accepted" || po.status === "billed") && (
+              {/* Billing info card — when PO is linked to a billing group */}
+              {po.billingId && (po.status === "accepted" || po.status === "billed") && (
+                <div className="card bg-primary/5 border border-primary/20 shadow-sm">
+                  <div className="card-body p-4 gap-3">
+                    <div className="flex items-center gap-2">
+                      <svg className="w-4 h-4 text-primary shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                          d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      <p className="text-sm font-semibold text-primary">อยู่ในระบบใบวางบิลรวม</p>
+                    </div>
+                    <p className="text-xs text-base-content/60">
+                      PO นี้ถูกรวมอยู่ในใบวางบิลของระบบใหม่ ข้อมูลใบกำกับภาษีและการพิมพ์ใบวางบิลอยู่ที่หน้าจัดการใบวางบิล
+                    </p>
+                    <button
+                      className="btn btn-primary btn-sm w-full gap-2"
+                      onClick={() => router.push(`/Admin/billing/${encodeURIComponent(po.billingId!)}`)}
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                      </svg>
+                      ไปจัดการใบวางบิล
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Tax Invoice section — only for old (single-PO) billing, not billing group */}
+              {(po.status === "accepted" || po.status === "billed") && !po.billingId && (
                 <div className="card bg-base-100 border border-base-300 shadow-sm overflow-hidden">
                   <div className="card-body p-6 gap-5">
 

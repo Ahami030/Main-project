@@ -1,7 +1,8 @@
 import React from "react";
 
 export interface TaxInvoice {
-  _id: string;
+  _id?: string;
+  ref?: string;
   invoiceNumber: string;
   invoiceDate: string;
   amount: number;
@@ -9,11 +10,13 @@ export interface TaxInvoice {
 
 export interface BillingNoteProps {
   po: {
-    poNumber: string;
+    poNumber?: string;          // single PO (old system, no group)
+    poNumbers?: string[];       // multi-PO (billing group or single wrapped in array)
+    billingGroupId?: string;    // billing group ID for display
     userName: string;
     userEmail: string;
     taxInvoices: TaxInvoice[];
-    billedAt: string;
+    billedAt?: string | null;
     createdAt: string;
   };
 }
@@ -21,11 +24,22 @@ export interface BillingNoteProps {
 const fmt = (n: number) =>
   n.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-const fmtDate = (d: string) =>
-  new Date(d).toLocaleDateString("th-TH", { year: "numeric", month: "long", day: "numeric" });
+const fmtDate = (d: string | null | undefined) => {
+  if (!d) return "-";
+  return new Date(d).toLocaleDateString("th-TH", { year: "numeric", month: "long", day: "numeric" });
+};
 
 export default function BillingNoteDocument({ po }: BillingNoteProps) {
   const grand = po.taxInvoices.reduce((s, inv) => s + inv.amount, 0);
+
+  // Resolve display PO numbers: prefer poNumbers array, fall back to single poNumber
+  const displayPoNumbers = po.poNumbers && po.poNumbers.length > 0
+    ? po.poNumbers
+    : po.poNumber
+      ? [po.poNumber]
+      : [];
+
+  const billingRef = po.billingGroupId ?? displayPoNumbers[0] ?? "-";
 
   return (
     <>
@@ -102,13 +116,13 @@ export default function BillingNoteDocument({ po }: BillingNoteProps) {
           </div>
           <div style={{ border: "1px solid #e2e8f0", borderRadius: "6px", padding: "10px 14px", backgroundColor: "#f8fafc", display: "flex", flexDirection: "column", gap: "4px" }}>
             {[
-              { label: "เลขที่ PO", value: po.poNumber },
-              { label: "วันที่สั่งซื้อ", value: fmtDate(po.createdAt) },
+              { label: "เลขที่ใบวางบิล", value: billingRef },
+              { label: "เลขที่ PO", value: displayPoNumbers.join(", ") || "-" },
               { label: "วันที่วางบิล", value: fmtDate(po.billedAt) },
             ].map(({ label, value }) => (
               <div key={label} style={{ display: "flex", justifyContent: "space-between", fontSize: "12px" }}>
-                <span style={{ color: "#94a3b8" }}>{label}</span>
-                <span style={{ color: "#1e293b", fontWeight: 500 }}>{value}</span>
+                <span style={{ color: "#94a3b8", flexShrink: 0, marginRight: "8px" }}>{label}</span>
+                <span style={{ color: "#1e293b", fontWeight: 500, textAlign: "right" }}>{value}</span>
               </div>
             ))}
           </div>
@@ -126,7 +140,7 @@ export default function BillingNoteDocument({ po }: BillingNoteProps) {
           </thead>
           <tbody>
             {po.taxInvoices.map((inv, i) => (
-              <tr key={inv._id} style={{ backgroundColor: i % 2 === 0 ? "#ffffff" : "#f8fafc" }}>
+              <tr key={inv._id ?? inv.ref ?? i} style={{ backgroundColor: i % 2 === 0 ? "#ffffff" : "#f8fafc" }}>
                 <td style={{ padding: "9px 8px", textAlign: "center", borderBottom: "1px solid #f1f5f9", borderRight: "1px solid #f1f5f9", color: "#64748b", fontSize: "12px" }}>
                   {i + 1}
                 </td>

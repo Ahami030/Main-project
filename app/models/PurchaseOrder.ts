@@ -27,6 +27,8 @@ const PurchaseOrderSchema = new mongoose.Schema(
     fileMimeType: { type: String, default: "" },
     taxInvoices:  { type: [TaxInvoiceSchema], default: [] },
     billedAt:     { type: Date, default: null },
+    // Reference to Billing collection (set when PO is added to a billing group)
+    billingId:    { type: mongoose.Schema.Types.ObjectId, ref: "Billing", default: null },
   },
   { timestamps: true }
 );
@@ -46,6 +48,11 @@ export async function generatePONumber(): Promise<string> {
     : 0;
   const next = String(lastNum + 1).padStart(3, "0");
   return `${prefix}${next}`;
+}
+
+// Clear model cache in development so schema changes are picked up on hot-reload
+if (process.env.NODE_ENV === "development" && mongoose.models.PurchaseOrder) {
+  delete mongoose.models.PurchaseOrder;
 }
 
 export default mongoose.models.PurchaseOrder ||
