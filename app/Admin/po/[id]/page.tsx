@@ -1,7 +1,6 @@
 "use client";
 
-import React from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useParams, useRouter } from "next/navigation";
 import BillingNoteDocument from "@/components/BillingNoteDocument";
@@ -41,29 +40,35 @@ const STATUS_BADGE: Record<POStatus, string> = {
   billed:   "badge-success",
 };
 
+const STATUS_BAR: Record<POStatus, string> = {
+  pending:  "from-warning to-warning/40",
+  accepted: "from-info to-info/40",
+  billed:   "from-success to-success/40",
+};
+
 const fmt = (n: number) =>
   n.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export default function AdminPODetailPage() {
   const { data: session } = useSession();
-  const params = useParams();
-  const router = useRouter();
-  const id = params?.id as string;
+  const params  = useParams();
+  const router  = useRouter();
+  const id      = params?.id as string;
+  const iframeRef = useRef<HTMLIFrameElement>(null);
 
-  const [po, setPO] = useState<PO | null>(null);
+  const [po, setPO]           = useState<PO | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Invoice form
-  const [invNum, setInvNum] = useState("");
-  const [invDate, setInvDate] = useState("");
+  const [invNum, setInvNum]       = useState("");
+  const [invDate, setInvDate]     = useState("");
   const [invAmount, setInvAmount] = useState("");
   const [addingInv, setAddingInv] = useState(false);
-  const [invError, setInvError] = useState("");
+  const [invError, setInvError]   = useState("");
 
-  // Actions
-  const [actionLoading, setActionLoading] = useState(false);
+  const [actionLoading, setActionLoading]         = useState(false);
   const [showBillingConfirm, setShowBillingConfirm] = useState(false);
-  const [showBillingNote, setShowBillingNote] = useState(false);
+  const [showBillingNote, setShowBillingNote]     = useState(false);
+  const [printImageMode, setPrintImageMode]       = useState(false);
 
   const fetchPO = async () => {
     const res = await fetch(`/api/po/${id}`);
@@ -72,6 +77,14 @@ export default function AdminPODetailPage() {
   };
 
   useEffect(() => { if (id) fetchPO(); }, [id]);
+
+  // Cleanup image print CSS after dialog closes
+  useEffect(() => {
+    if (!printImageMode) return;
+    const handler = () => setPrintImageMode(false);
+    window.addEventListener("afterprint", handler, { once: true });
+    return () => window.removeEventListener("afterprint", handler);
+  }, [printImageMode]);
 
   const patch = async (body: Record<string, unknown>) => {
     const res = await fetch(`/api/po/${id}`, {
@@ -120,262 +133,435 @@ export default function AdminPODetailPage() {
 
   const handlePrintProductList = () => {
     if (!po) return;
-    const fileUrl = `/api/po/file?id=${po._id}`;
-    const isImage = po.fileMimeType.startsWith("image/");
-    const win = window.open("", "_blank");
-    if (!win) return;
-    if (isImage) {
-      win.document.write(
-        `<html><head><title>รายการสินค้า</title></head><body style="margin:0;padding:0"><img src="${fileUrl}" style="max-width:100%;display:block"/></body></html>`
-      );
-    } else {
-      win.document.write(
-        `<html><head><title>รายการสินค้า</title></head><body style="margin:0;padding:0"><iframe src="${fileUrl}" style="width:100%;height:100vh;border:none"></iframe></body></html>`
-      );
+    if (isPdf) {
+      // Same-origin iframe: trigger PDF's own print dialog
+      try { iframeRef.current?.contentWindow?.print(); } catch {}
+    } else if (isImage) {
+      // Image: apply @media print CSS to show only image, then print
+      setPrintImageMode(true);
+      setTimeout(() => window.print(), 80);
     }
-    win.document.close();
-    win.addEventListener("load", () => win.print());
   };
 
-  const handlePrintBilling = () => window.print();
+  const handlePrintBilling = () => {
+    setShowBillingNote(true);
+    setTimeout(() => window.print(), 100);
+  };
 
   if (!session) return null;
+
   if (loading) return (
-    <div className="flex justify-center items-center min-h-screen">
-      <span className="loading loading-spinner loading-lg" />
+    <div className="min-h-screen bg-base-200 flex items-center justify-center">
+      <div className="flex flex-col items-center gap-3">
+        <span className="loading loading-spinner loading-lg text-primary" />
+        <p className="text-sm text-base-content/40">กำลังโหลด...</p>
+      </div>
     </div>
   );
+
   if (!po) return (
-    <div className="flex flex-col items-center justify-center min-h-screen gap-4">
+    <div className="min-h-screen bg-base-200 flex flex-col items-center justify-center gap-4">
       <p className="text-xl font-bold">ไม่พบ PO</p>
       <button className="btn btn-primary" onClick={() => router.push("/Admin/po")}>กลับ</button>
     </div>
   );
 
-  const grand = po.taxInvoices.reduce((s, inv) => s + inv.amount, 0);
+  const grand   = po.taxInvoices.reduce((s, inv) => s + inv.amount, 0);
   const fileUrl = `/api/po/file?id=${po._id}`;
   const isImage = po.fileMimeType.startsWith("image/");
-  const isPdf = po.fileMimeType === "application/pdf" || po.fileOrigName.endsWith(".pdf");
+  const isPdf   = po.fileMimeType === "application/pdf" || po.fileOrigName.toLowerCase().endsWith(".pdf");
 
   return (
     <>
-      {/* Billing note print view (hidden except when printing) */}
-      {showBillingNote && po.status === "billed" && (
+      {/* ── Print CSS: image-only mode ───────────────── */}
+      {printImageMode && (
+        <style>{`
+          @media print {
+            body * { visibility: hidden !important; }
+            #po-product-print-area, #po-product-print-area * { visibility: visible !important; }
+            #po-product-print-area {
+              position: fixed !important; top: 0; left: 0;
+              width: 100vw; height: 100vh;
+              display: flex !important; align-items: center; justify-content: center;
+              background: white !important;
+              z-index: 9999 !important;
+            }
+          }
+        `}</style>
+      )}
+
+      {/* ── Billing note (hidden until printing) ─────── */}
+      {po.status === "billed" && showBillingNote && (
         <div className="hidden print:block">
           <BillingNoteDocument po={{ ...po, billedAt: po.billedAt ?? "" }} />
         </div>
       )}
 
-      <div className="min-h-screen bg-base-200 py-8 px-4 print:hidden">
-        <div className="max-w-6xl mx-auto">
+      {/* ── Main UI ──────────────────────────────────── */}
+      <div className="min-h-screen bg-base-200 print:hidden">
 
-          {/* Top bar */}
-          <div className="flex items-center gap-3 mb-6">
-            <button className="btn btn-ghost btn-sm" onClick={() => router.push("/Admin/po")}>← กลับ</button>
-            <h1 className="text-xl font-bold">{po.poNumber}</h1>
-            <span className={`badge ${STATUS_BADGE[po.status]}`}>{STATUS_LABEL[po.status]}</span>
+        {/* Top bar */}
+        <div className="sticky top-0 z-20 bg-base-100 border-b border-base-300 shadow-sm">
+          <div className="max-w-6xl mx-auto px-4 md:px-6 h-14 flex items-center gap-3">
+            <button
+              className="btn btn-ghost btn-sm gap-1.5"
+              onClick={() => router.push("/Admin/po")}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+              กลับ
+            </button>
+            <div className="w-px h-5 bg-base-300" />
+            <span className="font-bold text-base">{po.poNumber}</span>
+            <span className={`badge badge-sm ${STATUS_BADGE[po.status]}`}>
+              {STATUS_LABEL[po.status]}
+            </span>
           </div>
+        </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="max-w-screen-2xl mx-auto px-4 md:px-8 py-5">
+          <div className="grid grid-cols-1 lg:grid-cols-[1fr_440px] gap-5 items-start">
 
-            {/* ─── Left: File viewer ─── */}
-            <div className="flex flex-col gap-4">
-              <div className="card bg-base-100 shadow-sm">
-                <div className="card-body gap-3">
-                  <div className="flex items-center justify-between">
-                    <h2 className="font-semibold">ไฟล์รายการสินค้า</h2>
-                    <button className="btn btn-outline btn-sm gap-1" onClick={handlePrintProductList}>
-                      <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+            {/* ── Left: File viewer ─────────────────────── */}
+            <div className="card bg-base-100 border border-base-300 shadow-sm overflow-hidden">
+              <div className={`h-1 bg-linear-to-r ${STATUS_BAR[po.status]}`} />
+              <div className="card-body p-4 gap-3 h-full">
+
+                {/* File card header */}
+                <div className="flex items-center justify-between gap-3 shrink-0">
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold uppercase tracking-widest text-base-content/40 mb-0.5">
+                      ไฟล์รายการสินค้า
+                    </p>
+                    <p className="text-sm font-medium truncate text-base-content/70">
+                      {po.fileOrigName}
+                    </p>
+                  </div>
+                  {(isPdf || isImage) ? (
+                    <button
+                      className="btn btn-outline btn-sm gap-1.5 shrink-0"
+                      onClick={handlePrintProductList}
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                          d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
                       </svg>
                       พิมพ์รายการสินค้า
                     </button>
-                  </div>
-
-                  <p className="text-sm text-base-content/60 truncate">{po.fileOrigName}</p>
-
-                  {isPdf ? (
-                    <iframe src={fileUrl} className="w-full h-96 rounded border border-base-300" title="product list" />
-                  ) : isImage ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={fileUrl} alt="product list" className="w-full max-h-96 object-contain rounded border border-base-300 bg-base-200" />
                   ) : (
-                    <div className="flex flex-col items-center gap-3 py-10 border border-dashed border-base-300 rounded-lg">
-                      <svg xmlns="http://www.w3.org/2000/svg" className="w-10 h-10 text-base-content/30" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                    <a
+                      href={fileUrl}
+                      download={po.fileOrigName}
+                      className="btn btn-outline btn-sm gap-1.5 shrink-0"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                          d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                       </svg>
-                      <a href={fileUrl} target="_blank" rel="noreferrer" className="btn btn-outline btn-sm">ดาวน์โหลดไฟล์</a>
-                    </div>
+                      ดาวน์โหลด
+                    </a>
                   )}
                 </div>
+
+                {/* File display area */}
+                {isPdf ? (
+                  <iframe
+                    ref={iframeRef}
+                    src={fileUrl}
+                    title="product list"
+                    className="w-full rounded-lg border border-base-300"
+                    style={{ height: "calc(100vh - 11rem)", minHeight: "480px" }}
+                  />
+                ) : isImage ? (
+                  <div
+                    id="po-product-print-area"
+                    className="flex items-center justify-center rounded-lg border border-base-300 bg-base-200/50 overflow-hidden"
+                    style={{ height: "calc(100vh - 11rem)", minHeight: "480px" }}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={fileUrl}
+                      alt="product list"
+                      className="max-w-full max-h-full object-contain"
+                    />
+                  </div>
+                ) : (
+                  <div className="flex-1 flex flex-col items-center justify-center gap-4 rounded-lg border-2 border-dashed border-base-300 py-16">
+                    <svg className="w-12 h-12 text-base-content/20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                        d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                    </svg>
+                    <p className="text-sm text-base-content/40">ไม่สามารถแสดงตัวอย่างไฟล์ประเภทนี้ได้</p>
+                    <a href={fileUrl} download={po.fileOrigName} className="btn btn-primary btn-sm gap-1.5">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                          d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                      </svg>
+                      ดาวน์โหลดไฟล์
+                    </a>
+                  </div>
+                )}
+
               </div>
             </div>
 
-            {/* ─── Right: PO info + actions ─── */}
-            <div className="flex flex-col gap-4">
+            {/* ── Right: Info + Actions ─────────────────── */}
+            <div className="flex flex-col gap-4 lg:sticky lg:top-[4.5rem]">
 
-              {/* PO Info */}
-              <div className="card bg-base-100 shadow-sm">
-                <div className="card-body gap-3">
-                  <h2 className="font-semibold">ข้อมูล PO</h2>
-                  <div className="grid grid-cols-2 gap-y-2 text-sm">
-                    {[
-                      { label: "เลขที่ PO", value: po.poNumber },
-                      { label: "ลูกค้า", value: po.userName },
-                      { label: "อีเมล", value: po.userEmail },
-                      { label: "วันที่ส่ง", value: new Date(po.createdAt).toLocaleDateString("th-TH", { year: "numeric", month: "long", day: "numeric" }) },
-                    ].map(({ label, value }) => (
-                      <React.Fragment key={label}>
-                        <span className="text-base-content/50">{label}</span>
-                        <span className="font-medium truncate">{value}</span>
-                      </React.Fragment>
-                    ))}
-                  </div>
+              {/* PO info card */}
+              <div className="card bg-base-100 border border-base-300 shadow-sm overflow-hidden">
+                <div className={`h-1 bg-linear-to-r ${STATUS_BAR[po.status]}`} />
 
-                  {po.status === "pending" && (
+                {/* Card header */}
+                <div className="px-6 pt-5 pb-4 flex items-center justify-between border-b border-base-200">
+                  <h2 className="text-xs font-semibold uppercase tracking-widest text-base-content/40">ข้อมูล PO</h2>
+                  <span className={`badge badge-md ${STATUS_BADGE[po.status]}`}>{STATUS_LABEL[po.status]}</span>
+                </div>
+
+                {/* PO number hero */}
+                <div className="px-6 py-5 border-b border-base-200">
+                  <p className="text-[11px] text-base-content/40 mb-1.5 uppercase tracking-wider">เลขที่ PO</p>
+                  <p className="text-3xl font-bold tracking-tight">{po.poNumber}</p>
+                </div>
+
+                {/* Details */}
+                <div className="px-6 py-5 space-y-4">
+                  {[
+                    { label: "ลูกค้า",     value: po.userName },
+                    { label: "อีเมล",      value: po.userEmail },
+                    { label: "วันที่ส่ง",  value: new Date(po.createdAt).toLocaleDateString("th-TH", { year: "numeric", month: "long", day: "numeric" }) },
+                  ].map(({ label, value }) => (
+                    <div key={label} className="grid grid-cols-[6.5rem_1fr] gap-3 text-sm">
+                      <span className="text-base-content/45 pt-px">{label}</span>
+                      <span className="font-medium break-all leading-snug">{value}</span>
+                    </div>
+                  ))}
+                </div>
+
+                {po.status === "pending" && (
+                  <div className="px-6 pb-6">
                     <button
-                      className="btn btn-primary w-full mt-2"
+                      className="btn btn-primary w-full gap-2"
                       disabled={actionLoading}
                       onClick={handleAccept}
                     >
-                      {actionLoading && <span className="loading loading-spinner loading-sm" />}
+                      {actionLoading
+                        ? <span className="loading loading-spinner loading-sm" />
+                        : <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                      }
                       รับ PO
                     </button>
-                  )}
-                </div>
+                  </div>
+                )}
               </div>
 
-              {/* Tax Invoices section */}
+              {/* Tax Invoice section */}
               {(po.status === "accepted" || po.status === "billed") && (
-                <div className="card bg-base-100 shadow-sm">
-                  <div className="card-body gap-3">
-                    <h2 className="font-semibold">ใบกำกับภาษี/ใบส่งของ</h2>
+                <div className="card bg-base-100 border border-base-300 shadow-sm overflow-hidden">
+                  <div className="card-body p-6 gap-5">
 
+                    <h2 className="font-bold text-base">ใบกำกับภาษี / ใบส่งของ</h2>
+
+                    {/* Invoice list */}
                     {po.taxInvoices.length > 0 ? (
-                      <div className="overflow-x-auto">
-                        <table className="table table-xs">
-                          <thead>
-                            <tr className="text-xs">
+                      <div className="overflow-x-auto rounded-lg border border-base-200">
+                        <table className="table table-sm w-full">
+                          <thead className="bg-base-200/60">
+                            <tr className="text-[11px] uppercase tracking-wider text-base-content/50">
                               <th>เลขที่</th>
                               <th>วันที่</th>
-                              <th className="text-right">ยอดเงิน (บาท)</th>
-                              {po.status !== "billed" && <th />}
+                              <th className="text-right">ยอดเงิน</th>
+                              {po.status !== "billed" && <th className="w-10" />}
                             </tr>
                           </thead>
                           <tbody>
                             {po.taxInvoices.map((inv) => (
-                              <tr key={inv._id}>
-                                <td className="font-medium">{inv.invoiceNumber}</td>
-                                <td>{inv.invoiceDate}</td>
-                                <td className="text-right">{fmt(inv.amount)}</td>
+                              <tr key={inv._id} className="hover:bg-base-200/30">
+                                <td className="font-medium text-sm">{inv.invoiceNumber}</td>
+                                <td className="text-sm text-base-content/60">{inv.invoiceDate}</td>
+                                <td className="text-right text-sm font-medium">{fmt(inv.amount)}</td>
                                 {po.status !== "billed" && (
                                   <td>
                                     <button
-                                      className="btn btn-ghost btn-xs text-error"
+                                      className="btn btn-ghost btn-xs text-error hover:bg-error/10"
                                       onClick={() => handleRemoveInvoice(inv._id)}
-                                    >ลบ</button>
+                                    >
+                                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                      </svg>
+                                    </button>
                                   </td>
                                 )}
                               </tr>
                             ))}
                           </tbody>
                           <tfoot>
-                            <tr className="font-bold bg-base-200">
-                              <td colSpan={po.status !== "billed" ? 2 : 2}>ยอดรวม</td>
-                              <td className="text-right">{fmt(grand)}</td>
+                            <tr className="border-t-2 border-base-300 bg-base-200/40">
+                              <td colSpan={2} className="font-bold text-sm">ยอดรวม</td>
+                              <td className="text-right font-bold text-sm text-success">{fmt(grand)}</td>
                               {po.status !== "billed" && <td />}
                             </tr>
                           </tfoot>
                         </table>
                       </div>
                     ) : (
-                      <p className="text-sm text-base-content/40 py-2">ยังไม่มีใบกำกับภาษี/ใบส่งของ</p>
+                      <div className="flex flex-col items-center py-5 gap-2 text-base-content/30 rounded-lg border border-dashed border-base-300">
+                        <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        <p className="text-xs">ยังไม่มีรายการ</p>
+                      </div>
                     )}
 
                     {/* Add invoice form */}
                     {po.status === "accepted" && (
-                      <div className="flex flex-col gap-2 pt-1">
-                        <p className="text-xs text-base-content/50 font-medium">เพิ่มใบกำกับภาษี/ใบส่งของ</p>
-                        <div className="flex flex-wrap gap-2">
+                      <div className="space-y-2.5 pt-1">
+                        <p className="text-xs font-semibold uppercase tracking-wider text-base-content/40">
+                          เพิ่มใบกำกับภาษี / ใบส่งของ
+                        </p>
+                        <div className="grid grid-cols-2 gap-2">
                           <input
                             type="text"
                             placeholder="เลขที่ใบกำกับฯ"
-                            className="input input-bordered input-sm flex-1 min-w-30"
+                            className="input input-bordered input-sm col-span-2"
                             value={invNum}
                             onChange={(e) => setInvNum(e.target.value)}
                           />
                           <input
                             type="date"
-                            className="input input-bordered input-sm w-40"
+                            className="input input-bordered input-sm"
                             value={invDate}
                             onChange={(e) => setInvDate(e.target.value)}
                           />
                           <input
                             type="number"
-                            placeholder="ยอดเงิน"
-                            className="input input-bordered input-sm w-28"
+                            placeholder="ยอดเงิน (บาท)"
+                            className="input input-bordered input-sm"
                             min="0"
                             step="0.01"
                             value={invAmount}
                             onChange={(e) => setInvAmount(e.target.value)}
                           />
-                          <button
-                            className="btn btn-outline btn-sm"
-                            disabled={addingInv}
-                            onClick={handleAddInvoice}
-                          >
-                            {addingInv ? <span className="loading loading-spinner loading-xs" /> : "+ เพิ่ม"}
-                          </button>
                         </div>
-                        {invError && <p className="text-error text-xs">{invError}</p>}
+                        {invError && (
+                          <p className="text-error text-xs">{invError}</p>
+                        )}
+                        <button
+                          className="btn btn-outline btn-sm w-full gap-1.5"
+                          disabled={addingInv}
+                          onClick={handleAddInvoice}
+                        >
+                          {addingInv
+                            ? <span className="loading loading-spinner loading-xs" />
+                            : <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                              </svg>
+                          }
+                          เพิ่มรายการ
+                        </button>
                       </div>
                     )}
 
-                    {/* Generate billing button */}
+                    {/* Action buttons */}
                     {po.status === "accepted" && po.taxInvoices.length > 0 && (
-                      <button
-                        className="btn btn-success w-full mt-1"
-                        onClick={() => setShowBillingConfirm(true)}
-                      >
-                        สร้างใบวางบิล
-                      </button>
+                      <>
+                        <div className="divider my-0" />
+                        <button
+                          className="btn btn-success w-full gap-2"
+                          onClick={() => setShowBillingConfirm(true)}
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                              d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                          </svg>
+                          สร้างใบวางบิล
+                        </button>
+                      </>
                     )}
 
-                    {/* Print billing note button */}
                     {po.status === "billed" && (
-                      <button className="btn btn-outline btn-sm gap-1" onClick={() => { setShowBillingNote(true); setTimeout(handlePrintBilling, 100); }}>
-                        <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-                        </svg>
-                        พิมพ์ใบวางบิล
-                      </button>
+                      <>
+                        <div className="divider my-0" />
+                        <button
+                          className="btn btn-outline btn-success w-full gap-2"
+                          onClick={handlePrintBilling}
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                              d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                          </svg>
+                          พิมพ์ใบวางบิล
+                        </button>
+                        {po.billedAt && (
+                          <p className="text-xs text-center text-base-content/35">
+                            วางบิลเมื่อ {new Date(po.billedAt).toLocaleDateString("th-TH", { year: "numeric", month: "long", day: "numeric" })}
+                          </p>
+                        )}
+                      </>
                     )}
+
                   </div>
                 </div>
               )}
+
             </div>
           </div>
         </div>
       </div>
 
-      {/* Confirm modal */}
+      {/* ── Confirm billing modal ─────────────────────── */}
       {showBillingConfirm && (
         <dialog open className="modal modal-open">
-          <div className="modal-box">
-            <h3 className="font-bold text-lg">ยืนยันการสร้างใบวางบิล</h3>
-            <p className="py-3 text-sm">
-              จะสร้างใบวางบิลจากใบกำกับภาษี/ใบส่งของ <strong>{po.taxInvoices.length} ใบ</strong> ยอดรวม <strong>{fmt(grand)} บาท</strong>
-              <br />หลังจากนี้จะไม่สามารถแก้ไขรายการใบกำกับภาษีได้
+          <div className="modal-box max-w-sm">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-10 h-10 rounded-full bg-success/15 flex items-center justify-center shrink-0">
+                <svg className="w-5 h-5 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="font-bold">ยืนยันการสร้างใบวางบิล</h3>
+                <p className="text-xs text-base-content/50 mt-0.5">การกระทำนี้ไม่สามารถย้อนกลับได้</p>
+              </div>
+            </div>
+            <div className="bg-base-200 rounded-xl p-4 space-y-1.5 text-sm mb-4">
+              <div className="flex justify-between">
+                <span className="text-base-content/60">จำนวนใบกำกับภาษี</span>
+                <span className="font-semibold">{po.taxInvoices.length} ใบ</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-base-content/60">ยอดรวม</span>
+                <span className="font-bold text-success">{fmt(grand)} บาท</span>
+              </div>
+            </div>
+            <p className="text-xs text-base-content/40 mb-4">
+              หลังจากนี้จะไม่สามารถแก้ไขรายการใบกำกับภาษี/ใบส่งของได้
             </p>
-            <div className="modal-action">
-              <button className="btn btn-ghost" onClick={() => setShowBillingConfirm(false)}>ยกเลิก</button>
-              <button className="btn btn-success" disabled={actionLoading} onClick={handleGenerateBilling}>
+            <div className="flex gap-2">
+              <button
+                className="btn btn-ghost flex-1"
+                onClick={() => setShowBillingConfirm(false)}
+              >
+                ยกเลิก
+              </button>
+              <button
+                className="btn btn-success flex-1 gap-2"
+                disabled={actionLoading}
+                onClick={handleGenerateBilling}
+              >
                 {actionLoading && <span className="loading loading-spinner loading-sm" />}
                 ยืนยัน
               </button>
             </div>
           </div>
-          <form method="dialog" className="modal-backdrop"><button onClick={() => setShowBillingConfirm(false)}>close</button></form>
+          <form method="dialog" className="modal-backdrop">
+            <button onClick={() => setShowBillingConfirm(false)}>close</button>
+          </form>
         </dialog>
       )}
     </>

@@ -18,6 +18,18 @@ interface Quotation {
   pdfPath: string | null;
 }
 
+type POStatus = "pending" | "accepted" | "billed";
+
+interface POOrder {
+  _id: string;
+  poNumber: string;
+  status: POStatus;
+  fileOrigName: string;
+  fileMimeType: string;
+  createdAt: string;
+  billedAt?: string;
+}
+
 // ─── Constants ────────────────────────────────────────────────────────────────
 const STEPS: { key: QuotationStatus; label: string; sublabel: string }[] = [
   { key: "sent",       label: "ส่งไฟล์แล้ว",        sublabel: "ระบบได้รับเอกสารของคุณแล้ว" },
@@ -47,6 +59,20 @@ const PROCESS_STEPS = [
   { step: "03", title: "ออกใบเสนอราคา",  desc: "ทีมงานจัดทำใบเสนอราคาตามรายการสินค้า" },
   { step: "04", title: "ต่อรองราคา",     desc: "พูดคุยและต่อรองราคากับทีมงานได้โดยตรง" },
 ];
+
+const PO_STEPS: { key: POStatus; label: string; sublabel: string }[] = [
+  { key: "pending",  label: "ส่งไฟล์แล้ว",   sublabel: "ระบบได้รับเอกสารของคุณแล้ว" },
+  { key: "accepted", label: "กำลังดำเนินการ", sublabel: "admin รับเรื่องแล้ว กำลังจัดสินค้า" },
+  { key: "billed",   label: "วางบิลแล้ว",     sublabel: "ออกใบวางบิลเรียบร้อยแล้ว" },
+];
+
+const PO_STATUS_ORDER: Record<POStatus, number> = { pending: 0, accepted: 1, billed: 2 };
+
+const PO_STATUS_META: Record<POStatus, { spotlight: string; dot: string; bar: string; badge: string; label: string }> = {
+  pending:  { spotlight: "border-warning/25 bg-warning/5",   dot: "bg-warning", bar: "from-warning to-warning/30",  badge: "badge-warning",  label: "รอตรวจสอบ" },
+  accepted: { spotlight: "border-info/25 bg-info/5",         dot: "bg-info",    bar: "from-info to-info/30",         badge: "badge-info",     label: "กำลังดำเนินการ" },
+  billed:   { spotlight: "border-success/40 bg-success/10",  dot: "bg-success", bar: "from-success to-success/40",  badge: "badge-success",  label: "วางบิลแล้ว" },
+};
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
 function IconArrow() {
@@ -104,6 +130,27 @@ export default function Page(): JSX.Element {
     const id = setInterval(() => fetchQuotations(true), 5000);
     return () => clearInterval(id);
   }, [fetchQuotations]);
+
+  // ── Fetch PO orders ──────────────────────────────────────────────────────
+  const [poOrders, setPoOrders]     = useState<POOrder[]>([]);
+  const [poLoading, setPoLoading]   = useState(true);
+
+  const fetchPOOrders = useCallback(async (silent = false) => {
+    if (!silent) setPoLoading(true);
+    try {
+      const res  = await fetch("/api/po");
+      const data = await res.json();
+      setPoOrders(Array.isArray(data) ? data : []);
+    } finally {
+      if (!silent) setPoLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { fetchPOOrders(); }, [fetchPOOrders]);
+  useEffect(() => {
+    const id = setInterval(() => fetchPOOrders(true), 8000);
+    return () => clearInterval(id);
+  }, [fetchPOOrders]);
 
   // ── Fetch RFQ when document modal opens ─────────────────────────────────
   useEffect(() => {
@@ -215,6 +262,11 @@ export default function Page(): JSX.Element {
   const meta        = latest ? STATUS_META[latest.status] : null;
   const currentStep = latest ? STEPS.find((s) => s.key === latest.status)! : null;
   const isInProgress = latest?.status === "sent" || latest?.status === "reviewing";
+
+  const poLatest       = poOrders[0] ?? null;
+  const poMeta         = poLatest ? PO_STATUS_META[poLatest.status] : null;
+  const poCurrentStep  = poLatest ? PO_STEPS.find((s) => s.key === poLatest.status)! : null;
+  const poIsInProgress = poLatest?.status === "pending" || poLatest?.status === "accepted";
 
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
@@ -460,6 +512,176 @@ export default function Page(): JSX.Element {
                   ].map((item, i) => (
                     <div key={i} className="flex items-center gap-3 rounded-xl bg-base-200 px-4 py-3">
                       <div className="w-6 h-6 rounded-full bg-primary/15 text-primary text-xs font-bold flex items-center justify-center shrink-0">
+                        {i + 1}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold leading-tight">{item.label}</p>
+                        <p className="text-xs text-base-content/40 mt-0.5">{item.sub}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+              </div>
+            </div>
+          </div>
+
+        )}
+
+        {/* ── PO Section ────────────────────────────────────────── */}
+        {poLoading ? (
+
+          <div className="card bg-base-100 border border-base-300 shadow-sm">
+            <div className="card-body items-center py-12 gap-3">
+              <span className="loading loading-spinner loading-lg text-secondary" />
+              <p className="text-sm text-base-content/40">กำลังโหลดใบสั่งซื้อ...</p>
+            </div>
+          </div>
+
+        ) : poLatest && poMeta && poCurrentStep ? (
+
+          /* ── PO Status Card ── */
+          <div className="card bg-base-100 border border-base-300 shadow-sm overflow-hidden">
+            <div className={`h-1 bg-linear-to-r ${poMeta.bar}`} />
+            <div className="card-body gap-5 pt-5 px-6 md:px-8">
+
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-base-200 flex items-center justify-center shrink-0 text-base-content/35">
+                    <IconDoc />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs tracking-widest uppercase text-secondary/60 font-medium mb-0.5">
+                      Purchase Order
+                    </p>
+                    <p className="font-semibold leading-snug">{poLatest.poNumber}</p>
+                    <p className="text-xs text-base-content/40 mt-0.5 truncate max-w-xs">
+                      {poLatest.fileOrigName} · {new Date(poLatest.createdAt).toLocaleDateString("th-TH", {
+                        year: "numeric", month: "short", day: "numeric",
+                        hour: "2-digit", minute: "2-digit",
+                      })}
+                    </p>
+                  </div>
+                </div>
+                <span className={`badge shrink-0 ${poMeta.badge}`}>{poMeta.label}</span>
+              </div>
+
+              <div className="divider my-0" />
+
+              <div className="flex flex-col md:flex-row gap-6">
+
+                {/* Left: spotlight + CTA */}
+                <div className="flex-1 flex flex-col gap-4">
+                  <div
+                    onClick={poLatest.status === "billed" ? () => router.push(`/Client/po/${poLatest._id}`) : undefined}
+                    className={`rounded-2xl border px-5 py-5 flex items-center gap-4 ${poMeta.spotlight} ${poLatest.status === "billed" ? "cursor-pointer hover:opacity-90 transition-opacity" : ""}`}
+                  >
+                    <span className={`w-3 h-3 rounded-full shrink-0 ${poMeta.dot} ${poIsInProgress ? "animate-pulse" : ""}`} />
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold">{poCurrentStep.label}</p>
+                      <p className="text-sm text-base-content/50 mt-0.5">{poCurrentStep.sublabel}</p>
+                    </div>
+                    {poIsInProgress && <span className="loading loading-dots loading-sm opacity-30" />}
+                    {poLatest.status === "billed" && (
+                      <svg className="w-4 h-4 text-base-content/30 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                    )}
+                  </div>
+
+                  {PO_STEPS[PO_STATUS_ORDER[poLatest.status] + 1] && (
+                    <div className="flex items-center gap-3 text-xs text-base-content/30">
+                      <div className="flex-1 h-px bg-base-300" />
+                      <span>ขั้นถัดไป · {PO_STEPS[PO_STATUS_ORDER[poLatest.status] + 1].label}</span>
+                      <div className="flex-1 h-px bg-base-300" />
+                    </div>
+                  )}
+                  {poLatest.status === "billed" && (
+                    <button
+                      onClick={() => router.push(`/Client/po/${poLatest._id}`)}
+                      className="btn btn-success w-full font-semibold gap-2 shadow-lg shadow-success/20"
+                    >
+                      ดูใบวางบิล
+                      <IconArrow />
+                    </button>
+                  )}
+                </div>
+
+                {/* Right: steps timeline */}
+                <div className="md:w-64 shrink-0 flex flex-col gap-0">
+                  {PO_STEPS.map((step, i) => {
+                    const done    = i <= PO_STATUS_ORDER[poLatest.status];
+                    const current = i === PO_STATUS_ORDER[poLatest.status];
+                    return (
+                      <div key={step.key} className="flex gap-3">
+                        <div className="flex flex-col items-center">
+                          <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 transition-colors
+                            ${done ? "bg-secondary text-secondary-content" : "bg-base-200 text-base-content/30"}`}>
+                            {done ? "✓" : i + 1}
+                          </div>
+                          {i < PO_STEPS.length - 1 && (
+                            <div className={`w-px flex-1 my-1 ${done ? "bg-secondary/40" : "bg-base-300"}`} />
+                          )}
+                        </div>
+                        <div className="pb-4 pt-1 min-w-0">
+                          <p className={`text-sm font-medium leading-tight ${current ? "text-base-content" : done ? "text-base-content/70" : "text-base-content/30"}`}>
+                            {step.label}
+                          </p>
+                          {current && (
+                            <p className="text-xs text-base-content/45 mt-0.5">{step.sublabel}</p>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+              </div>
+            </div>
+          </div>
+
+        ) : (
+
+          /* ── PO Hero CTA ── */
+          <div className="card bg-base-100 border border-base-300 shadow-sm overflow-hidden">
+            <div className="h-1 bg-linear-to-r from-secondary to-info" />
+            <div className="card-body py-10 px-8 gap-0">
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-10">
+
+                {/* Left: text */}
+                <div className="flex-1">
+                  <span className="inline-flex w-fit items-center gap-2 rounded-full border border-secondary/20 bg-secondary/10 px-3 py-1 text-xs font-medium text-secondary mb-6">
+                    <span className="w-1.5 h-1.5 rounded-full bg-secondary animate-pulse" />
+                    Purchase Order System
+                  </span>
+                  <h2 className="text-4xl md:text-5xl font-bold tracking-tight leading-[1.2] mb-4">
+                    ส่งรายการสินค้า<br />
+                    เพื่อ<span className="text-secondary">สั่งซื้อ</span>
+                  </h2>
+                  <p className="text-base text-base-content/50 leading-relaxed max-w-md mb-8">
+                    อัปโหลดรายการสินค้าที่ต้องการสั่งซื้อ ทีมงานจะจัดของและออกใบวางบิลให้คุณ
+                  </p>
+                  <div className="flex flex-wrap gap-3">
+                    <button
+                      onClick={() => router.push("/Client/po")}
+                      className="btn btn-secondary btn-lg gap-2 shadow-lg shadow-secondary/20"
+                    >
+                      เริ่มสั่งซื้อ
+                      <IconArrow />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Right: step list */}
+                <div className="hidden md:flex flex-col gap-3 w-72 shrink-0">
+                  {[
+                    { label: "อัปโหลดรายการสินค้า",  sub: "รองรับทุกประเภทไฟล์ สูงสุด 20 MB" },
+                    { label: "admin ตรวจสอบและจัดของ", sub: "รับเรื่องและจัดเตรียมสินค้า" },
+                    { label: "ออกใบกำกับภาษี/ใบส่งของ", sub: "เขียนบนกระดาษพร้อมส่ง" },
+                    { label: "รับใบวางบิล",            sub: "ดูและพิมพ์ใบวางบิลออนไลน์" },
+                  ].map((item, i) => (
+                    <div key={i} className="flex items-center gap-3 rounded-xl bg-base-200 px-4 py-3">
+                      <div className="w-6 h-6 rounded-full bg-secondary/15 text-secondary text-xs font-bold flex items-center justify-center shrink-0">
                         {i + 1}
                       </div>
                       <div className="min-w-0">

@@ -50,6 +50,7 @@ export default function AdminPage() {
   const [updating, setUpdating] = useState<string | null>(null);
   const [resetting, setResetting] = useState<string | null>(null);
   const [newRfqCount, setNewRfqCount] = useState(0);
+  const [pendingPoCount, setPendingPoCount] = useState(0);
   const [toasts, setToasts] = useState<ToastNotification[]>([]);
   const prevRfqCountRef = useRef<number | null>(null);
   const toastIdRef = useRef(0);
@@ -87,6 +88,21 @@ export default function AdminPage() {
   }, []);
 
   useEffect(() => { fetchQuotations(); }, [fetchQuotations]);
+
+  useEffect(() => {
+    const fetchPoCount = async () => {
+      try {
+        const res = await fetch('/api/po');
+        const data = await res.json();
+        if (Array.isArray(data)) {
+          setPendingPoCount(data.filter((p: { status: string }) => p.status === 'pending').length);
+        }
+      } catch {}
+    };
+    fetchPoCount();
+    const id = setInterval(fetchPoCount, 10000);
+    return () => clearInterval(id);
+  }, []);
 
   const updateStatus = async (id: string, status: QuotationStatus) => {
     setUpdating(id);
@@ -203,32 +219,42 @@ export default function AdminPage() {
               </div>
             </div>
 
-            {/* ── Configure system ── */}
+            {/* ── Manage PO ── */}
             <div className="card bg-base-100 border border-base-300 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 overflow-hidden">
               <div className="h-0.5 bg-linear-to-r from-secondary/50 to-secondary rounded-t-2xl" />
               <div className="card-body p-5">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="text-[10px] text-base-content/40 font-semibold uppercase tracking-widest">Settings</p>
-                    <h2 className="text-base font-bold text-base-content mt-1">Configure system</h2>
-                    <p className="text-[11px] text-base-content/40 mt-0.5">จัดการการตั้งค่าระบบ</p>
+                    <p className="text-[10px] text-base-content/40 font-semibold uppercase tracking-widest">Purchase Order</p>
+                    <h2 className="text-base font-bold text-base-content mt-1">Manage PO</h2>
+                    <p className="text-[11px] text-base-content/40 mt-0.5">ดูและจัดการใบสั่งซื้อ</p>
                   </div>
                   <div className="relative shrink-0">
                     <div className="w-10 h-10 rounded-xl bg-secondary/10 flex items-center justify-center">
                       <svg className="w-5 h-5 text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75}
-                          d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                          d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
                       </svg>
                     </div>
-                    <span className="absolute -top-1 -right-1 text-[8px] font-bold bg-secondary/15 text-secondary border border-secondary/30 px-1.5 py-0.5 rounded-full leading-none whitespace-nowrap">
-                      เร็วๆ นี้
-                    </span>
+                    {pendingPoCount > 0 && (
+                      <span className="absolute -top-1.5 -right-1.5 min-w-5 h-5 px-1 rounded-full bg-error text-white text-[10px] font-bold flex items-center justify-center animate-pulse shadow-sm">
+                        {pendingPoCount > 99 ? '99+' : pendingPoCount}
+                      </span>
+                    )}
                   </div>
                 </div>
                 <div className="card-actions mt-4">
-                  <button className="btn btn-secondary btn-sm rounded-lg w-full font-semibold opacity-50 cursor-not-allowed" disabled>
-                    เร็วๆ นี้
+                  <button
+                    className="btn btn-secondary btn-sm rounded-lg w-full font-semibold gap-2"
+                    onClick={() => router.push('/Admin/po')}
+                  >
+                    ดูทั้งหมด
+                    {pendingPoCount > 0 && (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-white/20 rounded-full px-2 py-0.5 leading-none">
+                        <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                        {pendingPoCount} ใหม่
+                      </span>
+                    )}
                   </button>
                 </div>
               </div>
