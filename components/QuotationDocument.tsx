@@ -61,10 +61,10 @@ function thaiNumberToWords(amount: number): string {
     : intWords + "บาท" + convertToThaiWords(dec) + "สตางค์";
 }
 
-const ITEMS_THRESHOLD_SEPARATE_FOOTER = 5;
+const ITEMS_THRESHOLD_SEPARATE_FOOTER = 8;
 const CAPACITY_FIRST = 14;   // first page: big header takes space
 const CAPACITY_MIDDLE = 20;  // middle pages: mini-header only
-const CAPACITY_LAST = 9;     // last items page: max items ที่ footer ยังพอดี (ceiling ไม่ใช่ floor)
+const CAPACITY_LAST = 11;    // last items page: max items ที่ footer ยังพอดี (ceiling ไม่ใช่ floor)
 
 function Watermark() {
   return (
@@ -151,62 +151,62 @@ function ConditionsAndSignatures({
           backgroundColor: "#f8fafc",
           border: "1px solid #e2e8f0",
           borderRadius: "6px",
-          padding: "12px 16px",
-          marginBottom: "20px",
-          fontSize: "12px",
+          padding: "8px 12px",
+          marginBottom: "12px",
+          fontSize: "11.5px",
           color: "#475569",
-          lineHeight: "1.9",
+          lineHeight: "1.6",
         }}
       >
-        <p style={{ margin: "0 0 6px", textAlign: "center", color: "#1e293b", fontWeight: 500 }}>
+        <p style={{ margin: "0 0 4px", textAlign: "center", color: "#1e293b", fontWeight: 500 }}>
           จำนวนเงินรวมทั้งสิ้น {fmt(grandTotal)} บาท ({thaiNumberToWords(grandTotal)})
         </p>
-        <div style={{ borderTop: "1px solid #e2e8f0", marginBottom: "8px" }} />
-        <p style={{ margin: "0 0 2px" }}>1. ราคานี้เป็นราคาที่รวมภาษีมูลค่าเพิ่ม รวมทั้งภาษีอากรอื่นและค่าใช้จ่ายทั้งปวงไว้ด้วยแล้ว</p>
+        <div style={{ borderTop: "1px solid #e2e8f0", marginBottom: "4px" }} />
+        <p style={{ margin: "0 0 1px" }}>1. ราคานี้เป็นราคาที่รวมภาษีมูลค่าเพิ่ม รวมทั้งภาษีอากรอื่นและค่าใช้จ่ายทั้งปวงไว้ด้วยแล้ว</p>
         {paymentTerms && (
-          <p style={{ margin: "0 0 2px" }}>2. เงื่อนไขการชำระเงิน: {paymentTerms}</p>
+          <p style={{ margin: "0 0 1px" }}>2. เงื่อนไขการชำระเงิน: {paymentTerms}</p>
         )}
-        <p style={{ margin: "0 0 2px" }}>
+        <p style={{ margin: "0 0 1px" }}>
           {paymentTerms ? "3" : "2"}. ราคาที่ยื่นเสนอยืนอยู่ได้ภายในกำหนด 15 วัน นับตั้งแต่วันที่ได้ยื่นใบเสนอราคา
         </p>
-        <p style={{ margin: "0 0 2px" }}>
+        <p style={{ margin: "0 0 1px" }}>
           {paymentTerms ? "4" : "3"}. กำหนดส่งมอบพัสดุตามรายละเอียดรายการข้างต้นภายใน {deliveryTime} นับถัดจากวันลงนาม
           {deliveryLocation && <> ณ {deliveryLocation}</>}
         </p>
-        <p style={{ textAlign: "center", marginTop: "10px", marginBottom: 0, color: "#64748b", fontSize: "11px" }}>
+        <p style={{ textAlign: "center", marginTop: "6px", marginBottom: 0, color: "#64748b", fontSize: "10.5px" }}>
           เสนอมา ณ วันที่ {rfq.rfq_date || "......"}
         </p>
       </div>
 
       {/* Signatures */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "32px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
         <div style={{ textAlign: "center" }}>
-          <p style={{ fontSize: "11px", color: "#64748b", margin: "0 0 8px" }}>
+          <p style={{ fontSize: "11px", color: "#64748b", margin: "0 0 4px" }}>
             ผู้ต่อรองราคา / Negotiator
           </p>
-          <div style={{ height: "48px", borderBottom: "1px solid #94a3b8", marginBottom: "8px" }} />
-          <p style={{ fontSize: "11px", color: "#475569", margin: "0 0 4px" }}>
+          <div style={{ height: "36px", borderBottom: "1px solid #94a3b8", marginBottom: "6px" }} />
+          <p style={{ fontSize: "11px", color: "#475569", margin: "0 0 2px" }}>
             ลงชื่อ .............................................
           </p>
-          <p style={{ fontSize: "11px", color: "#94a3b8", margin: "4px 0" }}>
+          <p style={{ fontSize: "11px", color: "#94a3b8", margin: "2px 0" }}>
             ( {rfq.buyer_company_name || "................................."} )
           </p>
-          <p style={{ fontSize: "10px", color: "#94a3b8", margin: "6px 0 0" }}>
+          <p style={{ fontSize: "10px", color: "#94a3b8", margin: "4px 0 0" }}>
             วันที่ ....../....../........
           </p>
         </div>
         <div style={{ textAlign: "center" }}>
-          <p style={{ fontSize: "11px", color: "#64748b", margin: "0 0 8px" }}>
+          <p style={{ fontSize: "11px", color: "#64748b", margin: "0 0 4px" }}>
             ผู้เสนอราคา / Authorized by
           </p>
-          <div style={{ height: "48px", borderBottom: "1px solid #94a3b8", marginBottom: "8px" }} />
-          <p style={{ fontSize: "11px", color: "#475569", margin: "0 0 4px" }}>
+          <div style={{ height: "36px", borderBottom: "1px solid #94a3b8", marginBottom: "6px" }} />
+          <p style={{ fontSize: "11px", color: "#475569", margin: "0 0 2px" }}>
             ลงชื่อ .............................................
           </p>
-          <p style={{ fontSize: "11px", color: "#94a3b8", margin: "4px 0" }}>
+          <p style={{ fontSize: "11px", color: "#94a3b8", margin: "2px 0" }}>
             ( {rfq.vendor_company_name || "................................."} )
           </p>
-          <p style={{ fontSize: "10px", color: "#94a3b8", margin: "6px 0 0" }}>
+          <p style={{ fontSize: "10px", color: "#94a3b8", margin: "4px 0 0" }}>
             วันที่ ....../....../........
           </p>
         </div>
@@ -474,20 +474,20 @@ export default function QuotationDocument({ rfq, confirmed = false }: { rfq: RFQ
 
             {/* ── Summary div — ใต้ตารางในหน้าสุดท้ายของรายการ ── */}
             {isLastItemsPage && (
-              <div className="rfq-summary" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "16px", gap: "16px" }}>
+              <div className="rfq-summary" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "10px", gap: "12px" }}>
                 <div style={{ flex: 1, fontSize: "11px", color: "#64748b", paddingTop: "4px", fontStyle: "italic" }}>
                   ({grandTotal > 0 ? thaiNumberToWords(grandTotal) : "—"})
                 </div>
-                <div style={{ width: "220px", border: "1px solid #e2e8f0", borderRadius: "6px", overflow: "hidden", fontSize: "12px" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", padding: "9px 12px", backgroundColor: "#1e293b", borderBottom: "1px solid #334155" }}>
+                <div style={{ width: "210px", border: "1px solid #e2e8f0", borderRadius: "6px", overflow: "hidden", fontSize: "11.5px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 10px", backgroundColor: "#1e293b", borderBottom: "1px solid #334155" }}>
                     <span style={{ color: "#ffffff", fontWeight: 600 }}>รวมเงิน</span>
-                    <span style={{ color: "#ffffff", fontWeight: 700, fontSize: "13px" }}>{fmt(grandTotal)} ฿</span>
+                    <span style={{ color: "#ffffff", fontWeight: 700, fontSize: "12.5px" }}>{fmt(grandTotal)} ฿</span>
                   </div>
-                  <div style={{ display: "flex", justifyContent: "space-between", padding: "7px 12px", backgroundColor: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", padding: "5px 10px", backgroundColor: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
                     <span style={{ color: "#64748b" }}>ภาษีมูลค่าเพิ่ม 7%</span>
                     <span style={{ color: "#ef4444", fontWeight: 500 }}>-{fmt(vat)} ฿</span>
                   </div>
-                  <div style={{ display: "flex", justifyContent: "space-between", padding: "7px 12px", backgroundColor: "#ffffff" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", padding: "5px 10px", backgroundColor: "#ffffff" }}>
                     <span style={{ color: "#64748b" }}>ราคาสินค้า</span>
                     <span style={{ color: "#1e293b", fontWeight: 600 }}>{fmt(subtotal)} ฿</span>
                   </div>
