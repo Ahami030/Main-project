@@ -5,6 +5,7 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import ChatNotificationBubble from "@/components/client/ChatNotificationBubble";
 import QuotationDocument, { RFQData } from "@/components/QuotationDocument";
+import BillingNoteDocument from "@/components/BillingNoteDocument";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type QuotationStatus = "sent" | "reviewing" | "completed" | "bargaining" | "confirmed";
@@ -41,9 +42,19 @@ interface POOrder {
 interface BillingButton {
   key:      string;
   label:    string;   // PO number (single) or billing number (group)
-  sublabel: string;   // "ออกใบวางบิลเรียบร้อยแล้ว" or "รวมกับ PO-xxx"
+  sublabel: string;
   isGroup:  boolean;
   href:     string;
+}
+
+interface ModalBillingData {
+  poNumbers:      string[];
+  billingGroupId?: string;
+  userName:       string;
+  userEmail:      string;
+  taxInvoices:    { _id?: string; invoiceNumber: string; invoiceDate: string; amount: number }[];
+  billedAt?:      string | null;
+  createdAt:      string;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -184,6 +195,98 @@ export default function Page(): JSX.Element {
   const [printReady, setPrintReady]         = useState(false);
   const [downloadReady, setDownloadReady]   = useState(false);
   const [printConfirmed, setPrintConfirmed] = useState(false);
+
+  // ── Billing modal state ──────────────────────────────────────────────
+  const [modalBilling, setModalBilling]             = useState<ModalBillingData | null>(null);
+  const [billingModalLoading, setBillingModalLoading] = useState(false);
+  const [billingPrintReady, setBillingPrintReady]   = useState(false);
+  const [billingDownloadReady, setBillingDownloadReady] = useState(false);
+
+  // ── Billing modal handlers ───────────────────────────────────────────
+  const handleOpenBillingModal = async (btn: BillingButton) => {
+    setBillingModalLoading(true);
+    setModalBilling(null);
+    try {
+      let data: ModalBillingData | null = null;
+      if (btn.isGroup) {
+        const res = await fetch(`/api/billing/${btn.key}`);
+        if (res.ok) {
+          const b = await res.json();
+          data = {
+            poNumbers:      b.poNumbers,
+            billingGroupId: b.billingNumber,
+            userName:       b.customerName,
+            userEmail:      b.customerEmail,
+            taxInvoices:    b.taxInvoices,
+            billedAt:       b.billingDate,
+            createdAt:      b.createdAt,
+          };
+        }
+      } else {
+        const res = await fetch(`/api/po/${btn.key}`);
+        if (res.ok) {
+          const po = await res.json();
+          data = {
+            poNumbers:   [po.poNumber],
+            userName:    po.userName,
+            userEmail:   po.userEmail,
+            taxInvoices: po.taxInvoices ?? [],
+            billedAt:    po.billedAt,
+            createdAt:   po.createdAt,
+          };
+        }
+      }
+      if (data) setModalBilling(data);
+    } finally {
+      setBillingModalLoading(false);
+    }
+  };
+
+  const handleBillingPrint = () => {
+    if (!modalBilling) return;
+    setBillingPrintReady(true);
+    setTimeout(() => {
+      window.print();
+      setBillingPrintReady(false);
+    }, 80);
+  };
+
+  const handleBillingDownload = () => {
+    if (!modalBilling) return;
+    setBillingDownloadReady(true);
+  };
+
+  // ── Billing PDF download effect ──────────────────────────────────────
+  useEffect(() => {
+    if (!billingDownloadReady || !modalBilling) return;
+    const generate = async () => {
+      await new Promise<void>((r) => setTimeout(r, 200));
+      try { await document.fonts.ready; } catch {}
+      const el = document.getElementById("billing-note-print-area");
+      if (!el) { setBillingDownloadReady(false); return; }
+      try {
+        const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
+          import("html2canvas"),
+          import("jspdf"),
+        ]);
+        const canvas = await html2canvas(el, {
+          scale: 2,
+          useCORS: true,
+          backgroundColor: "#ffffff",
+          logging: false,
+        });
+        const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+        pdf.addImage(canvas.toDataURL("image/jpeg", 0.92), "JPEG", 0, 0, 210, 297);
+        const filename = modalBilling.billingGroupId
+          ? `${modalBilling.billingGroupId}.pdf`
+          : `${modalBilling.poNumbers[0] ?? "billing"}.pdf`;
+        pdf.save(filename);
+      } finally {
+        setBillingDownloadReady(false);
+      }
+    };
+    generate();
+  }, [billingDownloadReady, modalBilling]);
 
   const handlePrint = () => {
     if (!rfqForModal) return;
@@ -656,7 +759,7 @@ export default function Page(): JSX.Element {
                         {billingButtons.map((btn) => (
                           <button
                             key={btn.key}
-                            onClick={() => router.push(btn.href)}
+                            onClick={() => handleOpenBillingModal(btn)}
                             className="w-full px-5 py-4 flex items-center gap-3 bg-base-100 hover:bg-base-200/60 active:bg-base-200 transition-colors text-left group"
                           >
                             {/* Icon */}
@@ -823,6 +926,88 @@ export default function Page(): JSX.Element {
       </div>
 
       <ChatNotificationBubble />
+
+      {/* ── Billing Modal ─────────────────────────────────────── */}
+      {(modalBilling || billingModalLoading) && (
+        <dialog className="modal modal-open">
+          <div className="modal-box w-11/12 max-w-4xl h-[92vh] p-0 overflow-hidden flex flex-col">
+
+            {/* Header */}
+            <div className="flex items-center justify-between px-4 py-2.5 bg-base-100 border-b border-base-300 shrink-0">
+              <div>
+                <p className="font-semibold text-sm leading-tight">ใบวางบิล</p>
+                {modalBilling && (
+                  <p className="text-xs text-base-content/40 mt-0.5">
+                    {modalBilling.billingGroupId ?? modalBilling.poNumbers.join(", ")}
+                  </p>
+                )}
+              </div>
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={handleBillingPrint}
+                  disabled={!modalBilling || billingPrintReady}
+                  className="btn btn-ghost btn-sm gap-1.5 text-xs disabled:opacity-40"
+                >
+                  {billingPrintReady
+                    ? <span className="loading loading-spinner loading-xs" />
+                    : <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                          d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                      </svg>
+                  }
+                  พิมพ์
+                </button>
+                <button
+                  onClick={handleBillingDownload}
+                  disabled={!modalBilling || billingDownloadReady}
+                  className="btn btn-primary btn-sm gap-1.5 text-xs disabled:opacity-40"
+                >
+                  {billingDownloadReady
+                    ? <><span className="loading loading-spinner loading-xs" />กำลังสร้าง...</>
+                    : <>
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                            d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                        </svg>
+                        ดาวน์โหลด PDF
+                      </>
+                  }
+                </button>
+                <button
+                  onClick={() => { setModalBilling(null); setBillingModalLoading(false); }}
+                  className="btn btn-ghost btn-sm btn-circle"
+                  aria-label="ปิด"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="flex-1 overflow-auto bg-base-200 p-4">
+              {billingModalLoading ? (
+                <div className="flex items-center justify-center h-full gap-3">
+                  <span className="loading loading-spinner loading-lg text-primary" />
+                </div>
+              ) : modalBilling ? (
+                <BillingNoteDocument po={modalBilling} />
+              ) : (
+                <div className="flex flex-col items-center justify-center h-full gap-2 text-base-content/30">
+                  <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                      d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  <p className="text-sm">ไม่พบข้อมูลใบวางบิล</p>
+                </div>
+              )}
+            </div>
+
+          </div>
+          <div className="modal-backdrop" onClick={() => { setModalBilling(null); setBillingModalLoading(false); }} />
+        </dialog>
+      )}
 
       {/* ── Learn More Modal ──────────────────────────────────── */}
       {learnMore && (

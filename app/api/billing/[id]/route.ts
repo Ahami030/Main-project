@@ -89,6 +89,32 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     return NextResponse.json(billing);
   }
 
+  if (action === "setExpiry") {
+    const { days, expiresAt: customDate, fullResetOnExpiry } = body as {
+      days?: number;
+      expiresAt?: string;
+      fullResetOnExpiry?: boolean;
+    };
+    if (days !== undefined && days > 0) {
+      billing.expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+    } else if (customDate) {
+      billing.expiresAt = new Date(customDate);
+    } else {
+      return NextResponse.json({ message: "ต้องระบุจำนวนวันหรือวันที่" }, { status: 400 });
+    }
+    if (fullResetOnExpiry !== undefined) {
+      billing.fullResetOnExpiry = fullResetOnExpiry;
+    }
+    await billing.save();
+    return NextResponse.json(billing);
+  }
+
+  if (action === "clearExpiry") {
+    billing.expiresAt = null;
+    await billing.save();
+    return NextResponse.json(billing);
+  }
+
   if (action === "cancel") {
     if (billing.status !== "draft") {
       return NextResponse.json({ message: "ไม่สามารถยกเลิกใบวางบิลที่ยืนยันแล้ว" }, { status: 400 });

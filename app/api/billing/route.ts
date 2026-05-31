@@ -5,6 +5,7 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { connectMongoDB } from "@/lib/mongo";
 import Billing, { generateBillingNumber } from "@/app/models/Billing";
 import PurchaseOrder from "@/app/models/PurchaseOrder";
+import { runCleanup } from "@/app/api/admin/billing/cleanup/route";
 
 export async function GET(_req: NextRequest) {
   const session = await getServerSession(authOptions as AuthOptions);
@@ -14,6 +15,10 @@ export async function GET(_req: NextRequest) {
   if (!isAdmin) return NextResponse.json({ message: "Forbidden" }, { status: 403 });
 
   await connectMongoDB();
+
+  // Fire-and-forget: clean up any expired billings automatically
+  runCleanup().catch(() => {});
+
   const billings = await Billing.find().sort({ createdAt: -1 }).lean();
   return NextResponse.json(billings);
 }
