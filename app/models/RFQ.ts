@@ -8,6 +8,12 @@ const LineItemSchema = new mongoose.Schema({
   unit_price: Number,
 });
 
+const ChangeLogEntrySchema = new mongoose.Schema({
+  index: Number,
+  is_new: Boolean,
+  changed_fields: [String],
+}, { _id: false });
+
 const RFQSchema = new mongoose.Schema({
   USER_ID: String,
   document_type: String,
@@ -22,6 +28,10 @@ const RFQSchema = new mongoose.Schema({
   },
   terms_and_conditions: Object,
   version: { type: Number, default: 0 },
+  change_log: {
+    type: [ChangeLogEntrySchema],
+    default: [],
+  },
 }, {
   collection: "Test_insert",
   timestamps: true

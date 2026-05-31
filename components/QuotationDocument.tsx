@@ -8,6 +8,12 @@ export type LineItem = {
   unit_price: number;
 };
 
+export type ChangeLogEntry = {
+  index: number;
+  is_new: boolean;
+  changed_fields: string[];
+};
+
 export type RFQData = {
   _id: string;
   rfq_number: string;
@@ -18,6 +24,7 @@ export type RFQData = {
   line_items: LineItem[];
   terms_and_conditions: Record<string, unknown>;
   version?: number;
+  change_log?: ChangeLogEntry[];
 };
 
 const fmt = (n: number) =>
@@ -137,10 +144,11 @@ interface ConditionsAndSignaturesProps {
   deliveryTime: string;
   paymentTerms: string | undefined;
   deliveryLocation: string | undefined;
+  confirmed: boolean;
 }
 
 function ConditionsAndSignatures({
-  rfq, grandTotal, deliveryTime, paymentTerms, deliveryLocation,
+  rfq, grandTotal, deliveryTime, paymentTerms, deliveryLocation, confirmed,
 }: ConditionsAndSignaturesProps) {
   return (
     <>
@@ -178,44 +186,54 @@ function ConditionsAndSignatures({
         </p>
       </div>
 
-      {/* Signatures */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
-        <div style={{ textAlign: "center" }}>
-          <p style={{ fontSize: "11px", color: "#64748b", margin: "0 0 4px" }}>
-            ผู้ต่อรองราคา / Negotiator
-          </p>
-          <div style={{ height: "36px", borderBottom: "1px solid #94a3b8", marginBottom: "6px" }} />
-          <p style={{ fontSize: "11px", color: "#475569", margin: "0 0 2px" }}>
-            ลงชื่อ .............................................
-          </p>
-          <p style={{ fontSize: "11px", color: "#94a3b8", margin: "2px 0" }}>
-            ( {rfq.buyer_company_name || "................................."} )
-          </p>
-          <p style={{ fontSize: "10px", color: "#94a3b8", margin: "4px 0 0" }}>
-            วันที่ ....../....../........
-          </p>
+      {/* Signatures — แสดงเฉพาะเมื่อลูกค้า confirm แล้ว */}
+      {confirmed && (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
+          <div style={{ textAlign: "center" }}>
+            <p style={{ fontSize: "11px", color: "#64748b", margin: "0 0 4px" }}>
+              ผู้ต่อรองราคา / Negotiator
+            </p>
+            <div style={{ height: "36px", borderBottom: "1px solid #94a3b8", marginBottom: "6px" }} />
+            <p style={{ fontSize: "11px", color: "#475569", margin: "0 0 2px" }}>
+              ลงชื่อ .............................................
+            </p>
+            <p style={{ fontSize: "11px", color: "#94a3b8", margin: "2px 0" }}>
+              ( {rfq.buyer_company_name || "................................."} )
+            </p>
+            <p style={{ fontSize: "10px", color: "#94a3b8", margin: "4px 0 0" }}>
+              วันที่ ....../....../........
+            </p>
+          </div>
+          <div style={{ textAlign: "center" }}>
+            <p style={{ fontSize: "11px", color: "#64748b", margin: "0 0 4px" }}>
+              ผู้เสนอราคา / Authorized by
+            </p>
+            <div style={{ height: "36px", borderBottom: "1px solid #94a3b8", marginBottom: "6px" }} />
+            <p style={{ fontSize: "11px", color: "#475569", margin: "0 0 2px" }}>
+              ลงชื่อ .............................................
+            </p>
+            <p style={{ fontSize: "11px", color: "#94a3b8", margin: "2px 0" }}>
+              ( {rfq.vendor_company_name || "................................."} )
+            </p>
+            <p style={{ fontSize: "10px", color: "#94a3b8", margin: "4px 0 0" }}>
+              วันที่ ....../....../........
+            </p>
+          </div>
         </div>
-        <div style={{ textAlign: "center" }}>
-          <p style={{ fontSize: "11px", color: "#64748b", margin: "0 0 4px" }}>
-            ผู้เสนอราคา / Authorized by
-          </p>
-          <div style={{ height: "36px", borderBottom: "1px solid #94a3b8", marginBottom: "6px" }} />
-          <p style={{ fontSize: "11px", color: "#475569", margin: "0 0 2px" }}>
-            ลงชื่อ .............................................
-          </p>
-          <p style={{ fontSize: "11px", color: "#94a3b8", margin: "2px 0" }}>
-            ( {rfq.vendor_company_name || "................................."} )
-          </p>
-          <p style={{ fontSize: "10px", color: "#94a3b8", margin: "4px 0 0" }}>
-            วันที่ ....../....../........
-          </p>
-        </div>
-      </div>
+      )}
     </>
   );
 }
 
-export default function QuotationDocument({ rfq, confirmed = false }: { rfq: RFQData; confirmed?: boolean }) {
+export default function QuotationDocument({
+  rfq,
+  confirmed = false,
+  showHighlights = true,
+}: {
+  rfq: RFQData;
+  confirmed?: boolean;
+  showHighlights?: boolean;
+}) {
   const items = rfq.line_items;
   const separateFooter = items.length > ITEMS_THRESHOLD_SEPARATE_FOOTER;
 
@@ -254,6 +272,13 @@ export default function QuotationDocument({ rfq, confirmed = false }: { rfq: RFQ
   const deliveryLocation = tc?.delivery_location;
 
   const version = rfq.version ?? 0;
+
+  // Build index-keyed change_log map for O(1) lookup per row
+  const changeMap = new Map<number, ChangeLogEntry>();
+  if (showHighlights && rfq.change_log?.length) {
+    for (const entry of rfq.change_log) changeMap.set(entry.index, entry);
+  }
+  const hasHighlights = changeMap.size > 0;
 
   return (
     <>
@@ -448,18 +473,40 @@ export default function QuotationDocument({ rfq, confirmed = false }: { rfq: RFQ
                     const globalIdx = globalStart + idx;
                     const amount = item.quantity * item.unit_price;
                     const isEven = globalIdx % 2 === 0;
+
+                    const logEntry = hasHighlights ? changeMap.get(globalIdx) : undefined;
+                    const isNewRow = logEntry?.is_new ?? false;
+                    const changedFields = logEntry?.changed_fields ?? [];
+                    const hasRowChange = isNewRow || changedFields.length > 0;
+
+                    const rowStyle: React.CSSProperties = hasRowChange
+                      ? isNewRow
+                        ? { backgroundColor: "#f0fdf4", borderLeft: "4px solid #22c55e" }
+                        : { backgroundColor: "#fffbeb", borderLeft: "4px solid #f59e0b" }
+                      : { backgroundColor: isEven ? "#ffffff" : "#f8fafc" };
+
+                    const cellHL = (field: string): React.CSSProperties =>
+                      !isNewRow && changedFields.includes(field)
+                        ? { backgroundColor: "#fef3c7", fontWeight: 600 }
+                        : {};
+
+                    const qtyUnitHL: React.CSSProperties =
+                      !isNewRow && (changedFields.includes("quantity") || changedFields.includes("unit"))
+                        ? { backgroundColor: "#fef3c7", fontWeight: 600 }
+                        : {};
+
                     return (
-                      <tr key={globalIdx} style={{ backgroundColor: isEven ? "#ffffff" : "#f8fafc" }}>
+                      <tr key={globalIdx} style={rowStyle}>
                         <td style={{ padding: "9px 8px", textAlign: "center", borderBottom: "1px solid #f1f5f9", borderRight: "1px solid #f1f5f9", color: "#64748b", fontSize: "12px" }}>
                           {item.item_number ?? globalIdx + 1}
                         </td>
-                        <td style={{ padding: "9px 12px", borderBottom: "1px solid #f1f5f9", borderRight: "1px solid #f1f5f9", color: "#1e293b" }}>
+                        <td style={{ padding: "9px 12px", borderBottom: "1px solid #f1f5f9", borderRight: "1px solid #f1f5f9", color: "#1e293b", ...cellHL("description") }}>
                           {item.description || "—"}
                         </td>
-                        <td style={{ padding: "9px 8px", textAlign: "center", borderBottom: "1px solid #f1f5f9", borderRight: "1px solid #f1f5f9", color: "#475569", fontSize: "12px" }}>
+                        <td style={{ padding: "9px 8px", textAlign: "center", borderBottom: "1px solid #f1f5f9", borderRight: "1px solid #f1f5f9", color: "#475569", fontSize: "12px", ...qtyUnitHL }}>
                           {item.quantity} {item.unit || ""}
                         </td>
-                        <td style={{ padding: "9px 10px", textAlign: "right", borderBottom: "1px solid #f1f5f9", borderRight: "1px solid #f1f5f9", color: "#475569" }}>
+                        <td style={{ padding: "9px 10px", textAlign: "right", borderBottom: "1px solid #f1f5f9", borderRight: "1px solid #f1f5f9", color: "#475569", ...cellHL("unit_price") }}>
                           {fmt(item.unit_price)}
                         </td>
                         <td style={{ padding: "9px 10px", textAlign: "right", borderBottom: "1px solid #f1f5f9", color: "#1e293b", fontWeight: 500 }}>
@@ -503,6 +550,7 @@ export default function QuotationDocument({ rfq, confirmed = false }: { rfq: RFQ
                 deliveryTime={deliveryTime}
                 paymentTerms={paymentTerms}
                 deliveryLocation={deliveryLocation}
+                confirmed={confirmed}
               />
             )}
 

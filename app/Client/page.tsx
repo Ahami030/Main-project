@@ -195,6 +195,7 @@ export default function Page(): JSX.Element {
   const [printReady, setPrintReady]         = useState(false);
   const [downloadReady, setDownloadReady]   = useState(false);
   const [printConfirmed, setPrintConfirmed] = useState(false);
+  const [showHighlights, setShowHighlights] = useState(true);
 
   // ── Billing modal state ──────────────────────────────────────────────
   const [modalBilling, setModalBilling]             = useState<ModalBillingData | null>(null);
@@ -1096,7 +1097,7 @@ export default function Page(): JSX.Element {
               : { position: "fixed", top: "-9999px", left: "-9999px", pointerEvents: "none" }
           }
         >
-          <QuotationDocument rfq={rfqForModal} confirmed={printConfirmed} />
+          <QuotationDocument rfq={rfqForModal} confirmed={printConfirmed} showHighlights={showHighlights} />
         </div>
       )}
 
@@ -1107,53 +1108,90 @@ export default function Page(): JSX.Element {
             <div className="modal-box w-11/12 max-w-4xl h-[92vh] p-0 overflow-hidden flex flex-col">
 
               {/* Header */}
-              <div className="flex items-center justify-between px-4 py-2.5 bg-base-100 border-b border-base-300 shrink-0">
-                <div>
-                  <p className="font-semibold text-sm leading-tight">ใบเสนอราคา</p>
-                  {rfqForModal && (
-                    <p className="text-xs text-base-content/40 mt-0.5">{rfqForModal.rfq_number}</p>
-                  )}
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <button
-                    onClick={handlePrint}
-                    disabled={!rfqForModal || printReady}
-                    className="btn btn-ghost btn-sm gap-1.5 text-xs disabled:opacity-40"
-                  >
-                    {printReady
-                      ? <span className="loading loading-spinner loading-xs" />
-                      : <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-                        </svg>
-                    }
-                    พิมพ์
-                  </button>
-                  <button
-                    onClick={handleDownloadPdf}
-                    disabled={!rfqForModal || downloadReady}
-                    className="btn btn-primary btn-sm gap-1.5 text-xs disabled:opacity-40"
-                  >
-                    {downloadReady ? (
-                      <><span className="loading loading-spinner loading-xs" />กำลังสร้าง...</>
-                    ) : (
-                      <>
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                        </svg>
-                        ดาวน์โหลด PDF
-                      </>
+              <div className="flex flex-col shrink-0 bg-base-100 border-b border-base-300">
+                <div className="flex items-center justify-between px-4 py-2.5">
+                  <div>
+                    <p className="font-semibold text-sm leading-tight">ใบเสนอราคา</p>
+                    {rfqForModal && (
+                      <p className="text-xs text-base-content/40 mt-0.5">{rfqForModal.rfq_number}</p>
                     )}
-                  </button>
-                  <button
-                    onClick={() => setModalQuotation(null)}
-                    className="btn btn-ghost btn-sm btn-circle"
-                    aria-label="ปิด"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={handlePrint}
+                      disabled={!rfqForModal || printReady}
+                      className="btn btn-ghost btn-sm gap-1.5 text-xs disabled:opacity-40"
+                    >
+                      {printReady
+                        ? <span className="loading loading-spinner loading-xs" />
+                        : <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                          </svg>
+                      }
+                      พิมพ์
+                    </button>
+                    <button
+                      onClick={handleDownloadPdf}
+                      disabled={!rfqForModal || downloadReady}
+                      className="btn btn-primary btn-sm gap-1.5 text-xs disabled:opacity-40"
+                    >
+                      {downloadReady ? (
+                        <><span className="loading loading-spinner loading-xs" />กำลังสร้าง...</>
+                      ) : (
+                        <>
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                          </svg>
+                          ดาวน์โหลด PDF
+                        </>
+                      )}
+                    </button>
+                    <button
+                      onClick={() => setModalQuotation(null)}
+                      className="btn btn-ghost btn-sm btn-circle"
+                      aria-label="ปิด"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
                 </div>
+
+                {/* Highlight toggle — แสดงเฉพาะเมื่อมี change_log */}
+                {rfqForModal?.change_log && rfqForModal.change_log.length > 0 && (
+                  <label className={`flex items-center gap-3 px-4 py-2.5 cursor-pointer select-none border-t transition-colors ${
+                    showHighlights
+                      ? "bg-warning/8 border-warning/20"
+                      : "bg-base-200/50 border-base-content/8"
+                  }`}>
+                    <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
+                      showHighlights ? "bg-warning/20" : "bg-base-content/8"
+                    }`}>
+                      <svg className={`w-3.5 h-3.5 transition-colors ${showHighlights ? "text-warning" : "text-base-content/30"}`}
+                        fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                          d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                      </svg>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className={`text-xs font-semibold leading-tight transition-colors ${
+                        showHighlights ? "text-warning" : "text-base-content/40"
+                      }`}>
+                        แสดงการเปลี่ยนแปลง
+                      </p>
+                      <p className="text-[10px] text-base-content/30 mt-0.5">
+                        {showHighlights ? "กำลังแสดง highlight · ปิดก่อนพิมพ์/ดาวน์โหลดถ้าต้องการ" : "ซ่อน highlight แล้ว"}
+                      </p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      className="toggle toggle-warning toggle-sm shrink-0"
+                      checked={showHighlights}
+                      onChange={(e) => setShowHighlights(e.target.checked)}
+                    />
+                  </label>
+                )}
               </div>
 
               {/* Document area */}
@@ -1166,6 +1204,7 @@ export default function Page(): JSX.Element {
                   <QuotationDocument
                     rfq={rfqForModal}
                     confirmed={modalQuotation.status === "confirmed"}
+                    showHighlights={showHighlights}
                   />
                 ) : (
                   <div className="flex flex-col items-center justify-center h-full gap-2 text-base-content/30">
