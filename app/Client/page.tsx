@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import ChatNotificationBubble from "@/components/client/ChatNotificationBubble";
 import QuotationDocument, { RFQData } from "@/components/QuotationDocument";
 import BillingNoteDocument from "@/components/BillingNoteDocument";
+import PaymentStatusBadge from "@/components/payment/PaymentStatusBadge";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type QuotationStatus = "sent" | "reviewing" | "completed" | "bargaining" | "confirmed";
@@ -178,6 +179,39 @@ export default function Page(): JSX.Element {
     const id = setInterval(() => fetchPOOrders(true), 8000);
     return () => clearInterval(id);
   }, [fetchPOOrders]);
+
+  // ── Fetch payment proofs ─────────────────────────────────────────────────
+  const [paymentProofs, setPaymentProofs] = useState<Record<string, string>>({}); // key → status
+
+  const fetchPaymentProofs = useCallback(async (buttons: { key: string; isGroup: boolean }[]) => {
+    if (buttons.length === 0) return;
+    try {
+      const results = await Promise.all(
+        buttons.map(({ key, isGroup }) => {
+          const param = isGroup ? `billingId=${key}` : `poId=${key}`;
+          return fetch(`/api/payment-proof?${param}`)
+            .then((r) => r.ok ? r.json() : [])
+            .catch(() => []);
+        })
+      );
+      const map: Record<string, string> = {};
+      buttons.forEach(({ key }, i) => {
+        const proofs = results[i] as { status: string }[];
+        if (!proofs || proofs.length === 0) {
+          map[key] = "unpaid";
+        } else if (proofs.every((p) => p.status === "approved")) {
+          map[key] = "approved";
+        } else if (proofs.some((p) => p.status === "pending")) {
+          map[key] = "pending";
+        } else if (proofs.some((p) => p.status === "rejected")) {
+          map[key] = "rejected";
+        } else {
+          map[key] = "unpaid";
+        }
+      });
+      setPaymentProofs(map);
+    } catch {}
+  }, []);
 
   // ── Fetch RFQ when document modal opens ─────────────────────────────────
   useEffect(() => {
@@ -427,6 +461,13 @@ export default function Page(): JSX.Element {
 
     return [...singles, ...groups];
   })();
+
+  // Fetch payment proofs whenever billing buttons change (both group and single-PO)
+  useEffect(() => {
+    if (billingButtons.length === 0) return;
+    fetchPaymentProofs(billingButtons.map((b) => ({ key: b.key, isGroup: b.isGroup })));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [billingButtons.map((b) => b.key).join(",")]);
 
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
@@ -791,6 +832,12 @@ export default function Page(): JSX.Element {
                                 {btn.isGroup && (
                                   <span className="badge badge-primary badge-xs">กลุ่ม</span>
                                 )}
+                                {btn.isGroup && paymentProofs[btn.key] && (
+                                  <PaymentStatusBadge
+                                    status={paymentProofs[btn.key] as "pending" | "approved" | "rejected" | "unpaid"}
+                                    size="xs"
+                                  />
+                                )}
                               </div>
                               <p className="text-xs text-base-content/45 mt-0.5 truncate">
                                 {btn.isGroup ? `· ${btn.sublabel}` : btn.sublabel}
@@ -807,6 +854,65 @@ export default function Page(): JSX.Element {
                           </button>
                         ))}
                       </div>
+
+                      {/* ── Payment action section ── */}
+                      <div className="divide-y divide-base-200 border-t border-base-300">
+                        {billingButtons.map((btn) => {
+                          const pStatus = paymentProofs[btn.key];
+                          // btn.key = billingId (group) or poId (single-PO legacy) — both work now
+                          const billingKey = btn.key;
+                          return (
+                            <div key={`pay-${btn.key}`} className="px-5 py-3 bg-base-100 flex items-center justify-between gap-3">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-base-content/30 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                                </svg>
+                                <p className="text-xs text-base-content/50 truncate">
+                                  ชำระเงิน · {btn.isGroup ? `ใบวางบิล ${btn.label}` : btn.label}
+                                </p>
+                              </div>
+                              <div className="flex items-center gap-2 shrink-0">
+                                {(!pStatus || pStatus === "unpaid") ? (
+                                  <button
+                                    className="btn btn-primary btn-xs"
+                                    onClick={() => router.push(`/Client/payment/${billingKey}`)}
+                                  >
+                                    ส่งหลักฐานการโอนเงิน
+                                  </button>
+                                ) : pStatus === "pending" ? (
+                                  <>
+                                    <span className="text-xs text-warning font-medium">รอตรวจสอบ...</span>
+                                    <button
+                                      className="btn btn-ghost btn-xs"
+                                      onClick={() => router.push(`/Client/payment/status/${billingKey}`)}
+                                    >
+                                      ดูสถานะ
+                                    </button>
+                                  </>
+                                ) : pStatus === "rejected" ? (
+                                  <>
+                                    <span className="text-xs text-error font-medium">ถูกปฏิเสธ</span>
+                                    <button
+                                      className="btn btn-error btn-xs"
+                                      onClick={() => router.push(`/Client/payment/${billingKey}`)}
+                                    >
+                                      ส่งใหม่
+                                    </button>
+                                  </>
+                                ) : pStatus === "approved" ? (
+                                  <button
+                                    className="btn btn-success btn-xs"
+                                    onClick={() => router.push(`/Client/payment/status/${billingKey}`)}
+                                  >
+                                    ดูใบเสร็จ
+                                  </button>
+                                ) : null}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+
                     </div>
 
                   ) : (
@@ -845,9 +951,7 @@ export default function Page(): JSX.Element {
                             ${done ? "bg-secondary text-secondary-content" : "bg-base-200 text-base-content/30"}`}>
                             {done ? "✓" : i + 1}
                           </div>
-                          {i < PO_STEPS.length - 1 && (
-                            <div className={`w-px flex-1 my-1 ${done ? "bg-secondary/40" : "bg-base-300"}`} />
-                          )}
+                          <div className={`w-px flex-1 my-1 ${done ? "bg-secondary/40" : "bg-base-300"}`} />
                         </div>
                         <div className="pb-4 pt-1 min-w-0">
                           <p className={`text-sm font-medium leading-tight ${current ? "text-base-content" : done ? "text-base-content/70" : "text-base-content/30"}`}>
@@ -860,6 +964,33 @@ export default function Page(): JSX.Element {
                       </div>
                     );
                   })}
+                  {/* Step 4: ชำระเงินแล้ว (derived from payment proof status) */}
+                  {(() => {
+                    const anyBillingId = billingButtons.find((b) => b.isGroup)?.key;
+                    const pStatus = anyBillingId ? paymentProofs[anyBillingId] : undefined;
+                    const paid = pStatus === "approved";
+                    return (
+                      <div className="flex gap-3">
+                        <div className="flex flex-col items-center">
+                          <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 transition-colors
+                            ${paid ? "bg-success text-success-content" : "bg-base-200 text-base-content/30"}`}>
+                            {paid ? "✓" : "4"}
+                          </div>
+                        </div>
+                        <div className="pb-4 pt-1 min-w-0">
+                          <p className={`text-sm font-medium leading-tight ${paid ? "text-success" : "text-base-content/30"}`}>
+                            ชำระเงินแล้ว
+                          </p>
+                          {paid && (
+                            <p className="text-xs text-base-content/45 mt-0.5">ยืนยันการชำระเงินเรียบร้อย</p>
+                          )}
+                          {pStatus === "pending" && (
+                            <p className="text-xs text-warning mt-0.5">รอการตรวจสอบ</p>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
 
               </div>

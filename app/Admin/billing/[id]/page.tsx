@@ -275,6 +275,32 @@ export default function AdminBillingDetailPage() {
             </div>
           </div>
 
+          {/* Payment proof link (only for finalized billings) */}
+          {isFinalized && (
+            <div className="card bg-base-100 border border-primary/20 shadow-sm">
+              <div className="card-body p-4 flex flex-row items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                        d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <p className="font-semibold text-sm">หลักฐานการชำระเงิน</p>
+                    <p className="text-xs text-base-content/50">ตรวจสอบหลักฐานการโอนเงินจากลูกค้า</p>
+                  </div>
+                </div>
+                <button
+                  className="btn btn-primary btn-sm"
+                  onClick={() => router.push(`/Admin/payments?billingId=${id}`)}
+                >
+                  ดูหลักฐาน →
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Expiry card */}
           <div className={`card border shadow-sm overflow-hidden ${isExpired ? "border-error/40 bg-error/5" : "bg-base-100 border-base-300"}`}>
             <div className="card-body p-5 gap-4">
