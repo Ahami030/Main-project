@@ -4,6 +4,7 @@ import type { Session } from "next-auth";
 const adminLinks = [
   { href: "/Admin",      label: "Dashboard" },
   { href: "/Admin/rfq",  label: "จัดการ RFQ" },
+  { href: "/Admin/po",   label: "จัดการ PO" },
   { href: "/Admin/chat", label: "แชท" },
 ];
 
@@ -25,6 +26,7 @@ export default function MobileMenu({ session, latestStatus, onClose }: Props) {
       {role === "user" && (
         <>
           <Link href="/Client" className={linkClass} onClick={onClose}>Dashboard</Link>
+          <Link href="/Client/po" className={linkClass} onClick={onClose}>ใบสั่งซื้อ</Link>
           {(latestStatus === "bargaining" || latestStatus === "confirmed") && (
             <Link href="/Client/Bargain" className={linkClass} onClick={onClose}>ต่อรองราคา</Link>
           )}

@@ -30,6 +30,7 @@ export default function DocumentChatPage() {
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [downloadReady, setDownloadReady] = useState(false);
   const [pdfLoading, setPdfLoading] = useState(false);
+  const [showHighlights, setShowHighlights] = useState(true);
 
   const chatContainerRef = useRef<HTMLDivElement>(null);
 
@@ -286,7 +287,7 @@ export default function DocumentChatPage() {
                 <span className="loading loading-spinner loading-md text-primary" />
               </div>
             ) : rfq ? (
-              <QuotationDocument rfq={rfq} confirmed={isConfirmed} />
+              <QuotationDocument rfq={rfq} confirmed={isConfirmed} showHighlights={showHighlights} />
             ) : (
               <div className="flex flex-col items-center justify-center h-full gap-2 text-base-content/30">
                 <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -463,6 +464,40 @@ export default function DocumentChatPage() {
                   <p className="text-base-content/30 text-[11px] text-center py-4">ไม่พบข้อมูลเอกสาร</p>
                 )}
               </div>
+
+              {rfq?.change_log && rfq.change_log.length > 0 && (
+                <label className={`flex items-center gap-3 px-3 py-3 rounded-xl border cursor-pointer select-none mb-1 transition-colors ${
+                  showHighlights
+                    ? "bg-warning/8 border-warning/30"
+                    : "bg-base-200/60 border-base-content/10"
+                }`}>
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
+                    showHighlights ? "bg-warning/20" : "bg-base-content/8"
+                  }`}>
+                    <svg className={`w-4 h-4 transition-colors ${showHighlights ? "text-warning" : "text-base-content/30"}`}
+                      fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                        d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                    </svg>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-xs font-semibold leading-tight transition-colors ${
+                      showHighlights ? "text-warning" : "text-base-content/50"
+                    }`}>
+                      แสดงการเปลี่ยนแปลง
+                    </p>
+                    <p className="text-[10px] text-base-content/35 mt-0.5 leading-tight">
+                      {showHighlights ? "กำลังแสดง highlight · ปิดก่อนพิมพ์/ดาวน์โหลดถ้าต้องการ" : "ซ่อน highlight แล้ว"}
+                    </p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    className="toggle toggle-warning toggle-sm shrink-0"
+                    checked={showHighlights}
+                    onChange={(e) => setShowHighlights(e.target.checked)}
+                  />
+                </label>
+              )}
 
               <div className="flex items-center gap-2 bg-base-100 border border-base-content/10 rounded-lg px-2.5 py-2 mb-3">
                 <svg className="w-3 h-3 text-base-content/30 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">

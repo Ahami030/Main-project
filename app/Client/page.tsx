@@ -5,6 +5,7 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import ChatNotificationBubble from "@/components/client/ChatNotificationBubble";
 import QuotationDocument, { RFQData } from "@/components/QuotationDocument";
+import BillingNoteDocument from "@/components/BillingNoteDocument";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type QuotationStatus = "sent" | "reviewing" | "completed" | "bargaining" | "confirmed";
@@ -16,6 +17,44 @@ interface Quotation {
   createdAt: string;
   pdfId:   string | null;
   pdfPath: string | null;
+}
+
+type POStatus = "pending" | "accepted" | "billed";
+
+interface BillingInfo {
+  _id: string;
+  billingNumber: string;
+  poNumbers: string[];
+  status: string;
+}
+
+interface POOrder {
+  _id: string;
+  poNumber: string;
+  status: POStatus;
+  fileOrigName: string;
+  fileMimeType: string;
+  createdAt: string;
+  billedAt?: string;
+  billingId?: BillingInfo | null;
+}
+
+interface BillingButton {
+  key:      string;
+  label:    string;   // PO number (single) or billing number (group)
+  sublabel: string;
+  isGroup:  boolean;
+  href:     string;
+}
+
+interface ModalBillingData {
+  poNumbers:      string[];
+  billingGroupId?: string;
+  userName:       string;
+  userEmail:      string;
+  taxInvoices:    { _id?: string; invoiceNumber: string; invoiceDate: string; amount: number }[];
+  billedAt?:      string | null;
+  createdAt:      string;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -47,6 +86,20 @@ const PROCESS_STEPS = [
   { step: "03", title: "ออกใบเสนอราคา",  desc: "ทีมงานจัดทำใบเสนอราคาตามรายการสินค้า" },
   { step: "04", title: "ต่อรองราคา",     desc: "พูดคุยและต่อรองราคากับทีมงานได้โดยตรง" },
 ];
+
+const PO_STEPS: { key: POStatus; label: string; sublabel: string }[] = [
+  { key: "pending",  label: "ส่งไฟล์แล้ว",   sublabel: "ระบบได้รับเอกสารของคุณแล้ว" },
+  { key: "accepted", label: "กำลังดำเนินการ", sublabel: "admin รับเรื่องแล้ว กำลังจัดสินค้า" },
+  { key: "billed",   label: "วางบิลแล้ว",     sublabel: "ออกใบวางบิลเรียบร้อยแล้ว" },
+];
+
+const PO_STATUS_ORDER: Record<POStatus, number> = { pending: 0, accepted: 1, billed: 2 };
+
+const PO_STATUS_META: Record<POStatus, { spotlight: string; dot: string; bar: string; badge: string; label: string }> = {
+  pending:  { spotlight: "border-warning/25 bg-warning/5",   dot: "bg-warning", bar: "from-warning to-warning/30",  badge: "badge-warning",  label: "รอตรวจสอบ" },
+  accepted: { spotlight: "border-info/25 bg-info/5",         dot: "bg-info",    bar: "from-info to-info/30",         badge: "badge-info",     label: "กำลังดำเนินการ" },
+  billed:   { spotlight: "border-success/40 bg-success/10",  dot: "bg-success", bar: "from-success to-success/40",  badge: "badge-success",  label: "วางบิลแล้ว" },
+};
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
 function IconArrow() {
@@ -105,6 +158,27 @@ export default function Page(): JSX.Element {
     return () => clearInterval(id);
   }, [fetchQuotations]);
 
+  // ── Fetch PO orders ──────────────────────────────────────────────────────
+  const [poOrders, setPoOrders]     = useState<POOrder[]>([]);
+  const [poLoading, setPoLoading]   = useState(true);
+
+  const fetchPOOrders = useCallback(async (silent = false) => {
+    if (!silent) setPoLoading(true);
+    try {
+      const res  = await fetch("/api/po");
+      const data = await res.json();
+      setPoOrders(Array.isArray(data) ? data : []);
+    } finally {
+      if (!silent) setPoLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { fetchPOOrders(); }, [fetchPOOrders]);
+  useEffect(() => {
+    const id = setInterval(() => fetchPOOrders(true), 8000);
+    return () => clearInterval(id);
+  }, [fetchPOOrders]);
+
   // ── Fetch RFQ when document modal opens ─────────────────────────────────
   useEffect(() => {
     if (!modalQuotation || !userId || userId === "ไม่พบข้อมูล") return;
@@ -121,6 +195,99 @@ export default function Page(): JSX.Element {
   const [printReady, setPrintReady]         = useState(false);
   const [downloadReady, setDownloadReady]   = useState(false);
   const [printConfirmed, setPrintConfirmed] = useState(false);
+  const [showHighlights, setShowHighlights] = useState(true);
+
+  // ── Billing modal state ──────────────────────────────────────────────
+  const [modalBilling, setModalBilling]             = useState<ModalBillingData | null>(null);
+  const [billingModalLoading, setBillingModalLoading] = useState(false);
+  const [billingPrintReady, setBillingPrintReady]   = useState(false);
+  const [billingDownloadReady, setBillingDownloadReady] = useState(false);
+
+  // ── Billing modal handlers ───────────────────────────────────────────
+  const handleOpenBillingModal = async (btn: BillingButton) => {
+    setBillingModalLoading(true);
+    setModalBilling(null);
+    try {
+      let data: ModalBillingData | null = null;
+      if (btn.isGroup) {
+        const res = await fetch(`/api/billing/${btn.key}`);
+        if (res.ok) {
+          const b = await res.json();
+          data = {
+            poNumbers:      b.poNumbers,
+            billingGroupId: b.billingNumber,
+            userName:       b.customerName,
+            userEmail:      b.customerEmail,
+            taxInvoices:    b.taxInvoices,
+            billedAt:       b.billingDate,
+            createdAt:      b.createdAt,
+          };
+        }
+      } else {
+        const res = await fetch(`/api/po/${btn.key}`);
+        if (res.ok) {
+          const po = await res.json();
+          data = {
+            poNumbers:   [po.poNumber],
+            userName:    po.userName,
+            userEmail:   po.userEmail,
+            taxInvoices: po.taxInvoices ?? [],
+            billedAt:    po.billedAt,
+            createdAt:   po.createdAt,
+          };
+        }
+      }
+      if (data) setModalBilling(data);
+    } finally {
+      setBillingModalLoading(false);
+    }
+  };
+
+  const handleBillingPrint = () => {
+    if (!modalBilling) return;
+    setBillingPrintReady(true);
+    setTimeout(() => {
+      window.print();
+      setBillingPrintReady(false);
+    }, 80);
+  };
+
+  const handleBillingDownload = () => {
+    if (!modalBilling) return;
+    setBillingDownloadReady(true);
+  };
+
+  // ── Billing PDF download effect ──────────────────────────────────────
+  useEffect(() => {
+    if (!billingDownloadReady || !modalBilling) return;
+    const generate = async () => {
+      await new Promise<void>((r) => setTimeout(r, 200));
+      try { await document.fonts.ready; } catch {}
+      const el = document.getElementById("billing-note-print-area");
+      if (!el) { setBillingDownloadReady(false); return; }
+      try {
+        const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
+          import("html2canvas"),
+          import("jspdf"),
+        ]);
+        const canvas = await html2canvas(el, {
+          scale: 2,
+          useCORS: true,
+          backgroundColor: "#ffffff",
+          logging: false,
+        });
+        const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+        pdf.addImage(canvas.toDataURL("image/jpeg", 0.92), "JPEG", 0, 0, 210, 297);
+        const filename = modalBilling.billingGroupId
+          ? `${modalBilling.billingGroupId}.pdf`
+          : `${modalBilling.poNumbers[0] ?? "billing"}.pdf`;
+        pdf.save(filename);
+      } finally {
+        setBillingDownloadReady(false);
+      }
+    };
+    generate();
+  }, [billingDownloadReady, modalBilling]);
 
   const handlePrint = () => {
     if (!rfqForModal) return;
@@ -215,6 +382,51 @@ export default function Page(): JSX.Element {
   const meta        = latest ? STATUS_META[latest.status] : null;
   const currentStep = latest ? STEPS.find((s) => s.key === latest.status)! : null;
   const isInProgress = latest?.status === "sent" || latest?.status === "reviewing";
+
+  const poLatest       = poOrders[0] ?? null;
+  const poMeta         = poLatest ? PO_STATUS_META[poLatest.status] : null;
+  const poCurrentStep  = poLatest ? PO_STEPS.find((s) => s.key === poLatest.status)! : null;
+  const poIsInProgress = poLatest?.status === "pending" || poLatest?.status === "accepted";
+
+  // Derive billing buttons from ALL billed POs (single + group, deduped)
+  const billingButtons: BillingButton[] = (() => {
+    const billedPOs = poOrders.filter((po) => po.status === "billed");
+
+    // Single-PO billing (no billingId)
+    const singles: BillingButton[] = billedPOs
+      .filter((po) => !po.billingId)
+      .map((po) => ({
+        key:      po._id,
+        label:    po.poNumber,
+        sublabel: "ออกใบวางบิลเรียบร้อยแล้ว",
+        isGroup:  false,
+        href:     `/Client/po/${po._id}`,
+      }));
+
+    // Group billing (billingId populated) — deduped by billing _id
+    const seen = new Set<string>();
+    const groups: BillingButton[] = billedPOs
+      .filter((po) => po.billingId)
+      .filter((po) => {
+        const bid = po.billingId!._id;
+        if (seen.has(bid)) return false;
+        seen.add(bid);
+        return true;
+      })
+      .map((po) => {
+        const bi       = po.billingId!;
+        const otherPOs = bi.poNumbers.filter((pn) => pn !== po.poNumber);
+        return {
+          key:      bi._id,
+          label:    bi.billingNumber,
+          sublabel: otherPOs.length > 0 ? `รวมกับ ${otherPOs.join(", ")}` : "ใบวางบิลรวม",
+          isGroup:  true,
+          href:     `/Client/po/${po._id}`,
+        };
+      });
+
+    return [...singles, ...groups];
+  })();
 
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
@@ -476,9 +688,327 @@ export default function Page(): JSX.Element {
 
         )}
 
+        {/* ── PO Section ────────────────────────────────────────── */}
+        {poLoading ? (
+
+          <div className="card bg-base-100 border border-base-300 shadow-sm">
+            <div className="card-body items-center py-12 gap-3">
+              <span className="loading loading-spinner loading-lg text-secondary" />
+              <p className="text-sm text-base-content/40">กำลังโหลดใบสั่งซื้อ...</p>
+            </div>
+          </div>
+
+        ) : poLatest && poMeta && poCurrentStep ? (
+
+          /* ── PO Status Card ── */
+          <div className="card bg-base-100 border border-base-300 shadow-sm overflow-hidden">
+            <div className={`h-1 bg-linear-to-r ${poMeta.bar}`} />
+            <div className="card-body gap-5 pt-5 px-6 md:px-8">
+
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-base-200 flex items-center justify-center shrink-0 text-base-content/35">
+                    <IconDoc />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs tracking-widest uppercase text-secondary/60 font-medium mb-0.5">
+                      Purchase Order
+                    </p>
+                    <p className="font-semibold leading-snug">{poLatest.poNumber}</p>
+                    <p className="text-xs text-base-content/40 mt-0.5 truncate max-w-xs">
+                      {poLatest.fileOrigName} · {new Date(poLatest.createdAt).toLocaleDateString("th-TH", {
+                        year: "numeric", month: "short", day: "numeric",
+                        hour: "2-digit", minute: "2-digit",
+                      })}
+                    </p>
+                  </div>
+                </div>
+                <span className={`badge shrink-0 ${poMeta.badge}`}>{poMeta.label}</span>
+              </div>
+
+              <div className="divider my-0" />
+
+              <div className="flex flex-col md:flex-row gap-6">
+
+                {/* Left: spotlight (non-billed) OR billing list (billed) */}
+                <div className="flex-1 flex flex-col gap-4">
+                  {poLatest.status === "billed" && billingButtons.length > 0 ? (
+
+                    /* ── Billing list card ── */
+                    <div className="rounded-2xl border border-success/30 overflow-hidden shadow-sm">
+
+                      {/* Header */}
+                      <div className={`px-5 py-4 flex items-center gap-3 ${poMeta.spotlight}`}>
+                        <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${poMeta.dot}`} />
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-sm">วางบิลแล้ว</p>
+                          <p className="text-xs text-base-content/50 mt-0.5">
+                            {billingButtons.length > 1
+                              ? `${billingButtons.length} ใบวางบิล พร้อมดูแล้ว`
+                              : "ออกใบวางบิลเรียบร้อยแล้ว"}
+                          </p>
+                        </div>
+                        {billingButtons.length > 1 && (
+                          <span className="badge badge-success badge-sm font-bold tabular-nums">
+                            {billingButtons.length}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Billing rows */}
+                      <div className="divide-y divide-base-200">
+                        {billingButtons.map((btn) => (
+                          <button
+                            key={btn.key}
+                            onClick={() => handleOpenBillingModal(btn)}
+                            className="w-full px-5 py-4 flex items-center gap-3 bg-base-100 hover:bg-base-200/60 active:bg-base-200 transition-colors text-left group"
+                          >
+                            {/* Icon */}
+                            <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 transition-colors ${
+                              btn.isGroup
+                                ? "bg-primary/10 text-primary group-hover:bg-primary/20"
+                                : "bg-success/10 text-success group-hover:bg-success/20"
+                            }`}>
+                              {btn.isGroup ? (
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                                    d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2" />
+                                </svg>
+                              ) : (
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                </svg>
+                              )}
+                            </div>
+
+                            {/* Info */}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="font-semibold text-sm leading-tight">
+                                  {btn.isGroup ? `ใบวางบิล ${btn.label}` : btn.label}
+                                </span>
+                                {btn.isGroup && (
+                                  <span className="badge badge-primary badge-xs">กลุ่ม</span>
+                                )}
+                              </div>
+                              <p className="text-xs text-base-content/45 mt-0.5 truncate">
+                                {btn.isGroup ? `· ${btn.sublabel}` : btn.sublabel}
+                              </p>
+                            </div>
+
+                            {/* Arrow */}
+                            <svg
+                              className="w-4 h-4 text-base-content/25 group-hover:text-base-content/50 group-hover:translate-x-0.5 transition-all shrink-0"
+                              fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                            >
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                            </svg>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                  ) : (
+
+                    /* ── Normal spotlight (pending / accepted) ── */
+                    <>
+                      <div className={`rounded-2xl border px-5 py-5 flex items-center gap-4 ${poMeta.spotlight}`}>
+                        <span className={`w-3 h-3 rounded-full shrink-0 ${poMeta.dot} ${poIsInProgress ? "animate-pulse" : ""}`} />
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold">{poCurrentStep.label}</p>
+                          <p className="text-sm text-base-content/50 mt-0.5">{poCurrentStep.sublabel}</p>
+                        </div>
+                        {poIsInProgress && <span className="loading loading-dots loading-sm opacity-30" />}
+                      </div>
+                      {PO_STEPS[PO_STATUS_ORDER[poLatest.status] + 1] && (
+                        <div className="flex items-center gap-3 text-xs text-base-content/30">
+                          <div className="flex-1 h-px bg-base-300" />
+                          <span>ขั้นถัดไป · {PO_STEPS[PO_STATUS_ORDER[poLatest.status] + 1].label}</span>
+                          <div className="flex-1 h-px bg-base-300" />
+                        </div>
+                      )}
+                    </>
+
+                  )}
+                </div>
+
+                {/* Right: steps timeline */}
+                <div className="md:w-64 shrink-0 flex flex-col gap-0">
+                  {PO_STEPS.map((step, i) => {
+                    const done    = i <= PO_STATUS_ORDER[poLatest.status];
+                    const current = i === PO_STATUS_ORDER[poLatest.status];
+                    return (
+                      <div key={step.key} className="flex gap-3">
+                        <div className="flex flex-col items-center">
+                          <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 transition-colors
+                            ${done ? "bg-secondary text-secondary-content" : "bg-base-200 text-base-content/30"}`}>
+                            {done ? "✓" : i + 1}
+                          </div>
+                          {i < PO_STEPS.length - 1 && (
+                            <div className={`w-px flex-1 my-1 ${done ? "bg-secondary/40" : "bg-base-300"}`} />
+                          )}
+                        </div>
+                        <div className="pb-4 pt-1 min-w-0">
+                          <p className={`text-sm font-medium leading-tight ${current ? "text-base-content" : done ? "text-base-content/70" : "text-base-content/30"}`}>
+                            {step.label}
+                          </p>
+                          {current && (
+                            <p className="text-xs text-base-content/45 mt-0.5">{step.sublabel}</p>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+              </div>
+            </div>
+          </div>
+
+        ) : (
+
+          /* ── PO Hero CTA ── */
+          <div className="card bg-base-100 border border-base-300 shadow-sm overflow-hidden">
+            <div className="h-1 bg-linear-to-r from-secondary to-info" />
+            <div className="card-body py-10 px-8 gap-0">
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-10">
+
+                {/* Left: text */}
+                <div className="flex-1">
+                  <span className="inline-flex w-fit items-center gap-2 rounded-full border border-secondary/20 bg-secondary/10 px-3 py-1 text-xs font-medium text-secondary mb-6">
+                    <span className="w-1.5 h-1.5 rounded-full bg-secondary animate-pulse" />
+                    Purchase Order System
+                  </span>
+                  <h2 className="text-4xl md:text-5xl font-bold tracking-tight leading-[1.2] mb-4">
+                    ส่งรายการสินค้า<br />
+                    เพื่อ<span className="text-secondary">สั่งซื้อ</span>
+                  </h2>
+                  <p className="text-base text-base-content/50 leading-relaxed max-w-md mb-8">
+                    อัปโหลดรายการสินค้าที่ต้องการสั่งซื้อ ทีมงานจะจัดของและออกใบวางบิลให้คุณ
+                  </p>
+                  <div className="flex flex-wrap gap-3">
+                    <button
+                      onClick={() => router.push("/Client/po")}
+                      className="btn btn-secondary btn-lg gap-2 shadow-lg shadow-secondary/20"
+                    >
+                      เริ่มสั่งซื้อ
+                      <IconArrow />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Right: step list */}
+                <div className="hidden md:flex flex-col gap-3 w-72 shrink-0">
+                  {[
+                    { label: "อัปโหลดรายการสินค้า",  sub: "รองรับทุกประเภทไฟล์ สูงสุด 20 MB" },
+                    { label: "admin ตรวจสอบและจัดของ", sub: "รับเรื่องและจัดเตรียมสินค้า" },
+                    { label: "ออกใบกำกับภาษี/ใบส่งของ", sub: "เขียนบนกระดาษพร้อมส่ง" },
+                    { label: "รับใบวางบิล",            sub: "ดูและพิมพ์ใบวางบิลออนไลน์" },
+                  ].map((item, i) => (
+                    <div key={i} className="flex items-center gap-3 rounded-xl bg-base-200 px-4 py-3">
+                      <div className="w-6 h-6 rounded-full bg-secondary/15 text-secondary text-xs font-bold flex items-center justify-center shrink-0">
+                        {i + 1}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold leading-tight">{item.label}</p>
+                        <p className="text-xs text-base-content/40 mt-0.5">{item.sub}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+              </div>
+            </div>
+          </div>
+
+        )}
+
       </div>
 
       <ChatNotificationBubble />
+
+      {/* ── Billing Modal ─────────────────────────────────────── */}
+      {(modalBilling || billingModalLoading) && (
+        <dialog className="modal modal-open">
+          <div className="modal-box w-11/12 max-w-4xl h-[92vh] p-0 overflow-hidden flex flex-col">
+
+            {/* Header */}
+            <div className="flex items-center justify-between px-4 py-2.5 bg-base-100 border-b border-base-300 shrink-0">
+              <div>
+                <p className="font-semibold text-sm leading-tight">ใบวางบิล</p>
+                {modalBilling && (
+                  <p className="text-xs text-base-content/40 mt-0.5">
+                    {modalBilling.billingGroupId ?? modalBilling.poNumbers.join(", ")}
+                  </p>
+                )}
+              </div>
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={handleBillingPrint}
+                  disabled={!modalBilling || billingPrintReady}
+                  className="btn btn-ghost btn-sm gap-1.5 text-xs disabled:opacity-40"
+                >
+                  {billingPrintReady
+                    ? <span className="loading loading-spinner loading-xs" />
+                    : <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                          d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                      </svg>
+                  }
+                  พิมพ์
+                </button>
+                <button
+                  onClick={handleBillingDownload}
+                  disabled={!modalBilling || billingDownloadReady}
+                  className="btn btn-primary btn-sm gap-1.5 text-xs disabled:opacity-40"
+                >
+                  {billingDownloadReady
+                    ? <><span className="loading loading-spinner loading-xs" />กำลังสร้าง...</>
+                    : <>
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                            d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                        </svg>
+                        ดาวน์โหลด PDF
+                      </>
+                  }
+                </button>
+                <button
+                  onClick={() => { setModalBilling(null); setBillingModalLoading(false); }}
+                  className="btn btn-ghost btn-sm btn-circle"
+                  aria-label="ปิด"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="flex-1 overflow-auto bg-base-200 p-4">
+              {billingModalLoading ? (
+                <div className="flex items-center justify-center h-full gap-3">
+                  <span className="loading loading-spinner loading-lg text-primary" />
+                </div>
+              ) : modalBilling ? (
+                <BillingNoteDocument po={modalBilling} />
+              ) : (
+                <div className="flex flex-col items-center justify-center h-full gap-2 text-base-content/30">
+                  <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                      d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  <p className="text-sm">ไม่พบข้อมูลใบวางบิล</p>
+                </div>
+              )}
+            </div>
+
+          </div>
+          <div className="modal-backdrop" onClick={() => { setModalBilling(null); setBillingModalLoading(false); }} />
+        </dialog>
+      )}
 
       {/* ── Learn More Modal ──────────────────────────────────── */}
       {learnMore && (
@@ -567,7 +1097,7 @@ export default function Page(): JSX.Element {
               : { position: "fixed", top: "-9999px", left: "-9999px", pointerEvents: "none" }
           }
         >
-          <QuotationDocument rfq={rfqForModal} confirmed={printConfirmed} />
+          <QuotationDocument rfq={rfqForModal} confirmed={printConfirmed} showHighlights={showHighlights} />
         </div>
       )}
 
@@ -578,53 +1108,90 @@ export default function Page(): JSX.Element {
             <div className="modal-box w-11/12 max-w-4xl h-[92vh] p-0 overflow-hidden flex flex-col">
 
               {/* Header */}
-              <div className="flex items-center justify-between px-4 py-2.5 bg-base-100 border-b border-base-300 shrink-0">
-                <div>
-                  <p className="font-semibold text-sm leading-tight">ใบเสนอราคา</p>
-                  {rfqForModal && (
-                    <p className="text-xs text-base-content/40 mt-0.5">{rfqForModal.rfq_number}</p>
-                  )}
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <button
-                    onClick={handlePrint}
-                    disabled={!rfqForModal || printReady}
-                    className="btn btn-ghost btn-sm gap-1.5 text-xs disabled:opacity-40"
-                  >
-                    {printReady
-                      ? <span className="loading loading-spinner loading-xs" />
-                      : <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-                        </svg>
-                    }
-                    พิมพ์
-                  </button>
-                  <button
-                    onClick={handleDownloadPdf}
-                    disabled={!rfqForModal || downloadReady}
-                    className="btn btn-primary btn-sm gap-1.5 text-xs disabled:opacity-40"
-                  >
-                    {downloadReady ? (
-                      <><span className="loading loading-spinner loading-xs" />กำลังสร้าง...</>
-                    ) : (
-                      <>
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                        </svg>
-                        ดาวน์โหลด PDF
-                      </>
+              <div className="flex flex-col shrink-0 bg-base-100 border-b border-base-300">
+                <div className="flex items-center justify-between px-4 py-2.5">
+                  <div>
+                    <p className="font-semibold text-sm leading-tight">ใบเสนอราคา</p>
+                    {rfqForModal && (
+                      <p className="text-xs text-base-content/40 mt-0.5">{rfqForModal.rfq_number}</p>
                     )}
-                  </button>
-                  <button
-                    onClick={() => setModalQuotation(null)}
-                    className="btn btn-ghost btn-sm btn-circle"
-                    aria-label="ปิด"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={handlePrint}
+                      disabled={!rfqForModal || printReady}
+                      className="btn btn-ghost btn-sm gap-1.5 text-xs disabled:opacity-40"
+                    >
+                      {printReady
+                        ? <span className="loading loading-spinner loading-xs" />
+                        : <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                          </svg>
+                      }
+                      พิมพ์
+                    </button>
+                    <button
+                      onClick={handleDownloadPdf}
+                      disabled={!rfqForModal || downloadReady}
+                      className="btn btn-primary btn-sm gap-1.5 text-xs disabled:opacity-40"
+                    >
+                      {downloadReady ? (
+                        <><span className="loading loading-spinner loading-xs" />กำลังสร้าง...</>
+                      ) : (
+                        <>
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                          </svg>
+                          ดาวน์โหลด PDF
+                        </>
+                      )}
+                    </button>
+                    <button
+                      onClick={() => setModalQuotation(null)}
+                      className="btn btn-ghost btn-sm btn-circle"
+                      aria-label="ปิด"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
                 </div>
+
+                {/* Highlight toggle — แสดงเฉพาะเมื่อมี change_log */}
+                {rfqForModal?.change_log && rfqForModal.change_log.length > 0 && (
+                  <label className={`flex items-center gap-3 px-4 py-2.5 cursor-pointer select-none border-t transition-colors ${
+                    showHighlights
+                      ? "bg-warning/8 border-warning/20"
+                      : "bg-base-200/50 border-base-content/8"
+                  }`}>
+                    <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
+                      showHighlights ? "bg-warning/20" : "bg-base-content/8"
+                    }`}>
+                      <svg className={`w-3.5 h-3.5 transition-colors ${showHighlights ? "text-warning" : "text-base-content/30"}`}
+                        fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                          d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                      </svg>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className={`text-xs font-semibold leading-tight transition-colors ${
+                        showHighlights ? "text-warning" : "text-base-content/40"
+                      }`}>
+                        แสดงการเปลี่ยนแปลง
+                      </p>
+                      <p className="text-[10px] text-base-content/30 mt-0.5">
+                        {showHighlights ? "กำลังแสดง highlight · ปิดก่อนพิมพ์/ดาวน์โหลดถ้าต้องการ" : "ซ่อน highlight แล้ว"}
+                      </p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      className="toggle toggle-warning toggle-sm shrink-0"
+                      checked={showHighlights}
+                      onChange={(e) => setShowHighlights(e.target.checked)}
+                    />
+                  </label>
+                )}
               </div>
 
               {/* Document area */}
@@ -637,6 +1204,7 @@ export default function Page(): JSX.Element {
                   <QuotationDocument
                     rfq={rfqForModal}
                     confirmed={modalQuotation.status === "confirmed"}
+                    showHighlights={showHighlights}
                   />
                 ) : (
                   <div className="flex flex-col items-center justify-center h-full gap-2 text-base-content/30">
