@@ -247,210 +247,262 @@ export default function PaymentSubmitPage({ params }: { params: Promise<{ billin
   if (loading) {
     return (
       <div className="min-h-screen bg-base-200 flex items-center justify-center">
-        <span className="loading loading-spinner loading-lg" />
+        <div className="flex flex-col items-center gap-3 text-base-content/50">
+          <span className="loading loading-spinner loading-lg" />
+          <p className="text-sm">กำลังโหลด...</p>
+        </div>
       </div>
     );
   }
 
   if (loadError || !info) {
     return (
-      <div className="min-h-screen bg-base-200 py-10 px-4">
-        <div className="max-w-2xl mx-auto">
-          <div className="alert alert-error">{loadError || "ไม่พบข้อมูล"}</div>
-          <button className="btn btn-ghost mt-4" onClick={() => router.push("/Client")}>← กลับ</button>
+      <div className="min-h-screen bg-base-200 flex items-center justify-center px-4">
+        <div className="card bg-base-100 shadow-sm max-w-sm w-full">
+          <div className="card-body items-center text-center gap-3">
+            <div className="w-12 h-12 bg-error/10 rounded-full flex items-center justify-center">
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 text-error" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <p className="font-semibold text-error">{loadError || "ไม่พบข้อมูล"}</p>
+            <button className="btn btn-ghost btn-sm" onClick={() => router.push("/Client")}>← กลับหน้าหลัก</button>
+          </div>
         </div>
       </div>
     );
   }
 
-  return (
-    <div className="min-h-screen bg-base-200 py-10 px-4">
-      <div className="max-w-2xl mx-auto space-y-5">
+  const remaining = Math.max(0, info.totalAmount - totalPaidAmount);
 
-        {/* Header */}
-        <div>
-          <button className="btn btn-ghost btn-sm mb-3" onClick={() => router.push("/Client")}>← กลับหน้าหลัก</button>
-          <h1 className="text-2xl font-bold">
-            {existingProof ? "ส่งหลักฐานการชำระเงินใหม่" : "ส่งหลักฐานการชำระเงิน"}
-          </h1>
-          <p className="text-base-content/60 mt-1">
-            {info.billingId ? "ใบวางบิล" : "PO"}{" "}
-            <span className="font-semibold text-primary">{info.displayNumber}</span>
-            {" · "}PO: {info.poNumbers.join(", ") || "-"}
-          </p>
+  return (
+    <div className="min-h-screen bg-base-200">
+
+      {/* Sticky top nav */}
+      <div className="bg-base-100 border-b border-base-300 sticky top-0 z-20 shadow-sm">
+        <div className="max-w-4xl mx-auto px-4 h-14 flex items-center gap-3">
+          <button className="btn btn-ghost btn-sm btn-circle" onClick={() => router.push("/Client")}>
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
+          <div className="flex-1 min-w-0">
+            <p className="font-semibold text-sm leading-tight">
+              {existingProof ? "ส่งหลักฐานใหม่" : "ส่งหลักฐานการชำระเงิน"}
+            </p>
+            <p className="text-xs text-base-content/50 truncate">
+              {info.billingId ? "ใบวางบิล" : "PO"} {info.displayNumber}
+            </p>
+          </div>
+          {installmentNumber > 1 && (
+            <div className="badge badge-neutral badge-outline badge-sm shrink-0">งวดที่ {installmentNumber}</div>
+          )}
         </div>
+      </div>
+
+      <div className="max-w-4xl mx-auto px-4 py-6 space-y-4">
 
         {/* Rejection notice */}
         {existingProof && (
-          <div className="alert alert-error">
+          <div className="alert alert-error shadow-sm">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M12 3a9 9 0 100 18A9 9 0 0012 3z" />
             </svg>
             <div>
               <p className="font-semibold">หลักฐานถูกปฏิเสธ</p>
-              <p className="text-sm">{existingProof.rejectionReason}</p>
+              <p className="text-sm opacity-80">{existingProof.rejectionReason}</p>
             </div>
           </div>
         )}
 
         {/* Billing summary */}
-        {info.totalAmount > 0 && (() => {
-          const remaining = Math.max(0, info.totalAmount - totalPaidAmount);
-          return (
-            <div className="card bg-base-100 shadow-sm">
-              <div className="card-body p-4 gap-2">
-                {/* Row 1: billing total */}
+        {info.totalAmount > 0 && (
+          <div className="card bg-base-100 shadow-sm overflow-hidden">
+            <div className="h-1 bg-primary w-full" />
+            <div className="card-body p-4 gap-2.5">
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-base-content/60">ยอดตามใบวางบิลรวม</span>
+                <span className="font-medium tabular-nums">{info.totalAmount.toLocaleString("th-TH", { minimumFractionDigits: 2 })} ฿</span>
+              </div>
+              {totalPaidAmount > 0 && (
                 <div className="flex justify-between items-center text-sm">
-                  <span className="text-base-content/60">ยอดตามใบวางบิลรวม</span>
-                  <span className="font-semibold">
-                    {info.totalAmount.toLocaleString("th-TH", { minimumFractionDigits: 2 })} ฿
-                  </span>
+                  <span className="text-base-content/60">จ่ายไปแล้ว ({installmentNumber - 1} งวด)</span>
+                  <span className="font-medium text-success tabular-nums">−{totalPaidAmount.toLocaleString("th-TH", { minimumFractionDigits: 2 })} ฿</span>
                 </div>
-
-                {/* Row 2: paid so far (show only if any paid) */}
-                {totalPaidAmount > 0 && (
-                  <div className="flex justify-between items-center text-sm">
-                    <span className="text-base-content/60">จ่ายไปแล้ว ({installmentNumber - 1} งวด)</span>
-                    <span className="font-semibold text-success">
-                      − {totalPaidAmount.toLocaleString("th-TH", { minimumFractionDigits: 2 })} ฿
+              )}
+              {totalPaidAmount > 0 && (
+                <>
+                  <div className="divider my-0" />
+                  <div className="flex justify-between items-center">
+                    <span className="font-semibold text-sm">ยอดคงเหลือที่ต้องชำระ</span>
+                    <span className={`text-xl font-bold tabular-nums ${remaining === 0 ? "text-success" : "text-warning"}`}>
+                      {remaining.toLocaleString("th-TH", { minimumFractionDigits: 2 })} ฿
                     </span>
                   </div>
-                )}
-
-                {/* Divider + remaining */}
-                {totalPaidAmount > 0 && (
-                  <>
-                    <div className="divider my-0" />
-                    <div className="flex justify-between items-center">
-                      <span className="font-medium text-sm">ยอดคงเหลือที่ต้องชำระ</span>
-                      <span className={`text-xl font-bold ${remaining === 0 ? "text-success" : "text-warning"}`}>
-                        {remaining.toLocaleString("th-TH", { minimumFractionDigits: 2 })} ฿
-                      </span>
-                    </div>
-                  </>
-                )}
-
-                {/* installment badge */}
-                {installmentNumber > 1 && (
-                  <p className="text-xs text-base-content/40 text-right mt-1">
-                    กำลังชำระครั้งที่ {installmentNumber}
-                  </p>
-                )}
-              </div>
+                </>
+              )}
             </div>
-          );
-        })()}
+          </div>
+        )}
 
         {/* Bank info */}
         <BankInfoCard />
 
-        {/* Form */}
+        {/* ── Form card ── */}
         <div className="card bg-base-100 shadow-sm">
-          <div className="card-body gap-4">
-            <h2 className="card-title text-base">รายละเอียดการชำระเงิน</h2>
+          <div className="card-body p-5 gap-0">
 
-            <div className="form-control">
-              <label className="label"><span className="label-text font-medium">จำนวนเงินที่โอน (บาท) *</span></label>
-              <input type="number" className="input input-bordered" placeholder="0.00" value={amount}
-                onChange={(e) => setAmount(e.target.value)} min={0} step={0.01} />
-            </div>
-
-            <div className="form-control">
-              <label className="label"><span className="label-text font-medium">วันที่โอนเงิน *</span></label>
-              <input type="date" className="input input-bordered" value={paymentDate}
-                onChange={(e) => setPaymentDate(e.target.value)} />
-            </div>
-
-            <div className="form-control">
-              <label className="label"><span className="label-text font-medium">วิธีการชำระเงิน</span></label>
-              <select className="select select-bordered" value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)}>
-                <option value="bank_transfer">โอนเงินผ่านธนาคาร</option>
-                <option value="cash">เงินสด</option>
-                <option value="cheque">เช็ค</option>
-              </select>
-            </div>
-
-            {paymentMethod === "bank_transfer" && (
-              <>
+            {/* ① ยอดและวันที่ */}
+            <div className="pb-5">
+              <div className="flex items-center gap-2 mb-4">
+                <div className="w-6 h-6 rounded-lg bg-primary/15 flex items-center justify-center shrink-0">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2z" />
+                  </svg>
+                </div>
+                <p className="text-xs font-semibold text-base-content/50 uppercase tracking-wider">รายละเอียดการชำระ</p>
+              </div>
+              <div className="space-y-4">
+                {/* Amount — full width, prominent */}
                 <div className="form-control">
-                  <label className="label"><span className="label-text font-medium">ธนาคารต้นทาง</span></label>
-                  <div className="relative" ref={bankRef}>
+                  <label className="label pb-1.5">
+                    <span className="label-text font-medium">จำนวนเงินที่โอน</span>
+                    <span className="label-text-alt text-error font-semibold">* จำเป็น</span>
+                  </label>
+                  <label className="input input-bordered flex items-center gap-2 text-lg font-semibold focus-within:input-primary">
                     <input
-                      type="text"
-                      className="input input-bordered w-full"
-                      placeholder="พิมพ์เพื่อค้นหาธนาคาร..."
-                      value={bankName}
-                      onChange={(e) => { setBankName(e.target.value); setBankDropdownOpen(true); }}
-                      onFocus={() => setBankDropdownOpen(true)}
-                      autoComplete="off"
+                      type="number"
+                      className="grow tabular-nums"
+                      placeholder="0.00"
+                      value={amount}
+                      onChange={(e) => setAmount(e.target.value)}
+                      min={0}
+                      step={0.01}
                     />
-                    {/* Chevron icon */}
-                    <button
-                      type="button"
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-base-content/40 hover:text-base-content"
-                      onClick={() => setBankDropdownOpen((v) => !v)}
-                      tabIndex={-1}
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" className={`w-4 h-4 transition-transform ${bankDropdownOpen ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                      </svg>
-                    </button>
-                    {/* Dropdown list */}
-                    {bankDropdownOpen && (
-                      <ul className="absolute z-50 w-full bg-base-100 border border-base-300 shadow-lg rounded-box mt-1 max-h-52 overflow-y-auto">
-                        {filteredBanks.length > 0 ? (
-                          filteredBanks.map((bank) => (
-                            <li key={bank}>
-                              <button
-                                type="button"
-                                className={`w-full text-left px-4 py-2 text-sm hover:bg-base-200 transition-colors ${bankName === bank ? "bg-primary/10 text-primary font-medium" : ""}`}
-                                onMouseDown={(e) => { e.preventDefault(); selectBank(bank); }}
-                              >
-                                {bank}
-                              </button>
-                            </li>
-                          ))
-                        ) : (
-                          <li className="px-4 py-3 text-sm text-base-content/40 text-center">ไม่พบธนาคารที่ค้นหา</li>
-                        )}
-                      </ul>
-                    )}
+                    <span className="badge badge-ghost badge-sm font-medium shrink-0">THB</span>
+                  </label>
+                </div>
+
+                {/* Date + Installment — equal columns */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="form-control">
+                    <label className="label pb-1.5">
+                      <span className="label-text font-medium">วันที่โอนเงิน</span>
+                      <span className="label-text-alt text-error font-semibold">*</span>
+                    </label>
+                    <input type="date" className="input input-bordered w-full" value={paymentDate}
+                      onChange={(e) => setPaymentDate(e.target.value)} />
+                  </div>
+                  <div className="form-control">
+                    <label className="label pb-1.5">
+                      <span className="label-text font-medium">งวดที่ชำระ</span>
+                    </label>
+                    <label className="input input-bordered flex items-center gap-2">
+                      <span className="text-base-content/40 text-xs shrink-0">ครั้งที่</span>
+                      <input
+                        type="number"
+                        className="grow text-center font-semibold tabular-nums"
+                        min={1}
+                        value={installmentNumber}
+                        onChange={(e) => setInstallmentNumber(parseInt(e.target.value) || 1)}
+                      />
+                    </label>
                   </div>
                 </div>
-                <div className="form-control">
-                  <label className="label"><span className="label-text font-medium">ชื่อบัญชีผู้โอน</span></label>
-                  <input type="text" className="input input-bordered" placeholder="ชื่อ-นามสกุล ผู้โอน"
-                    value={accountName} onChange={(e) => setAccountName(e.target.value)} />
-                </div>
-                <div className="form-control">
-                  <label className="label"><span className="label-text font-medium">เลขอ้างอิงธนาคาร</span></label>
-                  <input type="text" className="input input-bordered" placeholder="Transaction reference number"
-                    value={referenceNumber} onChange={(e) => setReferenceNumber(e.target.value)} />
-                </div>
-              </>
-            )}
-
-            <div className="form-control">
-              <label className="label">
-                <span className="label-text font-medium">ชำระครั้งที่</span>
-                <span className="label-text-alt text-base-content/50">สำหรับการชำระแบบแบ่งงวด</span>
-              </label>
-              <input type="number" className="input input-bordered" min={1} value={installmentNumber}
-                onChange={(e) => setInstallmentNumber(parseInt(e.target.value) || 1)} />
+              </div>
             </div>
 
-            <div className="form-control">
-              <label className="label"><span className="label-text font-medium">หมายเหตุ (ถ้ามี)</span></label>
-              <textarea className="textarea textarea-bordered" rows={2} placeholder="ข้อความเพิ่มเติม..."
-                value={note} onChange={(e) => setNote(e.target.value)} />
+            <div className="divider my-0" />
+
+            {/* ② วิธีชำระ + ข้อมูลธนาคาร */}
+            <div className="py-5">
+              <p className="text-xs font-semibold text-base-content/40 uppercase tracking-wider mb-4">วิธีการชำระเงิน</p>
+              <div className="space-y-4">
+                <div className="form-control">
+                  <select className="select select-bordered" value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)}>
+                    <option value="bank_transfer">🏦  โอนเงินผ่านธนาคาร</option>
+                    <option value="cash">💵  เงินสด</option>
+                    <option value="cheque">📄  เช็ค</option>
+                  </select>
+                </div>
+
+                {paymentMethod === "bank_transfer" && (
+                  <div className="bg-base-200/50 rounded-xl p-4 space-y-4">
+                    <div className="form-control">
+                      <label className="label pb-1.5"><span className="label-text font-medium">ธนาคารต้นทาง</span></label>
+                      <div className="relative" ref={bankRef}>
+                        <input
+                          type="text"
+                          className="input input-bordered w-full pr-10 bg-base-100"
+                          placeholder="พิมพ์เพื่อค้นหาธนาคาร..."
+                          value={bankName}
+                          onChange={(e) => { setBankName(e.target.value); setBankDropdownOpen(true); }}
+                          onFocus={() => setBankDropdownOpen(true)}
+                          autoComplete="off"
+                        />
+                        <button
+                          type="button"
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-base-content/40 hover:text-base-content"
+                          onClick={() => setBankDropdownOpen((v) => !v)}
+                          tabIndex={-1}
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className={`w-4 h-4 transition-transform ${bankDropdownOpen ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </button>
+                        {bankDropdownOpen && (
+                          <ul className="absolute z-50 w-full bg-base-100 border border-base-300 shadow-lg rounded-box mt-1 max-h-52 overflow-y-auto">
+                            {filteredBanks.length > 0 ? filteredBanks.map((bank) => (
+                              <li key={bank}>
+                                <button
+                                  type="button"
+                                  className={`w-full text-left px-4 py-2.5 text-sm hover:bg-base-200 transition-colors ${bankName === bank ? "bg-primary/10 text-primary font-medium" : ""}`}
+                                  onMouseDown={(e) => { e.preventDefault(); selectBank(bank); }}
+                                >
+                                  {bank}
+                                </button>
+                              </li>
+                            )) : (
+                              <li className="px-4 py-3 text-sm text-base-content/40 text-center">ไม่พบธนาคารที่ค้นหา</li>
+                            )}
+                          </ul>
+                        )}
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="form-control">
+                        <label className="label pb-1.5"><span className="label-text font-medium">ชื่อบัญชีผู้โอน</span></label>
+                        <input type="text" className="input input-bordered bg-base-100" placeholder="ชื่อ-นามสกุล ผู้โอน"
+                          value={accountName} onChange={(e) => setAccountName(e.target.value)} />
+                      </div>
+                      <div className="form-control">
+                        <label className="label pb-1.5"><span className="label-text font-medium">เลขอ้างอิงธนาคาร</span></label>
+                        <input type="text" className="input input-bordered bg-base-100 font-mono" placeholder="เช่น 202406021234567"
+                          value={referenceNumber} onChange={(e) => setReferenceNumber(e.target.value)} />
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
 
-            {/* File upload */}
-            <div className="form-control">
-              <label className="label"><span className="label-text font-medium">สลิปการโอนเงิน *</span></label>
+            <div className="divider my-0" />
+
+            {/* ③ สลิป */}
+            <div className="pt-5 space-y-3">
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded-lg bg-warning/15 flex items-center justify-center shrink-0">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5 text-warning" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                </div>
+                <p className="text-xs font-semibold text-base-content/50 uppercase tracking-wider">แนบสลิปการโอนเงิน</p>
+                <span className="badge badge-error badge-sm font-semibold">จำเป็น</span>
+              </div>
+
               <div
-                className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-colors ${
-                  file ? "border-primary bg-primary/5" : "border-base-300 hover:border-primary/50"
+                className={`border-2 border-dashed rounded-xl cursor-pointer transition-all duration-150 ${
+                  file ? "border-primary bg-primary/5" : "border-base-300 hover:border-primary/50 hover:bg-base-200/40"
                 }`}
                 onDrop={(e) => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) handleFile(f); }}
                 onDragOver={(e) => e.preventDefault()}
@@ -458,53 +510,103 @@ export default function PaymentSubmitPage({ params }: { params: Promise<{ billin
               >
                 <input ref={inputRef} type="file" className="hidden" accept="image/*,application/pdf"
                   onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
-                {file ? (
-                  <div className="flex flex-col items-center gap-1">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="w-8 h-8 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    <p className="font-semibold text-primary text-sm">{file.name}</p>
-                    <p className="text-xs text-base-content/50">คลิกเพื่อเปลี่ยนไฟล์</p>
+                {previewUrl && file ? (
+                  <div className="relative">
+                    {file.type === "application/pdf"
+                      ? <iframe src={previewUrl} className="w-full h-64 rounded-xl" title="preview" />
+                      // eslint-disable-next-line @next/next/no-img-element
+                      : <img src={previewUrl} alt="preview" className="w-full max-h-64 object-contain rounded-xl bg-base-200" />
+                    }
+                    <span className="absolute bottom-2 right-2 badge badge-primary badge-sm shadow">คลิกเพื่อเปลี่ยน</span>
                   </div>
                 ) : (
-                  <div className="flex flex-col items-center gap-1 text-base-content/50">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                    </svg>
-                    <p className="text-sm font-medium">ลากไฟล์มาวางที่นี่ หรือคลิกเพื่อเลือกไฟล์</p>
-                    <p className="text-xs">รูปภาพหรือ PDF ขนาดไม่เกิน 20MB</p>
+                  <div className="flex flex-col items-center gap-2 py-8 text-base-content/40">
+                    <div className="w-11 h-11 bg-base-300/60 rounded-full flex items-center justify-center">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                      </svg>
+                    </div>
+                    <p className="text-sm font-medium text-base-content/60">ลากไฟล์มาวาง หรือคลิกเพื่อเลือก</p>
+                    <p className="text-xs">รูปภาพหรือ PDF · ไม่เกิน 20 MB</p>
                   </div>
                 )}
               </div>
-              {fileError && <p className="text-error text-sm mt-1">{fileError}</p>}
+
+              {fileError && (
+                <p className="text-error text-xs flex items-center gap-1.5">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  {fileError}
+                </p>
+              )}
             </div>
 
-            {previewUrl && file && (
-              <div className="rounded-lg overflow-hidden border border-base-300">
-                {file.type === "application/pdf"
-                  ? <iframe src={previewUrl} className="w-full h-56" title="preview" />
-                  // eslint-disable-next-line @next/next/no-img-element
-                  : <img src={previewUrl} alt="preview" className="w-full max-h-56 object-contain bg-base-200" />
-                }
+            <div className="divider my-0 mt-5" />
+
+            {/* ④ หมายเหตุ */}
+            <div className="py-5">
+              <div className="flex items-center gap-2 mb-4">
+                <div className="w-6 h-6 rounded-lg bg-base-300/60 flex items-center justify-center shrink-0">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5 text-base-content/50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  </svg>
+                </div>
+                <p className="text-xs font-semibold text-base-content/50 uppercase tracking-wider">หมายเหตุ</p>
+                <span className="badge badge-ghost badge-sm text-base-content/40">ถ้ามี</span>
               </div>
-            )}
-
-            {status === "success" && <div className="alert alert-success"><span>ส่งหลักฐานสำเร็จ! กำลังกลับหน้าหลัก...</span></div>}
-            {status === "error"   && <div className="alert alert-error"><span>{errorMsg}</span></div>}
-
-            <div className="flex gap-3 justify-end pt-2">
-              <button className="btn btn-ghost" onClick={() => router.push("/Client")}>ยกเลิก</button>
-              <button
-                className="btn btn-primary"
-                disabled={!file || status === "uploading" || status === "success"}
-                onClick={handleSubmit}
-              >
-                {status === "uploading" && <span className="loading loading-spinner loading-sm" />}
-                {status === "uploading" ? "กำลังส่ง..." : existingProof ? "ส่งหลักฐานใหม่" : "ส่งหลักฐาน"}
-              </button>
+              <textarea
+                className="textarea textarea-bordered resize-none w-full"
+                rows={3}
+                placeholder="ข้อความเพิ่มเติม เช่น ชำระบางส่วน, รายละเอียดการโอน..."
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+              />
             </div>
+
+            {/* ④ Alerts + Submit */}
+            <div className="pt-5 space-y-3 border-t border-base-200 mt-5">
+              {status === "success" && (
+                <div className="alert alert-success">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  <span>ส่งหลักฐานสำเร็จ! กำลังกลับหน้าหลัก...</span>
+                </div>
+              )}
+              {status === "error" && (
+                <div className="alert alert-error">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span>{errorMsg}</span>
+                </div>
+              )}
+              <div className="flex gap-3 justify-end">
+                <button className="btn btn-ghost" onClick={() => router.push("/Client")}>ยกเลิก</button>
+                <button
+                  className="btn btn-primary gap-2"
+                  disabled={!file || status === "uploading" || status === "success"}
+                  onClick={handleSubmit}
+                >
+                  {status === "uploading" ? (
+                    <><span className="loading loading-spinner loading-sm" />กำลังส่ง...</>
+                  ) : (
+                    <>
+                      <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                      </svg>
+                      {existingProof ? "ส่งหลักฐานใหม่" : "ส่งหลักฐาน"}
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
           </div>
         </div>
+
+        <div className="pb-6" />
 
       </div>
     </div>
