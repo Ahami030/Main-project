@@ -1,11 +1,30 @@
 "use client";
 
-import { useState, useRef, useEffect, use } from "react";
+import { useState, useRef, useEffect, use, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import BankInfoCard from "@/components/payment/BankInfoCard";
 
 type SubmitStatus = "idle" | "uploading" | "success" | "error";
+
+const THAI_BANKS = [
+  "กรุงเทพ (BBL)",
+  "กสิกรไทย (KBank)",
+  "กรุงไทย (KTB)",
+  "ไทยพาณิชย์ (SCB)",
+  "กรุงศรีอยุธยา (BAY)",
+  "ทหารไทยธนชาต (TTB)",
+  "ออมสิน (GSB)",
+  "ธ.ก.ส. (BAAC)",
+  "อาคารสงเคราะห์ (GHB)",
+  "ซีไอเอ็มบี ไทย (CIMB)",
+  "ทิสโก้ (TISCO)",
+  "เกียรตินาคินภัทร (KKP)",
+  "แลนด์ แอนด์ เฮ้าส์ (LH Bank)",
+  "ยูโอบี (UOB)",
+  "สแตนดาร์ดชาร์เตอร์ด (SCB-SC)",
+  "อิสลามแห่งประเทศไทย (ISBT)",
+];
 
 // Info resolved from either a Billing document or a PO document
 interface ResolvedInfo {
@@ -39,6 +58,7 @@ export default function PaymentSubmitPage({ params }: { params: Promise<{ billin
 
   const [info, setInfo]             = useState<ResolvedInfo | null>(null);
   const [existingProof, setExistingProof] = useState<ExistingProof | null>(null);
+  const [totalPaidAmount, setTotalPaidAmount] = useState(0);
   const [loading, setLoading]       = useState(true);
   const [loadError, setLoadError]   = useState("");
 
@@ -51,6 +71,8 @@ export default function PaymentSubmitPage({ params }: { params: Promise<{ billin
   const [paymentDate, setPaymentDate]     = useState(new Date().toISOString().split("T")[0]);
   const [paymentMethod, setPaymentMethod] = useState("bank_transfer");
   const [bankName, setBankName]           = useState("");
+  const [bankDropdownOpen, setBankDropdownOpen] = useState(false);
+  const bankRef = useRef<HTMLDivElement>(null);
   const [accountName, setAccountName]     = useState("");
   const [referenceNumber, setReferenceNumber] = useState("");
   const [note, setNote]                   = useState("");
@@ -122,8 +144,10 @@ export default function PaymentSubmitPage({ params }: { params: Promise<{ billin
             setNote(rejected.note);
             setInstallmentNumber(rejected.installmentNumber ?? 1);
           }
-          const approved = proofs.filter((p) => p.status === "approved").length;
-          if (!rejected) setInstallmentNumber(approved + 1);
+          const approvedProofs = proofs.filter((p) => p.status === "approved");
+          const paidTotal = approvedProofs.reduce((s, p) => s + p.amount, 0);
+          setTotalPaidAmount(paidTotal);
+          if (!rejected) setInstallmentNumber(approvedProofs.length + 1);
         }
       } catch {
         setLoadError("เกิดข้อผิดพลาดในการโหลดข้อมูล");
@@ -133,6 +157,25 @@ export default function PaymentSubmitPage({ params }: { params: Promise<{ billin
     };
     load();
   }, [session, idParam]);
+
+  useEffect(() => {
+    const onMouseDown = (e: MouseEvent) => {
+      if (bankRef.current && !bankRef.current.contains(e.target as Node)) {
+        setBankDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onMouseDown);
+    return () => document.removeEventListener("mousedown", onMouseDown);
+  }, []);
+
+  const filteredBanks = THAI_BANKS.filter((b) =>
+    b.toLowerCase().includes(bankName.toLowerCase())
+  );
+
+  const selectBank = useCallback((name: string) => {
+    setBankName(name);
+    setBankDropdownOpen(false);
+  }, []);
 
   const handleFile = (f: File) => {
     setFileError("");
@@ -251,21 +294,52 @@ export default function PaymentSubmitPage({ params }: { params: Promise<{ billin
         )}
 
         {/* Billing summary */}
-        {info.totalAmount > 0 && (
-          <div className="card bg-base-100 shadow-sm">
-            <div className="card-body p-4">
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-base-content/60">ยอดตามใบวางบิลรวม</span>
-                <span className="text-xl font-bold text-primary">
-                  {info.totalAmount.toLocaleString("th-TH", { minimumFractionDigits: 2 })} ฿
-                </span>
+        {info.totalAmount > 0 && (() => {
+          const remaining = Math.max(0, info.totalAmount - totalPaidAmount);
+          return (
+            <div className="card bg-base-100 shadow-sm">
+              <div className="card-body p-4 gap-2">
+                {/* Row 1: billing total */}
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-base-content/60">ยอดตามใบวางบิลรวม</span>
+                  <span className="font-semibold">
+                    {info.totalAmount.toLocaleString("th-TH", { minimumFractionDigits: 2 })} ฿
+                  </span>
+                </div>
+
+                {/* Row 2: paid so far (show only if any paid) */}
+                {totalPaidAmount > 0 && (
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-base-content/60">จ่ายไปแล้ว ({installmentNumber - 1} งวด)</span>
+                    <span className="font-semibold text-success">
+                      − {totalPaidAmount.toLocaleString("th-TH", { minimumFractionDigits: 2 })} ฿
+                    </span>
+                  </div>
+                )}
+
+                {/* Divider + remaining */}
+                {totalPaidAmount > 0 && (
+                  <>
+                    <div className="divider my-0" />
+                    <div className="flex justify-between items-center">
+                      <span className="font-medium text-sm">ยอดคงเหลือที่ต้องชำระ</span>
+                      <span className={`text-xl font-bold ${remaining === 0 ? "text-success" : "text-warning"}`}>
+                        {remaining.toLocaleString("th-TH", { minimumFractionDigits: 2 })} ฿
+                      </span>
+                    </div>
+                  </>
+                )}
+
+                {/* installment badge */}
+                {installmentNumber > 1 && (
+                  <p className="text-xs text-base-content/40 text-right mt-1">
+                    กำลังชำระครั้งที่ {installmentNumber}
+                  </p>
+                )}
               </div>
-              {installmentNumber > 1 && (
-                <p className="text-xs text-base-content/50 text-right">ชำระครั้งที่ {installmentNumber}</p>
-              )}
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* Bank info */}
         <BankInfoCard />
@@ -300,8 +374,48 @@ export default function PaymentSubmitPage({ params }: { params: Promise<{ billin
               <>
                 <div className="form-control">
                   <label className="label"><span className="label-text font-medium">ธนาคารต้นทาง</span></label>
-                  <input type="text" className="input input-bordered" placeholder="เช่น กสิกรไทย, กรุงเทพ"
-                    value={bankName} onChange={(e) => setBankName(e.target.value)} />
+                  <div className="relative" ref={bankRef}>
+                    <input
+                      type="text"
+                      className="input input-bordered w-full"
+                      placeholder="พิมพ์เพื่อค้นหาธนาคาร..."
+                      value={bankName}
+                      onChange={(e) => { setBankName(e.target.value); setBankDropdownOpen(true); }}
+                      onFocus={() => setBankDropdownOpen(true)}
+                      autoComplete="off"
+                    />
+                    {/* Chevron icon */}
+                    <button
+                      type="button"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-base-content/40 hover:text-base-content"
+                      onClick={() => setBankDropdownOpen((v) => !v)}
+                      tabIndex={-1}
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className={`w-4 h-4 transition-transform ${bankDropdownOpen ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+                    {/* Dropdown list */}
+                    {bankDropdownOpen && (
+                      <ul className="absolute z-50 w-full bg-base-100 border border-base-300 shadow-lg rounded-box mt-1 max-h-52 overflow-y-auto">
+                        {filteredBanks.length > 0 ? (
+                          filteredBanks.map((bank) => (
+                            <li key={bank}>
+                              <button
+                                type="button"
+                                className={`w-full text-left px-4 py-2 text-sm hover:bg-base-200 transition-colors ${bankName === bank ? "bg-primary/10 text-primary font-medium" : ""}`}
+                                onMouseDown={(e) => { e.preventDefault(); selectBank(bank); }}
+                              >
+                                {bank}
+                              </button>
+                            </li>
+                          ))
+                        ) : (
+                          <li className="px-4 py-3 text-sm text-base-content/40 text-center">ไม่พบธนาคารที่ค้นหา</li>
+                        )}
+                      </ul>
+                    )}
+                  </div>
                 </div>
                 <div className="form-control">
                   <label className="label"><span className="label-text font-medium">ชื่อบัญชีผู้โอน</span></label>

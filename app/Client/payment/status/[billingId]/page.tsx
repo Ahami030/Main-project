@@ -28,6 +28,7 @@ interface Proof {
   installmentNumber: number;
   rejectionReason: string;
   reviewedAt: string | null;
+  fileMimeType: string;
   history: {
     action: string;
     actor: string;
@@ -37,6 +38,13 @@ interface Proof {
     amount?: number;
   }[];
   createdAt: string;
+}
+
+interface BillingInfo {
+  _id: string;
+  billingNumber: string;
+  taxInvoices: { _id: string; invoiceNumber: string; invoiceDate: string; amount: number }[];
+  paymentStatus: string;
 }
 
 const METHOD_LABEL: Record<string, string> = {
@@ -56,10 +64,12 @@ export default function PaymentStatusPage({ params }: { params: Promise<{ billin
   const router = useRouter();
 
   const [proofs, setProofs] = useState<Proof[]>([]);
+  const [billing, setBilling] = useState<BillingInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [downloadReady, setDownloadReady] = useState(false);
   const [selectedProof, setSelectedProof] = useState<Proof | null>(null);
+  const [slipProof, setSlipProof] = useState<Proof | null>(null);
   const receiptRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -68,13 +78,31 @@ export default function PaymentStatusPage({ params }: { params: Promise<{ billin
       try {
         // Try billingId first, then poId (for legacy single-PO billings)
         let data: Proof[] = [];
+        let foundViaBillingId = false;
+
         const byBilling = await fetch(`/api/payment-proof?billingId=${billingId}`);
-        if (byBilling.ok) data = await byBilling.json();
-        if (data.length === 0) {
+        if (byBilling.ok) {
+          const billingProofs = await byBilling.json() as Proof[];
+          if (billingProofs.length > 0) {
+            data = billingProofs;
+            foundViaBillingId = true;
+          }
+        }
+        if (!foundViaBillingId) {
           const byPO = await fetch(`/api/payment-proof?poId=${billingId}`);
           if (byPO.ok) data = await byPO.json();
         }
         setProofs(data.sort((a, b) => a.installmentNumber - b.installmentNumber));
+
+        // Fetch billing/PO info to get total amount for remaining balance calculation
+        if (foundViaBillingId) {
+          const billingRes = await fetch(`/api/billing/${billingId}`);
+          if (billingRes.ok) setBilling(await billingRes.json());
+        } else {
+          // Legacy PO path: fetch PO to get taxInvoices total
+          const poRes = await fetch(`/api/po/${billingId}`);
+          if (poRes.ok) setBilling(await poRes.json());
+        }
       } catch {
         setLoadError("เกิดข้อผิดพลาดในการโหลดข้อมูล");
       } finally {
@@ -108,6 +136,10 @@ export default function PaymentStatusPage({ params }: { params: Promise<{ billin
   const totalPaid = proofs
     .filter((p) => p.status === "approved")
     .reduce((s, p) => s + p.amount, 0);
+
+  const billingTotal = billing?.taxInvoices?.reduce((s, inv) => s + inv.amount, 0) ?? 0;
+  const remaining = billingTotal > 0 ? Math.max(0, billingTotal - totalPaid) : 0;
+  const isFullyPaid = billingTotal > 0 && remaining === 0;
 
   if (!session) return null;
 
@@ -171,22 +203,50 @@ export default function PaymentStatusPage({ params }: { params: Promise<{ billin
 
         {/* Summary card */}
         {proofs.length > 0 && (
-          <div className="stats stats-horizontal shadow w-full bg-base-100">
-            <div className="stat">
-              <div className="stat-title">ชำระสะสม</div>
-              <div className="stat-value text-success text-xl">
-                {totalPaid.toLocaleString("th-TH", { minimumFractionDigits: 2 })} ฿
+          <div className="card bg-base-100 shadow">
+            <div className="card-body p-4 gap-3">
+              {/* Billing total row */}
+              {billingTotal > 0 && (
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-base-content/60">ยอดตามใบวางบิลรวม</span>
+                  <span className="font-semibold">
+                    {billingTotal.toLocaleString("th-TH", { minimumFractionDigits: 2 })} ฿
+                  </span>
+                </div>
+              )}
+
+              {/* Paid row */}
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-base-content/60">
+                  ชำระแล้ว ({proofs.filter((p) => p.status === "approved").length} รายการ)
+                </span>
+                <span className="font-semibold text-success">
+                  {totalPaid.toLocaleString("th-TH", { minimumFractionDigits: 2 })} ฿
+                </span>
               </div>
-              <div className="stat-desc">{proofs.filter((p) => p.status === "approved").length} รายการที่อนุมัติ</div>
-            </div>
-            <div className="stat">
-              <div className="stat-title">จำนวนครั้งที่ส่ง</div>
-              <div className="stat-value text-xl">{proofs.length}</div>
-              <div className="stat-desc">
-                {proofs.filter((p) => p.status === "pending").length > 0 && "กำลังรอตรวจสอบ"}
-                {proofs.filter((p) => p.status === "rejected").length > 0 && "มีรายการที่ถูกปฏิเสธ"}
-                {allApproved && "ชำระครบทุกรายการ"}
-              </div>
+
+              {/* Remaining row */}
+              {billingTotal > 0 && (
+                <>
+                  <div className="divider my-0" />
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium">ยอดคงเหลือ</span>
+                    <span className={`text-xl font-bold ${remaining === 0 ? "text-success" : "text-warning"}`}>
+                      {remaining.toLocaleString("th-TH", { minimumFractionDigits: 2 })} ฿
+                    </span>
+                  </div>
+                  {remaining === 0 && (
+                    <div className="badge badge-success badge-sm self-end">ชำระครบแล้ว</div>
+                  )}
+                </>
+              )}
+
+              {/* Status note */}
+              <p className="text-xs text-base-content/40 mt-1">
+                {proofs.filter((p) => p.status === "pending").length > 0 && "มีรายการรอตรวจสอบ · "}
+                {proofs.filter((p) => p.status === "rejected").length > 0 && "มีรายการถูกปฏิเสธ · "}
+                ส่งหลักฐานทั้งหมด {proofs.length} ครั้ง
+              </p>
             </div>
           </div>
         )}
@@ -242,14 +302,12 @@ export default function PaymentStatusPage({ params }: { params: Promise<{ billin
 
               {/* Actions */}
               <div className="flex gap-2 justify-end flex-wrap">
-                <a
-                  href={`/api/payment-proof/file?id=${proof._id}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                <button
                   className="btn btn-ghost btn-xs"
+                  onClick={() => setSlipProof(proof)}
                 >
                   ดูสลิป
-                </a>
+                </button>
                 {proof.status === "approved" && (
                   <button
                     className="btn btn-success btn-xs"
@@ -279,22 +337,98 @@ export default function PaymentStatusPage({ params }: { params: Promise<{ billin
           </div>
         ))}
 
-        {/* Send new installment */}
+        {/* Fully paid banner / send next installment */}
         {latestProof.status === "approved" && (
-          <div className="card bg-base-100 shadow-sm border-2 border-dashed border-primary/30">
-            <div className="card-body p-4 text-center">
-              <p className="text-base-content/60 text-sm">ต้องการชำระงวดถัดไปหรือไม่?</p>
-              <button
-                className="btn btn-primary btn-sm"
-                onClick={() => router.push(`/Client/payment/${billingId}`)}
-              >
-                ส่งหลักฐานงวดถัดไป
-              </button>
+          isFullyPaid ? (
+            <div className="card bg-success/10 border border-success/30 shadow-sm">
+              <div className="card-body p-5 text-center gap-2">
+                <div className="text-4xl">✓</div>
+                <p className="font-bold text-success text-lg">ชำระเงินครบถ้วนแล้ว</p>
+                <p className="text-base-content/60 text-sm">
+                  คุณได้ชำระเงินตามยอดที่กำหนดครบถ้วนแล้ว ขอบคุณสำหรับการชำระเงิน
+                </p>
+                <p className="text-xs text-base-content/40 mt-1">
+                  ยอดรวม {billingTotal.toLocaleString("th-TH", { minimumFractionDigits: 2 })} ฿ · ชำระแล้ว {totalPaid.toLocaleString("th-TH", { minimumFractionDigits: 2 })} ฿
+                </p>
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="card bg-base-100 shadow-sm border-2 border-dashed border-primary/30">
+              <div className="card-body p-4 text-center">
+                <p className="text-base-content/60 text-sm">ต้องการชำระงวดถัดไปหรือไม่?</p>
+                {billingTotal > 0 && (
+                  <p className="text-xs text-warning font-medium">
+                    ยังคงเหลืออีก {remaining.toLocaleString("th-TH", { minimumFractionDigits: 2 })} ฿
+                  </p>
+                )}
+                <button
+                  className="btn btn-primary btn-sm"
+                  onClick={() => router.push(`/Client/payment/${billingId}`)}
+                >
+                  ส่งหลักฐานงวดถัดไป
+                </button>
+              </div>
+            </div>
+          )
         )}
 
       </div>
+
+      {/* Slip modal */}
+      {slipProof && (
+        <div className="modal modal-open">
+          <div className="modal-box max-w-2xl w-full p-0 overflow-hidden">
+            {/* Header */}
+            <div className="flex items-center justify-between px-4 py-3 border-b border-base-300">
+              <div>
+                <p className="font-semibold text-sm">{slipProof.proofNumber}</p>
+                <p className="text-xs text-base-content/50">สลิปการโอนเงิน</p>
+              </div>
+              <button
+                className="btn btn-ghost btn-sm btn-circle"
+                onClick={() => setSlipProof(null)}
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="bg-base-200 flex items-center justify-center min-h-64 max-h-[75vh] overflow-auto">
+              {slipProof.fileMimeType?.startsWith("image/") || !slipProof.fileMimeType ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={`/api/payment-proof/file?id=${slipProof._id}`}
+                  alt="สลิปการโอนเงิน"
+                  className="max-w-full max-h-[75vh] object-contain"
+                />
+              ) : (
+                <iframe
+                  src={`/api/payment-proof/file?id=${slipProof._id}`}
+                  className="w-full"
+                  style={{ height: "75vh" }}
+                  title="สลิปการโอนเงิน"
+                />
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="flex justify-end gap-2 px-4 py-3 border-t border-base-300">
+              <a
+                href={`/api/payment-proof/file?id=${slipProof._id}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn btn-ghost btn-sm"
+              >
+                เปิดในแท็บใหม่
+              </a>
+              <button className="btn btn-sm" onClick={() => setSlipProof(null)}>
+                ปิด
+              </button>
+            </div>
+          </div>
+          <div className="modal-backdrop" onClick={() => setSlipProof(null)} />
+        </div>
+      )}
 
       {/* Hidden receipt document for PDF generation */}
       {downloadReady && selectedProof && (
