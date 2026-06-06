@@ -219,7 +219,7 @@ export default function PaymentStatusPage({ params }: { params: Promise<{ billin
     <div className="min-h-screen bg-base-200">
 
       {/* Sticky top nav */}
-      <div className="bg-base-100 border-b border-base-300 sticky top-0 z-20 shadow-sm">
+      <div className="bg-base-100 border-b border-base-300 sticky top-16 z-20 shadow-sm">
         <div className="max-w-4xl mx-auto px-4 h-14 flex items-center gap-3">
           <button className="btn btn-ghost btn-sm btn-circle" onClick={() => router.push("/Client")}>
             <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">

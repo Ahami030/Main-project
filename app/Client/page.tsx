@@ -875,7 +875,7 @@ export default function Page(): JSX.Element {
                                 {(!pStatus || pStatus === "unpaid") ? (
                                   <button
                                     className="btn btn-primary btn-xs"
-                                    onClick={() => router.push(`/Client/payment/${billingKey}`)}
+                                    onClick={() => router.push(`/Client/payment/${billingKey}${!btn.isGroup ? "?t=po" : ""}`)}
                                   >
                                     ส่งหลักฐานการโอนเงิน
                                   </button>
@@ -884,7 +884,7 @@ export default function Page(): JSX.Element {
                                     <span className="text-xs text-warning font-medium">รอตรวจสอบ...</span>
                                     <button
                                       className="btn btn-ghost btn-xs"
-                                      onClick={() => router.push(`/Client/payment/status/${billingKey}`)}
+                                      onClick={() => router.push(`/Client/payment/status/${billingKey}${!btn.isGroup ? "?t=po" : ""}`)}
                                     >
                                       ดูสถานะ
                                     </button>
@@ -894,7 +894,7 @@ export default function Page(): JSX.Element {
                                     <span className="text-xs text-error font-medium">ถูกปฏิเสธ</span>
                                     <button
                                       className="btn btn-error btn-xs"
-                                      onClick={() => router.push(`/Client/payment/${billingKey}`)}
+                                      onClick={() => router.push(`/Client/payment/${billingKey}${!btn.isGroup ? "?t=po" : ""}`)}
                                     >
                                       ส่งใหม่
                                     </button>
@@ -902,7 +902,7 @@ export default function Page(): JSX.Element {
                                 ) : pStatus === "approved" ? (
                                   <button
                                     className="btn btn-success btn-xs"
-                                    onClick={() => router.push(`/Client/payment/status/${billingKey}`)}
+                                    onClick={() => router.push(`/Client/payment/status/${billingKey}${!btn.isGroup ? "?t=po" : ""}`)}
                                   >
                                     ดูใบเสร็จ
                                   </button>

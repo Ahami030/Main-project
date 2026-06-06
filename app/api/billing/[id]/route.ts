@@ -13,22 +13,27 @@ export async function GET(_req: NextRequest, { params }: Params) {
   if (!session) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
   const { id } = await params;
-  await connectMongoDB();
 
-  const billing = await Billing.findById(id).lean() as {
-    customerId?: string;
-    [key: string]: unknown;
-  } | null;
-  if (!billing) return NextResponse.json({ message: "Not found" }, { status: 404 });
+  try {
+    await connectMongoDB();
 
-  // Admin: full access. Client: only their own billing
-  const isAdmin = (session.user as { role?: string }).role === "admin";
-  const userId  = (session.user as { id?: string }).id;
-  if (!isAdmin && billing.customerId !== userId) {
-    return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+    const billing = await Billing.findById(id).lean() as {
+      customerId?: string;
+      [key: string]: unknown;
+    } | null;
+    if (!billing) return NextResponse.json({ message: "Not found" }, { status: 404 });
+
+    // Admin: full access. Client: only their own billing
+    const isAdmin = (session.user as { role?: string }).role === "admin";
+    const userId  = (session.user as { id?: string }).id;
+    if (!isAdmin && billing.customerId !== userId) {
+      return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+    }
+
+    return NextResponse.json(billing);
+  } catch {
+    return NextResponse.json({ message: "Not found" }, { status: 404 });
   }
-
-  return NextResponse.json(billing);
 }
 
 export async function PATCH(req: NextRequest, { params }: Params) {
