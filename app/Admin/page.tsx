@@ -260,31 +260,126 @@ export default function AdminPage() {
               </div>
             </div>
 
-            {/* ── View analytics ── */}
+            {/* ── จัดการใบวางบิล ── */}
             <div className="card bg-base-100 border border-base-300 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 overflow-hidden">
               <div className="h-0.5 bg-linear-to-r from-accent/50 to-accent rounded-t-2xl" />
               <div className="card-body p-5">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="text-[10px] text-base-content/40 font-semibold uppercase tracking-widest">Reports</p>
-                    <h2 className="text-base font-bold text-base-content mt-1">View analytics</h2>
-                    <p className="text-[11px] text-base-content/40 mt-0.5">วิเคราะห์ข้อมูลและรายงาน</p>
+                    <p className="text-[10px] text-base-content/40 font-semibold uppercase tracking-widest">Billing</p>
+                    <h2 className="text-base font-bold text-base-content mt-1">จัดการใบวางบิล</h2>
+                    <p className="text-[11px] text-base-content/40 mt-0.5">ดูและจัดการใบวางบิลทั้งหมด</p>
                   </div>
                   <div className="relative shrink-0">
                     <div className="w-10 h-10 rounded-xl bg-accent/10 flex items-center justify-center">
                       <svg className="w-5 h-5 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75}
-                          d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                          d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
                       </svg>
                     </div>
-                    <span className="absolute -top-1 -right-1 text-[8px] font-bold bg-accent/15 text-accent border border-accent/30 px-1.5 py-0.5 rounded-full leading-none whitespace-nowrap">
-                      เร็วๆ นี้
-                    </span>
                   </div>
                 </div>
                 <div className="card-actions mt-4">
-                  <button className="btn btn-accent btn-sm rounded-lg w-full font-semibold opacity-50 cursor-not-allowed" disabled>
-                    เร็วๆ นี้
+                  <button
+                    className="btn btn-accent btn-sm rounded-lg w-full font-semibold"
+                    onClick={() => router.push('/Admin/billing')}
+                  >
+                    ดูทั้งหมด
+                  </button>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          {/* History cards row */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+
+            {/* ── ประวัติแชท ── */}
+            <div className="card bg-base-100 border border-base-300 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 overflow-hidden">
+              <div className="h-0.5 bg-linear-to-r from-info/50 to-info rounded-t-2xl" />
+              <div className="card-body p-5">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-[10px] text-base-content/40 font-semibold uppercase tracking-widest">Archive</p>
+                    <h2 className="text-base font-bold text-base-content mt-1">ประวัติแชท</h2>
+                    <p className="text-[11px] text-base-content/40 mt-0.5">บทสนทนาที่ถูก archive แล้ว</p>
+                  </div>
+                  <div className="shrink-0">
+                    <div className="w-10 h-10 rounded-xl bg-info/10 flex items-center justify-center">
+                      <svg className="w-5 h-5 text-info" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75}
+                          d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                      </svg>
+                    </div>
+                  </div>
+                </div>
+                <div className="card-actions mt-4">
+                  <button
+                    className="btn btn-info btn-sm btn-outline rounded-lg w-full font-semibold"
+                    onClick={() => router.push('/Admin/history/chats')}
+                  >
+                    ดูประวัติ
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* ── ประวัติใบวางบิล ── */}
+            <div className="card bg-base-100 border border-base-300 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 overflow-hidden">
+              <div className="h-0.5 bg-linear-to-r from-warning/50 to-warning rounded-t-2xl" />
+              <div className="card-body p-5">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-[10px] text-base-content/40 font-semibold uppercase tracking-widest">Archive</p>
+                    <h2 className="text-base font-bold text-base-content mt-1">ประวัติใบวางบิล</h2>
+                    <p className="text-[11px] text-base-content/40 mt-0.5">ใบวางบิลที่ถูก archive แล้ว</p>
+                  </div>
+                  <div className="shrink-0">
+                    <div className="w-10 h-10 rounded-xl bg-warning/10 flex items-center justify-center">
+                      <svg className="w-5 h-5 text-warning" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75}
+                          d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                      </svg>
+                    </div>
+                  </div>
+                </div>
+                <div className="card-actions mt-4">
+                  <button
+                    className="btn btn-warning btn-sm btn-outline rounded-lg w-full font-semibold"
+                    onClick={() => router.push('/Admin/history/billings')}
+                  >
+                    ดูประวัติ
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* ── ประวัติ RFQ ── */}
+            <div className="card bg-base-100 border border-base-300 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 overflow-hidden">
+              <div className="h-0.5 bg-linear-to-r from-neutral/30 to-neutral/60 rounded-t-2xl" />
+              <div className="card-body p-5">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-[10px] text-base-content/40 font-semibold uppercase tracking-widest">Archive</p>
+                    <h2 className="text-base font-bold text-base-content mt-1">ประวัติ RFQ</h2>
+                    <p className="text-[11px] text-base-content/40 mt-0.5">ใบเสนอราคาที่ถูก archive แล้ว</p>
+                  </div>
+                  <div className="shrink-0">
+                    <div className="w-10 h-10 rounded-xl bg-base-200 flex items-center justify-center">
+                      <svg className="w-5 h-5 text-base-content/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75}
+                          d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+                      </svg>
+                    </div>
+                  </div>
+                </div>
+                <div className="card-actions mt-4">
+                  <button
+                    className="btn btn-ghost btn-sm rounded-lg w-full font-semibold border border-base-300"
+                    onClick={() => router.push('/Admin/history/rfqs')}
+                  >
+                    ดูประวัติ
                   </button>
                 </div>
               </div>
