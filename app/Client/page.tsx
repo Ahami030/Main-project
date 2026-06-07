@@ -966,7 +966,7 @@ export default function Page(): JSX.Element {
                   })}
                   {/* Step 4: ชำระเงินแล้ว (derived from payment proof status) */}
                   {(() => {
-                    const anyBillingId = billingButtons.find((b) => b.isGroup)?.key;
+                    const anyBillingId = billingButtons[0]?.key;
                     const pStatus = anyBillingId ? paymentProofs[anyBillingId] : undefined;
                     const paid = pStatus === "approved";
                     return (
