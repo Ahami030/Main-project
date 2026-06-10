@@ -234,8 +234,34 @@ export default function Page(): JSX.Element {
     totalPaid: number;
     billingTotal: number;
     remaining: number;
+    lastReviewedAt: string | null;
   };
   const [paymentProofs, setPaymentProofs] = useState<Record<string, PaymentInfo>>({});
+
+  // ── Track which billings the client has already "seen" the latest admin review for ──
+  const [seenReviews, setSeenReviews] = useState<Record<string, string>>({});
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("payment_seen_reviews");
+      if (raw) setSeenReviews(JSON.parse(raw));
+    } catch {}
+  }, []);
+
+  const markReviewSeen = useCallback((key: string, reviewedAt: string | null) => {
+    if (!reviewedAt) return;
+    setSeenReviews((prev) => {
+      const next = { ...prev, [key]: reviewedAt };
+      try { localStorage.setItem("payment_seen_reviews", JSON.stringify(next)); } catch {}
+      return next;
+    });
+  }, []);
+
+  const hasUnseenReview = (key: string) => {
+    const info = paymentProofs[key];
+    if (!info?.lastReviewedAt) return false;
+    const seen = seenReviews[key];
+    return !seen || new Date(info.lastReviewedAt) > new Date(seen);
+  };
 
   const fetchPaymentProofs = useCallback(async (buttons: { key: string; isGroup: boolean }[]) => {
     if (buttons.length === 0) return;
@@ -243,7 +269,7 @@ export default function Page(): JSX.Element {
       const results = await Promise.all(
         buttons.map(async ({ key, isGroup }) => {
           const param = isGroup ? `billingId=${key}` : `poId=${key}`;
-          const proofs: { status: string; amount: number }[] = await fetch(`/api/payment-proof?${param}`)
+          const proofs: { status: string; amount: number; reviewedAt: string | null }[] = await fetch(`/api/payment-proof?${param}`)
             .then((r) => r.ok ? r.json() : [])
             .catch(() => []);
 
@@ -282,7 +308,14 @@ export default function Page(): JSX.Element {
           status = "unpaid";
         }
 
-        map[key] = { status, totalPaid, billingTotal, remaining };
+        const reviewedTimestamps = (proofs ?? [])
+          .map((p) => p.reviewedAt)
+          .filter((d): d is string => !!d);
+        const lastReviewedAt = reviewedTimestamps.length > 0
+          ? reviewedTimestamps.reduce((a, b) => (new Date(a) > new Date(b) ? a : b))
+          : null;
+
+        map[key] = { status, totalPaid, billingTotal, remaining, lastReviewedAt };
       });
       setPaymentProofs(map);
     } catch {}
@@ -957,10 +990,16 @@ export default function Page(): JSX.Element {
                                 </div>
                                 <div className="flex items-center gap-2 shrink-0">
                                   <button
-                                    className="btn btn-sm btn-ghost btn-square"
+                                    className="btn btn-sm btn-ghost btn-square indicator"
                                     title="ประวัติการชำระเงิน"
-                                    onClick={() => setHistoryModal({ key: billingKey, isGroup: btn.isGroup, label: billingLabel })}
+                                    onClick={() => {
+                                      setHistoryModal({ key: billingKey, isGroup: btn.isGroup, label: billingLabel });
+                                      markReviewSeen(billingKey, info?.lastReviewedAt ?? null);
+                                    }}
                                   >
+                                    {hasUnseenReview(billingKey) && (
+                                      <span className="indicator-item indicator-top indicator-end w-2.5 h-2.5 bg-error rounded-full ring-2 ring-base-100" />
+                                    )}
                                     <IconHistory />
                                   </button>
                                   <button
@@ -988,10 +1027,16 @@ export default function Page(): JSX.Element {
                                 </div>
                                 <div className="flex items-center gap-2 shrink-0">
                                   <button
-                                    className="btn btn-sm btn-ghost btn-square"
+                                    className="btn btn-sm btn-ghost btn-square indicator"
                                     title="ประวัติการชำระเงิน"
-                                    onClick={() => setHistoryModal({ key: billingKey, isGroup: btn.isGroup, label: billingLabel })}
+                                    onClick={() => {
+                                      setHistoryModal({ key: billingKey, isGroup: btn.isGroup, label: billingLabel });
+                                      markReviewSeen(billingKey, info?.lastReviewedAt ?? null);
+                                    }}
                                   >
+                                    {hasUnseenReview(billingKey) && (
+                                      <span className="indicator-item indicator-top indicator-end w-2.5 h-2.5 bg-error rounded-full ring-2 ring-base-100" />
+                                    )}
                                     <IconHistory />
                                   </button>
                                   <button
@@ -1020,10 +1065,16 @@ export default function Page(): JSX.Element {
                                 </div>
                                 <div className="flex items-center gap-2 shrink-0">
                                   <button
-                                    className="btn btn-sm btn-ghost btn-square"
+                                    className="btn btn-sm btn-ghost btn-square indicator"
                                     title="ประวัติการชำระเงิน"
-                                    onClick={() => setHistoryModal({ key: billingKey, isGroup: btn.isGroup, label: billingLabel })}
+                                    onClick={() => {
+                                      setHistoryModal({ key: billingKey, isGroup: btn.isGroup, label: billingLabel });
+                                      markReviewSeen(billingKey, info?.lastReviewedAt ?? null);
+                                    }}
                                   >
+                                    {hasUnseenReview(billingKey) && (
+                                      <span className="indicator-item indicator-top indicator-end w-2.5 h-2.5 bg-error rounded-full ring-2 ring-base-100" />
+                                    )}
                                     <IconHistory />
                                   </button>
                                   <button
@@ -1051,10 +1102,16 @@ export default function Page(): JSX.Element {
                                 </div>
                                 <div className="flex items-center gap-2 shrink-0">
                                   <button
-                                    className="btn btn-sm btn-ghost btn-square"
+                                    className="btn btn-sm btn-ghost btn-square indicator"
                                     title="ประวัติการชำระเงิน"
-                                    onClick={() => setHistoryModal({ key: billingKey, isGroup: btn.isGroup, label: billingLabel })}
+                                    onClick={() => {
+                                      setHistoryModal({ key: billingKey, isGroup: btn.isGroup, label: billingLabel });
+                                      markReviewSeen(billingKey, info?.lastReviewedAt ?? null);
+                                    }}
                                   >
+                                    {hasUnseenReview(billingKey) && (
+                                      <span className="indicator-item indicator-top indicator-end w-2.5 h-2.5 bg-error rounded-full ring-2 ring-base-100" />
+                                    )}
                                     <IconHistory />
                                   </button>
                                   <button

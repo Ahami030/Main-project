@@ -95,37 +95,51 @@ export default function PaymentReceiptDocument({ receipt }: PaymentReceiptProps)
           <div style={{ textAlign: "right" }}>
             <p style={{ color: "#ffffff", fontSize: "22px", fontWeight: 700, margin: 0, letterSpacing: "0.05em" }}>ใบเสร็จรับเงิน</p>
             <p style={{ color: "rgba(255,255,255,0.5)", fontSize: "10px", letterSpacing: "0.2em", margin: "2px 0 0" }}>PAYMENT RECEIPT</p>
+            <p style={{ color: "rgba(255,255,255,0.85)", fontSize: "11px", letterSpacing: "0.05em", margin: "6px 0 0", fontWeight: 600 }}>
+              เลขที่ {receipt.proofNumber}
+            </p>
           </div>
         </div>
 
         {/* Approved stamp */}
         <div style={{
-          position: "relative",
-          border: "3px solid #16a34a",
-          borderRadius: "6px",
-          padding: "6px 14px",
-          display: "inline-block",
-          marginBottom: "16px",
-          transform: "rotate(-2deg)",
+          display: "inline-flex",
+          alignItems: "center",
+          gap: "8px",
+          backgroundColor: "#dcfce7",
+          border: "1.5px solid #16a34a",
+          borderRadius: "999px",
+          padding: "5px 16px 5px 8px",
+          marginBottom: "20px",
         }}>
-          <p style={{ color: "#16a34a", fontWeight: 700, fontSize: "14px", margin: 0, letterSpacing: "0.12em" }}>
-            ✓ รับชำระเงินแล้ว
+          <span style={{
+            width: "20px", height: "20px", borderRadius: "50%",
+            backgroundColor: "#16a34a",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            color: "#ffffff", fontSize: "12px", fontWeight: 700, lineHeight: 1,
+          }}>✓</span>
+          <p style={{ color: "#15803d", fontWeight: 700, fontSize: "13px", margin: 0, letterSpacing: "0.08em" }}>
+            รับชำระเงินแล้ว
           </p>
         </div>
 
         {/* Meta */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "20px" }}>
-          <div style={{ border: "1px solid #e2e8f0", borderRadius: "6px", padding: "10px 14px", backgroundColor: "#f8fafc" }}>
+          <div style={{ border: "1px solid #e2e8f0", borderLeft: "3px solid #94a3b8", borderRadius: "6px", padding: "10px 14px", backgroundColor: "#f8fafc" }}>
             <p style={{ color: "#94a3b8", fontSize: "9px", textTransform: "uppercase", letterSpacing: "0.12em", margin: "0 0 4px" }}>รับจาก / From</p>
             <p style={{ color: "#1e293b", fontWeight: 600, fontSize: "13px", margin: "0 0 2px" }}>{receipt.customerName}</p>
             <p style={{ color: "#64748b", fontSize: "11px", margin: 0 }}>{receipt.customerEmail}</p>
           </div>
-          <div style={{ border: "1px solid #e2e8f0", borderRadius: "6px", padding: "10px 14px", backgroundColor: "#f8fafc", display: "flex", flexDirection: "column", gap: "4px" }}>
+          <div style={{ border: "1px solid #e2e8f0", borderLeft: "3px solid #16a34a", borderRadius: "6px", padding: "10px 14px", backgroundColor: "#f8fafc", display: "flex", flexDirection: "column", gap: "4px" }}>
             {[
-              { label: "เลขที่ใบเสร็จ",  value: receipt.proofNumber },
               { label: "อ้างอิงใบวางบิล", value: receipt.billingNumber },
-              { label: "เลขที่ PO",       value: receipt.poNumbers.join(", ") || "-" },
-              { label: "วันที่รับชำระ",   value: fmtDate(receipt.approvedAt) },
+              ...(receipt.poNumbers.length > 0 && receipt.poNumbers.join(", ") !== receipt.billingNumber
+                ? [{ label: "เลขที่ PO", value: receipt.poNumbers.join(", ") }]
+                : []),
+              { label: "วิธีชำระ",        value: `${METHOD_LABEL[receipt.paymentMethod] ?? receipt.paymentMethod}${receipt.bankName ? ` — ${receipt.bankName}` : ""}` },
+              ...(receipt.referenceNumber ? [{ label: "เลขอ้างอิง", value: receipt.referenceNumber }] : []),
+              { label: "วันที่โอน",       value: fmtDate(receipt.paymentDate) },
+              { label: "วันที่อนุมัติ",    value: fmtDate(receipt.approvedAt) },
             ].map(({ label, value }) => (
               <div key={label} style={{ display: "flex", justifyContent: "space-between", fontSize: "12px" }}>
                 <span style={{ color: "#94a3b8", flexShrink: 0, marginRight: "8px" }}>{label}</span>
@@ -146,20 +160,11 @@ export default function PaymentReceiptDocument({ receipt }: PaymentReceiptProps)
           <tbody>
             <tr style={{ backgroundColor: "#f0fdf4" }}>
               <td style={{ padding: "12px", borderBottom: "1px solid #dcfce7", borderRight: "1px solid #dcfce7" }}>
-                <p style={{ margin: 0, fontWeight: 500 }}>
-                  รับชำระค่าสินค้า/บริการ{receipt.installmentNumber && receipt.installmentNumber > 1 ? ` (งวดที่ ${receipt.installmentNumber})` : ""}
+                <p style={{ margin: 0, fontWeight: 600, fontSize: "13px" }}>
+                  {receipt.proofNumber}
                 </p>
                 <p style={{ margin: "4px 0 0", fontSize: "11px", color: "#64748b" }}>
-                  วิธีชำระ: {METHOD_LABEL[receipt.paymentMethod] ?? receipt.paymentMethod}
-                  {receipt.bankName ? ` — ${receipt.bankName}` : ""}
-                </p>
-                {receipt.referenceNumber && (
-                  <p style={{ margin: "2px 0 0", fontSize: "11px", color: "#64748b" }}>
-                    เลขอ้างอิง: {receipt.referenceNumber}
-                  </p>
-                )}
-                <p style={{ margin: "2px 0 0", fontSize: "11px", color: "#64748b" }}>
-                  วันที่โอน: {fmtDate(receipt.paymentDate)}
+                  ค่าสินค้า/บริการ{receipt.installmentNumber && receipt.installmentNumber > 1 ? ` (งวดที่ ${receipt.installmentNumber})` : ""}
                 </p>
               </td>
               <td style={{ padding: "12px", textAlign: "right", borderBottom: "1px solid #dcfce7", fontWeight: 600, fontSize: "14px" }}>
@@ -193,6 +198,13 @@ export default function PaymentReceiptDocument({ receipt }: PaymentReceiptProps)
               <p style={{ fontSize: "10px", color: "#94a3b8", margin: "6px 0 0" }}>วันที่ ....../....../........</p>
             </div>
           ))}
+        </div>
+
+        {/* Footer note */}
+        <div style={{ marginTop: "32px", paddingTop: "12px", borderTop: "1px dashed #e2e8f0", textAlign: "center" }}>
+          <p style={{ fontSize: "10.5px", color: "#94a3b8", margin: 0 }}>
+            ขอบคุณที่ใช้บริการ — เอกสารนี้ออกโดยระบบอัตโนมัติ
+          </p>
         </div>
       </div>
     </>

@@ -1,13 +1,10 @@
 "use client";
 
-import { useState, useEffect, useRef, use } from "react";
+import { useState, useEffect, use } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import PaymentStatusBadge from "@/components/payment/PaymentStatusBadge";
-import PaymentReceiptDocument from "@/components/payment/PaymentReceiptDocument";
-import type { PaymentReceiptProps } from "@/components/payment/PaymentReceiptDocument";
-import jsPDF from "jspdf";
-import html2canvas from "html2canvas";
 
 interface Proof {
   _id: string;
@@ -66,10 +63,7 @@ export default function PaymentStatusPage({ params }: { params: Promise<{ billin
   const [billing, setBilling] = useState<BillingInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
-  const [downloadReady, setDownloadReady] = useState(false);
-  const [selectedProof, setSelectedProof] = useState<Proof | null>(null);
   const [slipProof, setSlipProof] = useState<Proof | null>(null);
-  const receiptRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!session) return;
@@ -110,27 +104,6 @@ export default function PaymentStatusPage({ params }: { params: Promise<{ billin
     };
     load();
   }, [session, billingId]);
-
-  const handleDownloadReceipt = async (proof: Proof) => {
-    setSelectedProof(proof);
-    setDownloadReady(true);
-  };
-
-  useEffect(() => {
-    if (!downloadReady || !selectedProof || !receiptRef.current) return;
-    const el = receiptRef.current.querySelector("#payment-receipt-print-area") as HTMLElement | null;
-    if (!el) return;
-    html2canvas(el, { scale: 2, useCORS: true }).then((canvas) => {
-      const imgData = canvas.toDataURL("image/png");
-      const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-      const pdfW = pdf.internal.pageSize.getWidth();
-      const pdfH = (canvas.height * pdfW) / canvas.width;
-      pdf.addImage(imgData, "PNG", 0, 0, pdfW, pdfH);
-      pdf.save(`receipt-${selectedProof.proofNumber}.pdf`);
-      setDownloadReady(false);
-      setSelectedProof(null);
-    });
-  }, [downloadReady, selectedProof]);
 
   const totalPaid = proofs
     .filter((p) => p.status === "approved")
@@ -387,12 +360,17 @@ export default function PaymentStatusPage({ params }: { params: Promise<{ billin
                   ดูสลิป
                 </button>
                 {proof.status === "approved" && (
-                  <button className="btn btn-success btn-xs gap-1.5" onClick={() => handleDownloadReceipt(proof)}>
+                  <Link
+                    href={`/Client/payment/receipt/${proof._id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn btn-success btn-xs gap-1.5"
+                  >
                     <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                     </svg>
-                    ดาวน์โหลดใบเสร็จ
-                  </button>
+                    ใบเสร็จ
+                  </Link>
                 )}
                 {proof.status === "rejected" && idx === proofs.length - 1 && (
                   <button className="btn btn-error btn-xs gap-1.5" onClick={() => router.push(`/Client/payment/${billingId}`)}>
@@ -580,28 +558,6 @@ export default function PaymentStatusPage({ params }: { params: Promise<{ billin
             </div>
           </div>
           <div className="modal-backdrop" onClick={() => setSlipProof(null)} />
-        </div>
-      )}
-
-      {/* Hidden receipt document for PDF generation */}
-      {downloadReady && selectedProof && (
-        <div ref={receiptRef} style={{ position: "absolute", left: "-9999px", top: 0 }}>
-          <PaymentReceiptDocument
-            receipt={{
-              proofNumber:       selectedProof.proofNumber,
-              billingNumber:     selectedProof.billingNumber,
-              poNumbers:         selectedProof.poNumbers ?? [],
-              customerName:      selectedProof.customerName,
-              customerEmail:     selectedProof.customerEmail,
-              amount:            selectedProof.amount,
-              paymentDate:       selectedProof.paymentDate,
-              paymentMethod:     selectedProof.paymentMethod,
-              bankName:          selectedProof.bankName,
-              referenceNumber:   selectedProof.referenceNumber,
-              approvedAt:        selectedProof.reviewedAt ?? selectedProof.createdAt,
-              installmentNumber: selectedProof.installmentNumber,
-            } satisfies PaymentReceiptProps["receipt"]}
-          />
         </div>
       )}
     </div>

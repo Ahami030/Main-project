@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import PaymentHistoryTimeline, { HistoryEntry } from "./PaymentHistoryTimeline";
 import PaymentStatusBadge from "./PaymentStatusBadge";
 
@@ -138,7 +139,19 @@ export default function PaymentHistoryModal({ billingKey, isGroup, label, onClos
                         <p className="text-xs text-base-content/50 mt-0.5 tabular-nums">{fmtBaht(proof.amount)} ฿</p>
                       </div>
                     </div>
-                    <PaymentStatusBadge status={proof.status as "pending" | "approved" | "rejected"} size="sm" />
+                    <div className="flex items-center gap-2 shrink-0">
+                      <PaymentStatusBadge status={proof.status as "pending" | "approved" | "rejected"} size="sm" />
+                      {proof.status === "approved" && (
+                        <Link
+                          href={`/Client/payment/receipt/${proof._id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="btn btn-success btn-xs gap-1.5"
+                        >
+                          ใบเสร็จ
+                        </Link>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -154,6 +167,7 @@ export default function PaymentHistoryModal({ billingKey, isGroup, label, onClos
         )}
 
       </div>
+
       <div className="modal-backdrop" onClick={onClose} />
     </dialog>
   );
