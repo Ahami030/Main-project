@@ -7,6 +7,7 @@ import ChatNotificationBubble from "@/components/client/ChatNotificationBubble";
 import QuotationDocument, { RFQData } from "@/components/QuotationDocument";
 import BillingNoteDocument from "@/components/BillingNoteDocument";
 import PaymentStatusBadge from "@/components/payment/PaymentStatusBadge";
+import PaymentHistoryModal from "@/components/payment/PaymentHistoryModal";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type QuotationStatus = "sent" | "reviewing" | "completed" | "bargaining" | "confirmed";
@@ -119,6 +120,53 @@ function IconDoc() {
   );
 }
 
+function IconBanknote() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="w-5 h-5">
+      <rect x="2" y="6" width="20" height="12" rx="2" strokeWidth={2} />
+      <circle cx="12" cy="12" r="2" strokeWidth={2} />
+      <path strokeWidth={2} strokeLinecap="round" d="M6 12h.01M18 12h.01" />
+    </svg>
+  );
+}
+
+function IconClock() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="w-5 h-5">
+      <circle cx="12" cy="12" r="9" strokeWidth={2} />
+      <path strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" d="M12 7v5l3 3" />
+    </svg>
+  );
+}
+
+function IconXCircle() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="w-5 h-5">
+      <circle cx="12" cy="12" r="9" strokeWidth={2} />
+      <path strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" d="M15 9l-6 6m0-6l6 6" />
+    </svg>
+  );
+}
+
+function IconCheckCircle() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="w-5 h-5">
+      <circle cx="12" cy="12" r="9" strokeWidth={2} />
+      <path strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4" />
+    </svg>
+  );
+}
+
+function IconHistory() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="w-4 h-4">
+      <path strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" d="M3 12a9 9 0 1 0 2.64-6.36L3 8" />
+      <path strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" d="M3 3v5h5" />
+      <path strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" d="M12 7v5l3 3" />
+    </svg>
+  );
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function Page(): JSX.Element {
   const { data: session } = useSession();
@@ -181,33 +229,60 @@ export default function Page(): JSX.Element {
   }, [fetchPOOrders]);
 
   // ── Fetch payment proofs ─────────────────────────────────────────────────
-  const [paymentProofs, setPaymentProofs] = useState<Record<string, string>>({}); // key → status
+  type PaymentInfo = {
+    status: "unpaid" | "pending" | "rejected" | "partial" | "approved";
+    totalPaid: number;
+    billingTotal: number;
+    remaining: number;
+  };
+  const [paymentProofs, setPaymentProofs] = useState<Record<string, PaymentInfo>>({});
 
   const fetchPaymentProofs = useCallback(async (buttons: { key: string; isGroup: boolean }[]) => {
     if (buttons.length === 0) return;
     try {
       const results = await Promise.all(
-        buttons.map(({ key, isGroup }) => {
+        buttons.map(async ({ key, isGroup }) => {
           const param = isGroup ? `billingId=${key}` : `poId=${key}`;
-          return fetch(`/api/payment-proof?${param}`)
+          const proofs: { status: string; amount: number }[] = await fetch(`/api/payment-proof?${param}`)
             .then((r) => r.ok ? r.json() : [])
             .catch(() => []);
+
+          let billingTotal = 0;
+          try {
+            const infoRes = await fetch(isGroup ? `/api/billing/${key}` : `/api/po/${key}`);
+            if (infoRes.ok) {
+              const info = await infoRes.json();
+              billingTotal = (info.taxInvoices ?? []).reduce(
+                (s: number, inv: { amount: number }) => s + (inv.amount ?? 0), 0
+              );
+            }
+          } catch {}
+
+          return { key, proofs, billingTotal };
         })
       );
-      const map: Record<string, string> = {};
-      buttons.forEach(({ key }, i) => {
-        const proofs = results[i] as { status: string }[];
+
+      const map: Record<string, PaymentInfo> = {};
+      results.forEach(({ key, proofs, billingTotal }) => {
+        const totalPaid = (proofs ?? [])
+          .filter((p) => p.status === "approved")
+          .reduce((s, p) => s + (p.amount ?? 0), 0);
+        const remaining = billingTotal > 0 ? Math.max(0, billingTotal - totalPaid) : 0;
+
+        let status: PaymentInfo["status"];
         if (!proofs || proofs.length === 0) {
-          map[key] = "unpaid";
+          status = "unpaid";
         } else if (proofs.every((p) => p.status === "approved")) {
-          map[key] = "approved";
+          status = billingTotal > 0 && remaining > 0 ? "partial" : "approved";
         } else if (proofs.some((p) => p.status === "pending")) {
-          map[key] = "pending";
+          status = "pending";
         } else if (proofs.some((p) => p.status === "rejected")) {
-          map[key] = "rejected";
+          status = "rejected";
         } else {
-          map[key] = "unpaid";
+          status = "unpaid";
         }
+
+        map[key] = { status, totalPaid, billingTotal, remaining };
       });
       setPaymentProofs(map);
     } catch {}
@@ -236,6 +311,9 @@ export default function Page(): JSX.Element {
   const [billingModalLoading, setBillingModalLoading] = useState(false);
   const [billingPrintReady, setBillingPrintReady]   = useState(false);
   const [billingDownloadReady, setBillingDownloadReady] = useState(false);
+
+  // ── Payment history modal state ──────────────────────────────────────
+  const [historyModal, setHistoryModal] = useState<{ key: string; isGroup: boolean; label: string } | null>(null);
 
   // ── Billing modal handlers ───────────────────────────────────────────
   const handleOpenBillingModal = async (btn: BillingButton) => {
@@ -834,7 +912,7 @@ export default function Page(): JSX.Element {
                                 )}
                                 {btn.isGroup && paymentProofs[btn.key] && (
                                   <PaymentStatusBadge
-                                    status={paymentProofs[btn.key] as "pending" | "approved" | "rejected" | "unpaid"}
+                                    status={paymentProofs[btn.key].status}
                                     size="xs"
                                   />
                                 )}
@@ -856,58 +934,158 @@ export default function Page(): JSX.Element {
                       </div>
 
                       {/* ── Payment action section ── */}
-                      <div className="divide-y divide-base-200 border-t border-base-300">
+                      <div className="p-3 space-y-2 bg-base-200/30 border-t border-base-300">
                         {billingButtons.map((btn) => {
-                          const pStatus = paymentProofs[btn.key];
+                          const info     = paymentProofs[btn.key];
+                          const pStatus  = info?.status ?? "unpaid";
                           // btn.key = billingId (group) or poId (single-PO legacy) — both work now
-                          const billingKey = btn.key;
-                          return (
-                            <div key={`pay-${btn.key}`} className="px-5 py-3 bg-base-100 flex items-center justify-between gap-3">
-                              <div className="flex items-center gap-2 min-w-0">
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-base-content/30 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
-                                </svg>
-                                <p className="text-xs text-base-content/50 truncate">
-                                  ชำระเงิน · {btn.isGroup ? `ใบวางบิล ${btn.label}` : btn.label}
-                                </p>
-                              </div>
-                              <div className="flex items-center gap-2 shrink-0">
-                                {(!pStatus || pStatus === "unpaid") ? (
+                          const billingKey   = btn.key;
+                          const billingLabel = btn.isGroup ? `ใบวางบิล ${btn.label}` : btn.label;
+                          const qs           = !btn.isGroup ? "?t=po" : "";
+
+                          if (pStatus === "pending") {
+                            return (
+                              <div key={`pay-${btn.key}`} className="rounded-xl border border-warning/30 bg-warning/5 px-4 py-3.5 flex items-center gap-3.5">
+                                <div className="w-10 h-10 rounded-full bg-warning/15 text-warning flex items-center justify-center shrink-0 animate-pulse">
+                                  <IconClock />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="font-semibold text-sm text-warning">รอตรวจสอบการชำระเงิน</p>
+                                  <p className="text-xs text-base-content/45 mt-0.5 truncate">
+                                    {billingLabel} · ทีมงานกำลังตรวจสอบหลักฐานการโอนเงินของคุณ
+                                  </p>
+                                </div>
+                                <div className="flex items-center gap-2 shrink-0">
                                   <button
-                                    className="btn btn-primary btn-xs"
-                                    onClick={() => router.push(`/Client/payment/${billingKey}${!btn.isGroup ? "?t=po" : ""}`)}
+                                    className="btn btn-sm btn-ghost btn-square"
+                                    title="ประวัติการชำระเงิน"
+                                    onClick={() => setHistoryModal({ key: billingKey, isGroup: btn.isGroup, label: billingLabel })}
                                   >
-                                    ส่งหลักฐานการโอนเงิน
+                                    <IconHistory />
                                   </button>
-                                ) : pStatus === "pending" ? (
-                                  <>
-                                    <span className="text-xs text-warning font-medium">รอตรวจสอบ...</span>
-                                    <button
-                                      className="btn btn-ghost btn-xs"
-                                      onClick={() => router.push(`/Client/payment/status/${billingKey}${!btn.isGroup ? "?t=po" : ""}`)}
-                                    >
-                                      ดูสถานะ
-                                    </button>
-                                  </>
-                                ) : pStatus === "rejected" ? (
-                                  <>
-                                    <span className="text-xs text-error font-medium">ถูกปฏิเสธ</span>
-                                    <button
-                                      className="btn btn-error btn-xs"
-                                      onClick={() => router.push(`/Client/payment/${billingKey}${!btn.isGroup ? "?t=po" : ""}`)}
-                                    >
-                                      ส่งใหม่
-                                    </button>
-                                  </>
-                                ) : pStatus === "approved" ? (
                                   <button
-                                    className="btn btn-success btn-xs"
-                                    onClick={() => router.push(`/Client/payment/status/${billingKey}${!btn.isGroup ? "?t=po" : ""}`)}
+                                    className="btn btn-sm btn-outline btn-warning"
+                                    onClick={() => router.push(`/Client/payment/status/${billingKey}${qs}`)}
+                                  >
+                                    ดูสถานะ
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          }
+
+                          if (pStatus === "rejected") {
+                            return (
+                              <div key={`pay-${btn.key}`} className="rounded-xl border border-error/30 bg-error/5 px-4 py-3.5 flex items-center gap-3.5">
+                                <div className="w-10 h-10 rounded-full bg-error/15 text-error flex items-center justify-center shrink-0">
+                                  <IconXCircle />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="font-semibold text-sm text-error">หลักฐานการชำระเงินถูกปฏิเสธ</p>
+                                  <p className="text-xs text-base-content/45 mt-0.5 truncate">
+                                    {billingLabel} · กรุณาตรวจสอบและส่งหลักฐานการโอนเงินใหม่อีกครั้ง
+                                  </p>
+                                </div>
+                                <div className="flex items-center gap-2 shrink-0">
+                                  <button
+                                    className="btn btn-sm btn-ghost btn-square"
+                                    title="ประวัติการชำระเงิน"
+                                    onClick={() => setHistoryModal({ key: billingKey, isGroup: btn.isGroup, label: billingLabel })}
+                                  >
+                                    <IconHistory />
+                                  </button>
+                                  <button
+                                    className="btn btn-sm btn-error"
+                                    onClick={() => router.push(`/Client/payment/${billingKey}${qs}`)}
+                                  >
+                                    ส่งหลักฐานใหม่
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          }
+
+                          if (pStatus === "partial") {
+                            return (
+                              <div key={`pay-${btn.key}`} className="rounded-xl border border-info/30 bg-info/5 px-4 py-3.5 flex items-center gap-3.5">
+                                <div className="w-10 h-10 rounded-full bg-info/15 text-info flex items-center justify-center shrink-0">
+                                  <IconBanknote />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="font-semibold text-sm text-info">ชำระเงินบางส่วนแล้ว</p>
+                                  <p className="text-xs text-base-content/45 mt-0.5 truncate">
+                                    {billingLabel} · ยังเหลืออีก{" "}
+                                    {info!.remaining.toLocaleString("th-TH", { minimumFractionDigits: 2 })} ฿
+                                  </p>
+                                </div>
+                                <div className="flex items-center gap-2 shrink-0">
+                                  <button
+                                    className="btn btn-sm btn-ghost btn-square"
+                                    title="ประวัติการชำระเงิน"
+                                    onClick={() => setHistoryModal({ key: billingKey, isGroup: btn.isGroup, label: billingLabel })}
+                                  >
+                                    <IconHistory />
+                                  </button>
+                                  <button
+                                    className="btn btn-sm btn-info"
+                                    onClick={() => router.push(`/Client/payment/${billingKey}${qs}`)}
+                                  >
+                                    ชำระส่วนที่เหลือ
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          }
+
+                          if (pStatus === "approved") {
+                            return (
+                              <div key={`pay-${btn.key}`} className="rounded-xl border border-success/30 bg-success/5 px-4 py-3.5 flex items-center gap-3.5">
+                                <div className="w-10 h-10 rounded-full bg-success/15 text-success flex items-center justify-center shrink-0">
+                                  <IconCheckCircle />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="font-semibold text-sm text-success">ชำระเงินเรียบร้อยแล้ว</p>
+                                  <p className="text-xs text-base-content/45 mt-0.5 truncate">
+                                    {billingLabel} · ยืนยันการชำระเงินเรียบร้อย พร้อมดาวน์โหลดใบเสร็จ
+                                  </p>
+                                </div>
+                                <div className="flex items-center gap-2 shrink-0">
+                                  <button
+                                    className="btn btn-sm btn-ghost btn-square"
+                                    title="ประวัติการชำระเงิน"
+                                    onClick={() => setHistoryModal({ key: billingKey, isGroup: btn.isGroup, label: billingLabel })}
+                                  >
+                                    <IconHistory />
+                                  </button>
+                                  <button
+                                    className="btn btn-sm btn-success"
+                                    onClick={() => router.push(`/Client/payment/status/${billingKey}${qs}`)}
                                   >
                                     ดูใบเสร็จ
                                   </button>
-                                ) : null}
+                                </div>
                               </div>
+                            );
+                          }
+
+                          // unpaid (default)
+                          return (
+                            <div key={`pay-${btn.key}`} className="rounded-xl border border-primary/30 bg-primary/5 px-4 py-3.5 flex items-center gap-3.5">
+                              <div className="w-10 h-10 rounded-full bg-primary/15 text-primary flex items-center justify-center shrink-0">
+                                <IconBanknote />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="font-semibold text-sm">ชำระเงิน</p>
+                                <p className="text-xs text-base-content/45 mt-0.5 truncate">
+                                  {billingLabel} · กรุณาอัปโหลดหลักฐานการโอนเงินเพื่อยืนยันคำสั่งซื้อ
+                                </p>
+                              </div>
+                              <button
+                                className="btn btn-sm btn-primary shrink-0"
+                                onClick={() => router.push(`/Client/payment/${billingKey}${qs}`)}
+                              >
+                                ส่งหลักฐานการโอนเงิน
+                              </button>
                             </div>
                           );
                         })}
@@ -967,7 +1145,8 @@ export default function Page(): JSX.Element {
                   {/* Step 4: ชำระเงินแล้ว (derived from payment proof status) */}
                   {(() => {
                     const anyBillingId = billingButtons[0]?.key;
-                    const pStatus = anyBillingId ? paymentProofs[anyBillingId] : undefined;
+                    const info = anyBillingId ? paymentProofs[anyBillingId] : undefined;
+                    const pStatus = info?.status;
                     const paid = pStatus === "approved";
                     return (
                       <div className="flex gap-3">
@@ -986,6 +1165,11 @@ export default function Page(): JSX.Element {
                           )}
                           {pStatus === "pending" && (
                             <p className="text-xs text-warning mt-0.5">รอการตรวจสอบ</p>
+                          )}
+                          {pStatus === "partial" && (
+                            <p className="text-xs text-info mt-0.5">
+                              ชำระบางส่วนแล้ว เหลืออีก {info!.remaining.toLocaleString("th-TH", { minimumFractionDigits: 2 })} ฿
+                            </p>
                           )}
                         </div>
                       </div>
@@ -1139,6 +1323,16 @@ export default function Page(): JSX.Element {
           </div>
           <div className="modal-backdrop" onClick={() => { setModalBilling(null); setBillingModalLoading(false); }} />
         </dialog>
+      )}
+
+      {/* ── Payment History Modal ─────────────────────────────── */}
+      {historyModal && (
+        <PaymentHistoryModal
+          billingKey={historyModal.key}
+          isGroup={historyModal.isGroup}
+          label={historyModal.label}
+          onClose={() => setHistoryModal(null)}
+        />
       )}
 
       {/* ── Learn More Modal ──────────────────────────────────── */}

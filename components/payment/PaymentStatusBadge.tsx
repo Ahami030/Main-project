@@ -9,7 +9,7 @@ interface Props {
 
 const STATUS_MAP: Record<PaymentStatus, { label: string; className: string }> = {
   unpaid:   { label: "ยังไม่ชำระ",   className: "badge-warning" },
-  partial:  { label: "รอตรวจสอบ",    className: "badge-info" },
+  partial:  { label: "ชำระบางส่วน",  className: "badge-info" },
   pending:  { label: "รอตรวจสอบ",    className: "badge-warning" },
   approved: { label: "ชำระแล้ว",     className: "badge-success" },
   paid:     { label: "ชำระแล้ว",     className: "badge-success" },
