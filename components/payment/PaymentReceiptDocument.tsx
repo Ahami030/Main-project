@@ -44,6 +44,19 @@ export default function PaymentReceiptDocument({ receipt }: PaymentReceiptProps)
             position: absolute !important;
             top: 0; left: 0; width: 100%;
           }
+          .receipt-print-dialog, .receipt-print-box {
+            position: static !important;
+            overflow: visible !important;
+            max-height: none !important;
+            height: auto !important;
+            width: 100% !important;
+            max-width: none !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            background: transparent !important;
+            box-shadow: none !important;
+            display: block !important;
+          }
         }
       `}</style>
 
@@ -65,7 +78,7 @@ export default function PaymentReceiptDocument({ receipt }: PaymentReceiptProps)
       >
         {/* Header */}
         <div style={{
-          background: "linear-gradient(135deg, #166534 0%, #15803d 100%)",
+          backgroundColor: "#166534",
           borderRadius: "8px",
           padding: "16px 20px",
           marginBottom: "20px",
@@ -103,9 +116,7 @@ export default function PaymentReceiptDocument({ receipt }: PaymentReceiptProps)
 
         {/* Approved stamp */}
         <div style={{
-          display: "inline-flex",
-          alignItems: "center",
-          gap: "8px",
+          display: "inline-block",
           backgroundColor: "#dcfce7",
           border: "1.5px solid #16a34a",
           borderRadius: "999px",
@@ -113,14 +124,17 @@ export default function PaymentReceiptDocument({ receipt }: PaymentReceiptProps)
           marginBottom: "20px",
         }}>
           <span style={{
+            display: "inline-block",
             width: "20px", height: "20px", borderRadius: "50%",
             backgroundColor: "#16a34a",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            color: "#ffffff", fontSize: "12px", fontWeight: 700, lineHeight: 1,
+            color: "#ffffff", fontSize: "12px", fontWeight: 700,
+            textAlign: "center", lineHeight: "20px",
+            verticalAlign: "middle",
+            marginRight: "8px",
           }}>✓</span>
-          <p style={{ color: "#15803d", fontWeight: 700, fontSize: "13px", margin: 0, letterSpacing: "0.08em" }}>
+          <span style={{ color: "#15803d", fontWeight: 700, fontSize: "13px", letterSpacing: "0.08em", verticalAlign: "middle" }}>
             รับชำระเงินแล้ว
-          </p>
+          </span>
         </div>
 
         {/* Meta */}
