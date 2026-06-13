@@ -16,6 +16,30 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: "user", // ⭐ สำคัญ
     },
+    organizationName: {
+      type: String,
+      default: "",
+    },
+    taxId: {
+      type: String,
+      default: "",
+    },
+    phone: {
+      type: String,
+      default: "",
+    },
+    lineId: {
+      type: String,
+      default: "",
+    },
+    billingAddress: {
+      type: String,
+      default: "",
+    },
+    shippingAddress: {
+      type: String,
+      default: "",
+    },
   },
   { timestamps: true }
 );
