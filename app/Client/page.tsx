@@ -582,35 +582,56 @@ export default function Page(): JSX.Element {
 
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
-    <main className="min-h-screen bg-base-200 text-base-content">
-      <div className="max-w-6xl mx-auto px-4 md:px-8 py-6 md:py-10 space-y-4 md:space-y-5">
+    <main className="relative min-h-screen bg-base-200 text-base-content overflow-hidden">
+      {/* ── Decorative aurora background ─────────────────────────── */}
+      <div aria-hidden className="pointer-events-none fixed inset-0 overflow-hidden">
+        <div className="absolute -top-40 -left-32 w-[34rem] h-[34rem] rounded-full bg-primary/20 blur-[120px] opacity-50" />
+        <div className="absolute top-32 -right-40 w-[32rem] h-[32rem] rounded-full bg-accent/20 blur-[120px] opacity-40" />
+        <div className="absolute bottom-[-10rem] left-1/3 w-[30rem] h-[30rem] rounded-full bg-secondary/15 blur-[120px] opacity-40" />
+        <div
+          className="absolute inset-0 opacity-[0.025]"
+          style={{
+            backgroundImage:
+              "linear-gradient(to right, currentColor 1px, transparent 1px), linear-gradient(to bottom, currentColor 1px, transparent 1px)",
+            backgroundSize: "44px 44px",
+          }}
+        />
+      </div>
+
+      <div className="relative max-w-6xl mx-auto px-4 md:px-8 py-6 md:py-10 space-y-4 md:space-y-5">
 
         {/* ── User Card ─────────────────────────────────────────── */}
-        <div className="card bg-base-100 border border-base-300 shadow-sm">
-          <div className="card-body py-5 px-6">
+        <div className="card relative overflow-hidden border border-base-300/60 bg-base-100/80 backdrop-blur-xl rounded-3xl shadow-xl shadow-base-300/30 transition-all duration-300 hover:shadow-2xl">
+          {/* gradient banner */}
+          <div className="absolute inset-x-0 top-0 h-20 bg-gradient-to-r from-primary/20 via-accent/15 to-secondary/20" />
+          <div className="absolute inset-x-0 top-0 h-20 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-accent/20 to-transparent" />
+          <div className="card-body relative py-5 px-6">
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-4">
                 <div className="avatar placeholder shrink-0">
-                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary to-accent text-primary-content font-bold text-lg flex items-center justify-center">
+                  <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-primary to-accent text-primary-content font-bold text-xl flex items-center justify-center ring-4 ring-base-100 shadow-lg shadow-primary/30">
                     <span>{name[0]?.toUpperCase()}</span>
                   </div>
                 </div>
                 <div>
-                  <h2 className="font-semibold text-base leading-snug">
+                  <h2 className="font-bold text-lg leading-snug tracking-tight">
                     Welcome &ldquo;{name}&rdquo;
                   </h2>
                   <p className="text-sm text-base-content/55 mt-0.5">
                     You are logged in as {email}
                   </p>
                   {uid && (
-                    <p className="text-xs text-base-content/35 mt-0.5">
-                      Your id is: {uid}
+                    <p className="text-xs text-base-content/35 mt-0.5 font-mono">
+                      ID · {uid}
                     </p>
                   )}
                 </div>
               </div>
-              <div className="flex items-center gap-1.5 text-xs text-success font-medium shrink-0">
-                <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
+              <div className="flex items-center gap-1.5 text-xs text-success font-medium shrink-0 rounded-full border border-success/25 bg-success/10 px-3 py-1.5 backdrop-blur-sm">
+                <span className="relative flex h-2 w-2">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75" />
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-success" />
+                </span>
                 ออนไลน์
               </div>
             </div>
@@ -620,7 +641,7 @@ export default function Page(): JSX.Element {
         {/* ── Main Section ──────────────────────────────────────── */}
         {loading ? (
 
-          <div className="card bg-base-100 border border-base-300 shadow-sm">
+          <div className="card bg-base-100/85 backdrop-blur-xl border border-base-300/60 rounded-3xl shadow-xl shadow-base-300/30 transition-all duration-300 hover:shadow-2xl">
             <div className="card-body items-center py-24 gap-3">
               <span className="loading loading-spinner loading-lg text-primary" />
               <p className="text-sm text-base-content/40">กำลังโหลด...</p>
@@ -630,8 +651,8 @@ export default function Page(): JSX.Element {
         ) : latest && meta && currentStep ? (
 
           /* ── Status Card (มี quotation อยู่) ── */
-          <div className="card bg-base-100 border border-base-300 shadow-sm overflow-hidden">
-            <div className={`h-1 bg-gradient-to-r ${meta.bar}`} />
+          <div className="card bg-base-100/85 backdrop-blur-xl border border-base-300/60 rounded-3xl shadow-xl shadow-base-300/30 transition-all duration-300 hover:shadow-2xl overflow-hidden">
+            <div className={`h-1.5 bg-gradient-to-r ${meta.bar}`} />
             <div className="card-body gap-5 pt-5 px-6 md:px-8">
 
               {/* File header */}
@@ -778,8 +799,8 @@ export default function Page(): JSX.Element {
         ) : (
 
           /* ── Hero CTA (ยังไม่มี quotation) ── */
-          <div className="card bg-base-100 border border-base-300 shadow-sm overflow-hidden">
-            <div className="h-1 bg-gradient-to-r from-primary to-accent" />
+          <div className="card bg-base-100/85 backdrop-blur-xl border border-base-300/60 rounded-3xl shadow-xl shadow-base-300/30 transition-all duration-300 hover:shadow-2xl overflow-hidden">
+            <div className="h-1.5 bg-gradient-to-r from-primary to-accent" />
             <div className="card-body py-10 px-8 gap-0">
               <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-10">
 
@@ -800,7 +821,7 @@ export default function Page(): JSX.Element {
                   <div className="flex flex-wrap gap-3">
                     <button
                       onClick={() => router.push("/Client/quotation")}
-                      className="btn btn-primary btn-lg gap-2 shadow-lg shadow-primary/20"
+                      className="btn btn-primary btn-lg gap-2 shadow-lg shadow-primary/30 transition-transform hover:scale-[1.03] active:scale-95"
                     >
                       เริ่มต้นเลย
                       <IconArrow />
@@ -843,7 +864,7 @@ export default function Page(): JSX.Element {
         {/* ── PO Section ────────────────────────────────────────── */}
         {poLoading ? (
 
-          <div className="card bg-base-100 border border-base-300 shadow-sm">
+          <div className="card bg-base-100/85 backdrop-blur-xl border border-base-300/60 rounded-3xl shadow-xl shadow-base-300/30 transition-all duration-300 hover:shadow-2xl">
             <div className="card-body items-center py-12 gap-3">
               <span className="loading loading-spinner loading-lg text-secondary" />
               <p className="text-sm text-base-content/40">กำลังโหลดใบสั่งซื้อ...</p>
@@ -853,8 +874,8 @@ export default function Page(): JSX.Element {
         ) : poLatest && poMeta && poCurrentStep ? (
 
           /* ── PO Status Card ── */
-          <div className="card bg-base-100 border border-base-300 shadow-sm overflow-hidden">
-            <div className={`h-1 bg-linear-to-r ${poMeta.bar}`} />
+          <div className="card bg-base-100/85 backdrop-blur-xl border border-base-300/60 rounded-3xl shadow-xl shadow-base-300/30 transition-all duration-300 hover:shadow-2xl overflow-hidden">
+            <div className={`h-1.5 bg-linear-to-r ${poMeta.bar}`} />
             <div className="card-body gap-5 pt-5 px-6 md:px-8">
 
               <div className="flex items-start justify-between gap-4">
@@ -1241,8 +1262,8 @@ export default function Page(): JSX.Element {
         ) : (
 
           /* ── PO Hero CTA ── */
-          <div className="card bg-base-100 border border-base-300 shadow-sm overflow-hidden">
-            <div className="h-1 bg-linear-to-r from-secondary to-info" />
+          <div className="card bg-base-100/85 backdrop-blur-xl border border-base-300/60 rounded-3xl shadow-xl shadow-base-300/30 transition-all duration-300 hover:shadow-2xl overflow-hidden">
+            <div className="h-1.5 bg-linear-to-r from-secondary to-info" />
             <div className="card-body py-10 px-8 gap-0">
               <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-10">
 
@@ -1262,7 +1283,7 @@ export default function Page(): JSX.Element {
                   <div className="flex flex-wrap gap-3">
                     <button
                       onClick={() => router.push("/Client/po")}
-                      className="btn btn-secondary btn-lg gap-2 shadow-lg shadow-secondary/20"
+                      className="btn btn-secondary btn-lg gap-2 shadow-lg shadow-secondary/30 transition-transform hover:scale-[1.03] active:scale-95"
                     >
                       เริ่มสั่งซื้อ
                       <IconArrow />
