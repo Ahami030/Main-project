@@ -1,17 +1,17 @@
 @import "tailwindcss";
 
-/* ── Sofia Sans — closest open-source match to Mastercard's MarkForMC ──────── */
-@import url('https://fonts.googleapis.com/css2?family=Sofia+Sans:ital,wght@0,300..800;1,300..800&display=swap');
-
 @plugin "daisyui" {
   themes: light --default, dark --prefersdark, halloween;
 }
 
-/* ── Mastercard editorial theme ───────────────────────────────────────────── */
-@plugin "daisyui/theme" {
-  name: "mastercard";
-  default: false;
-  prefersdark: false;
+/* ── Mastercard editorial theme ───────────────────────────────────────────────
+   Declared as a plain data-theme block (not @plugin "daisyui/theme", which is
+   skipped when an explicit `themes:` list is present). DaisyUI utilities already
+   reference var(--color-*) / var(--radius-*), so overriding them on a scoped
+   [data-theme="mastercard"] element re-themes that subtree. Applied only to the
+   Client dashboard <main>, so the global ThemeSwitcher is untouched.
+   Sofia Sans (the .font-mc family) is loaded via <link> in app/layout.tsx. */
+[data-theme="mastercard"] {
   color-scheme: light;
 
   /* Surfaces: canvas cream → lifted cream → cream border */
@@ -45,7 +45,7 @@
   --color-error: #b3261e;
   --color-error-content: #ffffff;
 
-  /* Radius scale — small / 20px buttons / 40px boxes; pills via rounded-full */
+  /* Radius scale — 20px buttons / 40px boxes; full pills via rounded-full */
   --radius-selector: 2rem;
   --radius-field: 1.2rem;
   --radius-box: 2.5rem;
@@ -58,24 +58,20 @@
   --noise: 0;
 }
 
-/* ── Mastercard atmospheric shadows — soft, large-spread, low-opacity ─────── */
-@layer utilities {
-  .shadow-mc-sm {
-    box-shadow: rgba(0, 0, 0, 0.04) 0px 4px 24px 0px;
-  }
-  .shadow-mc {
-    box-shadow: rgba(0, 0, 0, 0.08) 0px 24px 48px 0px;
-  }
-  .shadow-mc-lg {
-    box-shadow: rgba(0, 0, 0, 0.12) 0px 36px 70px 0px;
-  }
-
-  /* Sofia Sans editorial type — 450 body weight, tight display tracking */
-  .font-mc {
-    font-family: "Sofia Sans", system-ui, Arial, sans-serif;
-    font-weight: 450;
-  }
-  .tracking-mc {
-    letter-spacing: -0.02em;
-  }
+/* ── Mastercard atmospheric shadows + editorial type (Tailwind v4 @utility) ── */
+@utility shadow-mc-sm {
+  box-shadow: rgba(0, 0, 0, 0.04) 0px 4px 24px 0px;
+}
+@utility shadow-mc {
+  box-shadow: rgba(0, 0, 0, 0.06) 0px 18px 40px 0px;
+}
+@utility shadow-mc-lg {
+  box-shadow: rgba(0, 0, 0, 0.10) 0px 30px 60px 0px;
+}
+@utility font-mc {
+  font-family: "Sofia Sans", system-ui, Arial, sans-serif;
+  font-weight: 450;
+}
+@utility tracking-mc {
+  letter-spacing: -0.02em;
 }

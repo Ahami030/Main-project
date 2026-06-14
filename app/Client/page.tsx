@@ -580,25 +580,159 @@ export default function Page(): JSX.Element {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [billingButtons.map((b) => b.key).join(",")]);
 
+  // ── PO status timeline (shared by billed & in-progress layouts) ──────────
+  const poTimeline = poLatest ? (
+    <div className="md:w-64 shrink-0 flex flex-col gap-0">
+      {PO_STEPS.map((step, i) => {
+        const done    = i <= PO_STATUS_ORDER[poLatest.status];
+        const current = i === PO_STATUS_ORDER[poLatest.status];
+        return (
+          <div key={step.key} className="flex gap-3">
+            <div className="flex flex-col items-center">
+              <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 transition-colors
+                ${done ? "bg-secondary text-secondary-content" : "bg-base-200 text-base-content/30"}`}>
+                {done ? "✓" : i + 1}
+              </div>
+              <div className={`w-px flex-1 my-1 ${done ? "bg-secondary/40" : "bg-base-300"}`} />
+            </div>
+            <div className="pb-4 pt-1 min-w-0">
+              <p className={`text-sm font-medium leading-tight ${current ? "text-base-content" : done ? "text-base-content/70" : "text-base-content/30"}`}>
+                {step.label}
+              </p>
+              {current && (
+                <p className="text-xs text-base-content/45 mt-0.5">{step.sublabel}</p>
+              )}
+            </div>
+          </div>
+        );
+      })}
+      {/* Step 4: ชำระเงินแล้ว (derived from payment proof status) */}
+      {(() => {
+        const anyBillingId = billingButtons[0]?.key;
+        const info = anyBillingId ? paymentProofs[anyBillingId] : undefined;
+        const pStatus = info?.status;
+        const paid = pStatus === "approved";
+        return (
+          <div className="flex gap-3">
+            <div className="flex flex-col items-center">
+              <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 transition-colors
+                ${paid ? "bg-success text-success-content" : "bg-base-200 text-base-content/30"}`}>
+                {paid ? "✓" : "4"}
+              </div>
+            </div>
+            <div className="pb-4 pt-1 min-w-0">
+              <p className={`text-sm font-medium leading-tight ${paid ? "text-success" : "text-base-content/30"}`}>
+                ชำระเงินแล้ว
+              </p>
+              {paid && (
+                <p className="text-xs text-base-content/45 mt-0.5">ยืนยันการชำระเงินเรียบร้อย</p>
+              )}
+              {pStatus === "pending" && (
+                <p className="text-xs text-warning mt-0.5">รอการตรวจสอบ</p>
+              )}
+              {pStatus === "partial" && (
+                <p className="text-xs text-info mt-0.5">
+                  ชำระบางส่วนแล้ว เหลืออีก {info!.remaining.toLocaleString("th-TH", { minimumFractionDigits: 2 })} ฿
+                </p>
+              )}
+            </div>
+          </div>
+        );
+      })()}
+    </div>
+  ) : null;
+
+  // ── Payment panel — full-width, spacious; each billing gets its own card ──
+  const paymentPanel = (poLatest?.status === "billed" && billingButtons.length > 0) ? (
+    <div>
+      <p className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.16em] text-base-content/55 mb-4">
+        <span className="w-1.5 h-1.5 rounded-full bg-accent" />
+        การชำระเงิน
+      </p>
+      <div className={`grid gap-4 ${billingButtons.length > 1 ? "lg:grid-cols-2" : "grid-cols-1"}`}>
+        {billingButtons.map((btn) => {
+          const info         = paymentProofs[btn.key];
+          const pStatus      = info?.status ?? "unpaid";
+          const billingKey   = btn.key;
+          const billingLabel = btn.isGroup ? `ใบวางบิล ${btn.label}` : btn.label;
+          const qs           = !btn.isGroup ? "?t=po" : "";
+
+          const STAT: Record<string, {
+            wrap: string; iconWrap: string; titleColor: string;
+            Icon: () => JSX.Element; title: string; desc: JSX.Element | string;
+            cta: string; btnClass: string; pulse?: boolean; toStatus?: boolean;
+          }> = {
+            pending:  { wrap: "border-warning/30 bg-warning/5", iconWrap: "bg-warning/15 text-warning", titleColor: "text-warning", Icon: IconClock, title: "รอตรวจสอบการชำระเงิน", desc: "ทีมงานกำลังตรวจสอบหลักฐานการโอนเงินของคุณ", cta: "ดูสถานะ", btnClass: "btn-outline btn-warning", pulse: true, toStatus: true },
+            rejected: { wrap: "border-error/30 bg-error/5", iconWrap: "bg-error/15 text-error", titleColor: "text-error", Icon: IconXCircle, title: "หลักฐานถูกปฏิเสธ", desc: "กรุณาตรวจสอบและส่งหลักฐานการโอนเงินใหม่อีกครั้ง", cta: "ส่งหลักฐานใหม่", btnClass: "btn-error" },
+            partial:  { wrap: "border-info/30 bg-info/5", iconWrap: "bg-info/15 text-info", titleColor: "text-info", Icon: IconBanknote, title: "ชำระเงินบางส่วนแล้ว", desc: <>ยังเหลืออีก <span className="font-semibold text-info">{info?.remaining.toLocaleString("th-TH", { minimumFractionDigits: 2 })} ฿</span></>, cta: "ชำระส่วนที่เหลือ", btnClass: "btn-info" },
+            approved: { wrap: "border-success/30 bg-success/5", iconWrap: "bg-success/15 text-success", titleColor: "text-success", Icon: IconCheckCircle, title: "ชำระเงินเรียบร้อยแล้ว", desc: "ยืนยันการชำระเงินเรียบร้อย พร้อมดาวน์โหลดใบเสร็จ", cta: "ดูใบเสร็จ", btnClass: "btn-success", toStatus: true },
+            unpaid:   { wrap: "border-primary/25 bg-primary/5", iconWrap: "bg-primary/10 text-primary", titleColor: "text-base-content", Icon: IconBanknote, title: "รอการชำระเงิน", desc: "กรุณาอัปโหลดหลักฐานการโอนเงินเพื่อยืนยันคำสั่งซื้อ", cta: "ส่งหลักฐานการโอนเงิน", btnClass: "btn-primary" },
+          };
+          const cfg  = STAT[pStatus] ?? STAT.unpaid;
+          const Icon = cfg.Icon;
+          const href = cfg.toStatus
+            ? `/Client/payment/status/${billingKey}${qs}`
+            : `/Client/payment/${billingKey}${qs}`;
+
+          return (
+            <div key={`pay-${btn.key}`} className={`rounded-[1.75rem] border ${cfg.wrap} p-5 sm:p-6 flex flex-col gap-5`}>
+              <div className="flex items-start gap-4">
+                <div className={`w-12 h-12 rounded-full flex items-center justify-center shrink-0 ${cfg.iconWrap} ${cfg.pulse ? "animate-pulse" : ""}`}>
+                  <Icon />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className={`font-medium text-base tracking-mc leading-tight ${cfg.titleColor}`}>
+                    {cfg.title}
+                  </p>
+                  <p className="text-sm text-base-content/55 mt-1">{cfg.desc}</p>
+                  <p className="inline-flex items-center gap-1.5 text-xs text-base-content/40 mt-2 font-medium">
+                    <span className="w-1 h-1 rounded-full bg-base-content/30" />
+                    {billingLabel}
+                  </p>
+                </div>
+                {pStatus !== "unpaid" && (
+                  <button
+                    className="btn btn-ghost btn-sm btn-circle indicator shrink-0"
+                    title="ประวัติการชำระเงิน"
+                    onClick={() => {
+                      setHistoryModal({ key: billingKey, isGroup: btn.isGroup, label: billingLabel });
+                      markReviewSeen(billingKey, info?.lastReviewedAt ?? null);
+                    }}
+                  >
+                    {hasUnseenReview(billingKey) && (
+                      <span className="indicator-item indicator-top indicator-end w-2.5 h-2.5 bg-error rounded-full ring-2 ring-base-100" />
+                    )}
+                    <IconHistory />
+                  </button>
+                )}
+              </div>
+              <button
+                className={`btn ${cfg.btnClass} w-full`}
+                onClick={() => router.push(href)}
+              >
+                {cfg.cta}
+              </button>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  ) : null;
+
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
     <main
       data-theme="mastercard"
       className="font-mc relative min-h-screen bg-base-200 text-base-content overflow-hidden"
     >
-      {/* ── Decorative orbital arcs (Light Signal Orange, hand-drawn feel) ── */}
-      <svg
-        aria-hidden
-        className="pointer-events-none fixed inset-0 w-full h-full opacity-[0.18]"
-        preserveAspectRatio="none"
-        viewBox="0 0 1440 900"
-        fill="none"
-      >
-        <path d="M-100 180 C 360 60, 1080 60, 1560 220" stroke="#f37338" strokeWidth="1.2" />
-        <path d="M-100 760 C 420 880, 1040 840, 1560 700" stroke="#f37338" strokeWidth="1.2" />
-        <circle cx="1320" cy="150" r="220" stroke="#f37338" strokeWidth="1" opacity="0.5" />
-        <circle cx="120" cy="780" r="180" stroke="#f37338" strokeWidth="1" opacity="0.5" />
-      </svg>
+      {/* ── Decorative orbital rings — true circles bleeding off the corners,
+             cradling the content from outside rather than crossing it ─────── */}
+      <div aria-hidden className="pointer-events-none fixed inset-0 overflow-hidden">
+        <div className="absolute -top-[30rem] -right-[18rem] w-[58rem] h-[58rem] rounded-full border border-accent/15" />
+        <div className="absolute -top-[22rem] -right-[10rem] w-[42rem] h-[42rem] rounded-full border border-accent/10" />
+        <div className="absolute -bottom-[34rem] -left-[20rem] w-[58rem] h-[58rem] rounded-full border border-secondary/12" />
+        <div className="absolute -bottom-[26rem] -left-[12rem] w-[42rem] h-[42rem] rounded-full border border-secondary/[0.08]" />
+      </div>
 
       <div className="relative max-w-6xl mx-auto px-4 md:px-8 py-8 md:py-14 space-y-5 md:space-y-7">
 
@@ -900,6 +1034,7 @@ export default function Page(): JSX.Element {
 
               <div className="divider my-0" />
 
+              <div className="flex flex-col gap-6">
               <div className="flex flex-col md:flex-row gap-6">
 
                 {/* Left: spotlight (non-billed) OR billing list (billed) */}
@@ -985,189 +1120,6 @@ export default function Page(): JSX.Element {
                           </button>
                         ))}
                       </div>
-
-                      {/* ── Payment action section ── */}
-                      <div className="p-3 space-y-2 bg-base-200/30 border-t border-base-300">
-                        {billingButtons.map((btn) => {
-                          const info     = paymentProofs[btn.key];
-                          const pStatus  = info?.status ?? "unpaid";
-                          // btn.key = billingId (group) or poId (single-PO legacy) — both work now
-                          const billingKey   = btn.key;
-                          const billingLabel = btn.isGroup ? `ใบวางบิล ${btn.label}` : btn.label;
-                          const qs           = !btn.isGroup ? "?t=po" : "";
-
-                          if (pStatus === "pending") {
-                            return (
-                              <div key={`pay-${btn.key}`} className="rounded-xl border border-warning/30 bg-warning/5 px-4 py-3.5 flex items-center gap-3.5">
-                                <div className="w-10 h-10 rounded-full bg-warning/15 text-warning flex items-center justify-center shrink-0 animate-pulse">
-                                  <IconClock />
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <p className="font-semibold text-sm text-warning">รอตรวจสอบการชำระเงิน</p>
-                                  <p className="text-xs text-base-content/45 mt-0.5 truncate">
-                                    {billingLabel} · ทีมงานกำลังตรวจสอบหลักฐานการโอนเงินของคุณ
-                                  </p>
-                                </div>
-                                <div className="flex items-center gap-2 shrink-0">
-                                  <button
-                                    className="btn btn-sm btn-ghost btn-square indicator"
-                                    title="ประวัติการชำระเงิน"
-                                    onClick={() => {
-                                      setHistoryModal({ key: billingKey, isGroup: btn.isGroup, label: billingLabel });
-                                      markReviewSeen(billingKey, info?.lastReviewedAt ?? null);
-                                    }}
-                                  >
-                                    {hasUnseenReview(billingKey) && (
-                                      <span className="indicator-item indicator-top indicator-end w-2.5 h-2.5 bg-error rounded-full ring-2 ring-base-100" />
-                                    )}
-                                    <IconHistory />
-                                  </button>
-                                  <button
-                                    className="btn btn-sm btn-outline btn-warning"
-                                    onClick={() => router.push(`/Client/payment/status/${billingKey}${qs}`)}
-                                  >
-                                    ดูสถานะ
-                                  </button>
-                                </div>
-                              </div>
-                            );
-                          }
-
-                          if (pStatus === "rejected") {
-                            return (
-                              <div key={`pay-${btn.key}`} className="rounded-xl border border-error/30 bg-error/5 px-4 py-3.5 flex items-center gap-3.5">
-                                <div className="w-10 h-10 rounded-full bg-error/15 text-error flex items-center justify-center shrink-0">
-                                  <IconXCircle />
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <p className="font-semibold text-sm text-error">หลักฐานการชำระเงินถูกปฏิเสธ</p>
-                                  <p className="text-xs text-base-content/45 mt-0.5 truncate">
-                                    {billingLabel} · กรุณาตรวจสอบและส่งหลักฐานการโอนเงินใหม่อีกครั้ง
-                                  </p>
-                                </div>
-                                <div className="flex items-center gap-2 shrink-0">
-                                  <button
-                                    className="btn btn-sm btn-ghost btn-square indicator"
-                                    title="ประวัติการชำระเงิน"
-                                    onClick={() => {
-                                      setHistoryModal({ key: billingKey, isGroup: btn.isGroup, label: billingLabel });
-                                      markReviewSeen(billingKey, info?.lastReviewedAt ?? null);
-                                    }}
-                                  >
-                                    {hasUnseenReview(billingKey) && (
-                                      <span className="indicator-item indicator-top indicator-end w-2.5 h-2.5 bg-error rounded-full ring-2 ring-base-100" />
-                                    )}
-                                    <IconHistory />
-                                  </button>
-                                  <button
-                                    className="btn btn-sm btn-error"
-                                    onClick={() => router.push(`/Client/payment/${billingKey}${qs}`)}
-                                  >
-                                    ส่งหลักฐานใหม่
-                                  </button>
-                                </div>
-                              </div>
-                            );
-                          }
-
-                          if (pStatus === "partial") {
-                            return (
-                              <div key={`pay-${btn.key}`} className="rounded-xl border border-info/30 bg-info/5 px-4 py-3.5 flex items-center gap-3.5">
-                                <div className="w-10 h-10 rounded-full bg-info/15 text-info flex items-center justify-center shrink-0">
-                                  <IconBanknote />
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <p className="font-semibold text-sm text-info">ชำระเงินบางส่วนแล้ว</p>
-                                  <p className="text-xs text-base-content/45 mt-0.5 truncate">
-                                    {billingLabel} · ยังเหลืออีก{" "}
-                                    {info!.remaining.toLocaleString("th-TH", { minimumFractionDigits: 2 })} ฿
-                                  </p>
-                                </div>
-                                <div className="flex items-center gap-2 shrink-0">
-                                  <button
-                                    className="btn btn-sm btn-ghost btn-square indicator"
-                                    title="ประวัติการชำระเงิน"
-                                    onClick={() => {
-                                      setHistoryModal({ key: billingKey, isGroup: btn.isGroup, label: billingLabel });
-                                      markReviewSeen(billingKey, info?.lastReviewedAt ?? null);
-                                    }}
-                                  >
-                                    {hasUnseenReview(billingKey) && (
-                                      <span className="indicator-item indicator-top indicator-end w-2.5 h-2.5 bg-error rounded-full ring-2 ring-base-100" />
-                                    )}
-                                    <IconHistory />
-                                  </button>
-                                  <button
-                                    className="btn btn-sm btn-info"
-                                    onClick={() => router.push(`/Client/payment/${billingKey}${qs}`)}
-                                  >
-                                    ชำระส่วนที่เหลือ
-                                  </button>
-                                </div>
-                              </div>
-                            );
-                          }
-
-                          if (pStatus === "approved") {
-                            return (
-                              <div key={`pay-${btn.key}`} className="rounded-xl border border-success/30 bg-success/5 px-4 py-3.5 flex items-center gap-3.5">
-                                <div className="w-10 h-10 rounded-full bg-success/15 text-success flex items-center justify-center shrink-0">
-                                  <IconCheckCircle />
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <p className="font-semibold text-sm text-success">ชำระเงินเรียบร้อยแล้ว</p>
-                                  <p className="text-xs text-base-content/45 mt-0.5 truncate">
-                                    {billingLabel} · ยืนยันการชำระเงินเรียบร้อย พร้อมดาวน์โหลดใบเสร็จ
-                                  </p>
-                                </div>
-                                <div className="flex items-center gap-2 shrink-0">
-                                  <button
-                                    className="btn btn-sm btn-ghost btn-square indicator"
-                                    title="ประวัติการชำระเงิน"
-                                    onClick={() => {
-                                      setHistoryModal({ key: billingKey, isGroup: btn.isGroup, label: billingLabel });
-                                      markReviewSeen(billingKey, info?.lastReviewedAt ?? null);
-                                    }}
-                                  >
-                                    {hasUnseenReview(billingKey) && (
-                                      <span className="indicator-item indicator-top indicator-end w-2.5 h-2.5 bg-error rounded-full ring-2 ring-base-100" />
-                                    )}
-                                    <IconHistory />
-                                  </button>
-                                  <button
-                                    className="btn btn-sm btn-success"
-                                    onClick={() => router.push(`/Client/payment/status/${billingKey}${qs}`)}
-                                  >
-                                    ดูใบเสร็จ
-                                  </button>
-                                </div>
-                              </div>
-                            );
-                          }
-
-                          // unpaid (default)
-                          return (
-                            <div key={`pay-${btn.key}`} className="rounded-xl border border-primary/30 bg-primary/5 px-4 py-3.5 flex items-center gap-3.5">
-                              <div className="w-10 h-10 rounded-full bg-primary/15 text-primary flex items-center justify-center shrink-0">
-                                <IconBanknote />
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <p className="font-semibold text-sm">ชำระเงิน</p>
-                                <p className="text-xs text-base-content/45 mt-0.5 truncate">
-                                  {billingLabel} · กรุณาอัปโหลดหลักฐานการโอนเงินเพื่อยืนยันคำสั่งซื้อ
-                                </p>
-                              </div>
-                              <button
-                                className="btn btn-sm btn-primary shrink-0"
-                                onClick={() => router.push(`/Client/payment/${billingKey}${qs}`)}
-                              >
-                                ส่งหลักฐานการโอนเงิน
-                              </button>
-                            </div>
-                          );
-                        })}
-                      </div>
-
                     </div>
 
                   ) : (
@@ -1194,66 +1146,10 @@ export default function Page(): JSX.Element {
                   )}
                 </div>
 
-                {/* Right: steps timeline */}
-                <div className="md:w-64 shrink-0 flex flex-col gap-0">
-                  {PO_STEPS.map((step, i) => {
-                    const done    = i <= PO_STATUS_ORDER[poLatest.status];
-                    const current = i === PO_STATUS_ORDER[poLatest.status];
-                    return (
-                      <div key={step.key} className="flex gap-3">
-                        <div className="flex flex-col items-center">
-                          <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 transition-colors
-                            ${done ? "bg-secondary text-secondary-content" : "bg-base-200 text-base-content/30"}`}>
-                            {done ? "✓" : i + 1}
-                          </div>
-                          <div className={`w-px flex-1 my-1 ${done ? "bg-secondary/40" : "bg-base-300"}`} />
-                        </div>
-                        <div className="pb-4 pt-1 min-w-0">
-                          <p className={`text-sm font-medium leading-tight ${current ? "text-base-content" : done ? "text-base-content/70" : "text-base-content/30"}`}>
-                            {step.label}
-                          </p>
-                          {current && (
-                            <p className="text-xs text-base-content/45 mt-0.5">{step.sublabel}</p>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                  {/* Step 4: ชำระเงินแล้ว (derived from payment proof status) */}
-                  {(() => {
-                    const anyBillingId = billingButtons[0]?.key;
-                    const info = anyBillingId ? paymentProofs[anyBillingId] : undefined;
-                    const pStatus = info?.status;
-                    const paid = pStatus === "approved";
-                    return (
-                      <div className="flex gap-3">
-                        <div className="flex flex-col items-center">
-                          <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 transition-colors
-                            ${paid ? "bg-success text-success-content" : "bg-base-200 text-base-content/30"}`}>
-                            {paid ? "✓" : "4"}
-                          </div>
-                        </div>
-                        <div className="pb-4 pt-1 min-w-0">
-                          <p className={`text-sm font-medium leading-tight ${paid ? "text-success" : "text-base-content/30"}`}>
-                            ชำระเงินแล้ว
-                          </p>
-                          {paid && (
-                            <p className="text-xs text-base-content/45 mt-0.5">ยืนยันการชำระเงินเรียบร้อย</p>
-                          )}
-                          {pStatus === "pending" && (
-                            <p className="text-xs text-warning mt-0.5">รอการตรวจสอบ</p>
-                          )}
-                          {pStatus === "partial" && (
-                            <p className="text-xs text-info mt-0.5">
-                              ชำระบางส่วนแล้ว เหลืออีก {info!.remaining.toLocaleString("th-TH", { minimumFractionDigits: 2 })} ฿
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })()}
-                </div>
+                {poTimeline}
 
+              </div>
+                {paymentPanel}
               </div>
             </div>
           </div>
