@@ -1,5 +1,5 @@
 'use client';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { JSX, useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import InlineChatPanel from '@/components/admin/InlineChatPanel';
 
@@ -43,6 +43,59 @@ const NEXT_STATUS: Record<QuotationStatus, QuotationStatus | null> = {
   confirmed:  null,
 };
 
+// ─── Reusable navigation card (Mastercard editorial) ───────────────────────────
+function NavCard({
+  category, title, desc, icon, iconWrap, count, cta = 'ดูทั้งหมด', onClick,
+}: {
+  category: string;
+  title: string;
+  desc: string;
+  icon: JSX.Element;
+  iconWrap: string;
+  count?: number;
+  cta?: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="group card bg-base-100 border border-base-300/70 rounded-[2rem] shadow-mc-sm hover:shadow-mc hover:-translate-y-0.5 transition-all duration-300 text-left"
+    >
+      <div className="card-body p-6 gap-0">
+        <div className="flex items-start justify-between gap-3 mb-5">
+          <div className={`w-12 h-12 rounded-full flex items-center justify-center shrink-0 ${iconWrap}`}>
+            {icon}
+          </div>
+          {!!count && count > 0 && (
+            <span className="min-w-6 h-6 px-2 rounded-full bg-error text-error-content text-xs font-bold flex items-center justify-center animate-pulse shrink-0">
+              {count > 99 ? '99+' : count}
+            </span>
+          )}
+        </div>
+        <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-base-content/40">{category}</p>
+        <h2 className="font-medium text-lg tracking-mc leading-tight mt-1">{title}</h2>
+        <p className="text-sm text-base-content/50 mt-1.5">{desc}</p>
+        <div className="flex items-center gap-1.5 text-sm font-medium mt-5 text-base-content/80 group-hover:text-base-content transition-colors">
+          {cta}
+          <svg className="w-4 h-4 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </div>
+      </div>
+    </button>
+  );
+}
+
+// ─── Section eyebrow header ─────────────────────────────────────────────────────
+function SectionHeader({ label }: { label: string }) {
+  return (
+    <p className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.16em] text-base-content/55">
+      <span className="w-1.5 h-1.5 rounded-full bg-accent" />
+      {label}
+    </p>
+  );
+}
+
 export default function AdminPage() {
   const router = useRouter();
   const [quotations, setQuotations] = useState<Quotation[]>([]);
@@ -51,9 +104,21 @@ export default function AdminPage() {
   const [resetting, setResetting] = useState<string | null>(null);
   const [newRfqCount, setNewRfqCount] = useState(0);
   const [pendingPoCount, setPendingPoCount] = useState(0);
+  const [pendingPaymentCount, setPendingPaymentCount] = useState(0);
   const [toasts, setToasts] = useState<ToastNotification[]>([]);
   const prevRfqCountRef = useRef<number | null>(null);
   const toastIdRef = useRef(0);
+
+  // ── Theme ──────────────────────────────────────────────────────────────────
+  // Follow the global Theme picker (navbar) but default to the Mastercard theme.
+  const [theme, setTheme] = useState('mastercard');
+  useEffect(() => {
+    const pick = () => setTheme(localStorage.getItem('theme') || 'mastercard');
+    pick();
+    const obs = new MutationObserver(pick);
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    return () => obs.disconnect();
+  }, []);
 
   const dismissToast = (id: number) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
@@ -69,11 +134,6 @@ export default function AdminPage() {
       setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 5000);
     }
     prevRfqCountRef.current = count;
-  }, []);
-
-  useEffect(() => {
-    const savedTheme = localStorage.getItem('theme') || 'light';
-    document.documentElement.setAttribute('data-theme', savedTheme);
   }, []);
 
   const fetchQuotations = useCallback(async () => {
@@ -101,6 +161,22 @@ export default function AdminPage() {
     };
     fetchPoCount();
     const id = setInterval(fetchPoCount, 10000);
+    return () => clearInterval(id);
+  }, []);
+
+  // ── Pending payment-proofs awaiting review ──────────────────────────────────
+  useEffect(() => {
+    const fetchPaymentCount = async () => {
+      try {
+        const res = await fetch('/api/payment-proof');
+        const data = await res.json();
+        if (Array.isArray(data)) {
+          setPendingPaymentCount(data.filter((p: { status: string }) => p.status === 'pending').length);
+        }
+      } catch {}
+    };
+    fetchPaymentCount();
+    const id = setInterval(fetchPaymentCount, 10000);
     return () => clearInterval(id);
   }, []);
 
@@ -147,275 +223,200 @@ export default function AdminPage() {
   };
 
   return (
-    <div className="min-h-screen bg-base-200">
+    <div data-theme={theme} className="font-mc relative min-h-screen bg-base-200 text-base-content overflow-hidden">
+
+      {/* ── Decorative orbital rings ─────────────────────────────────────── */}
+      <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div className="absolute -top-[30rem] -right-[18rem] w-[58rem] h-[58rem] rounded-full border border-accent/15" />
+        <div className="absolute -top-[22rem] -right-[10rem] w-[42rem] h-[42rem] rounded-full border border-accent/10" />
+        <div className="absolute -bottom-[34rem] -left-[20rem] w-[58rem] h-[58rem] rounded-full border border-secondary/12" />
+        <div className="absolute -bottom-[26rem] -left-[12rem] w-[42rem] h-[42rem] rounded-full border border-secondary/[0.08]" />
+      </div>
+
       {/* Toast notifications */}
       {toasts.length > 0 && (
         <div className="toast toast-top toast-end z-50 gap-2">
           {toasts.map((t) => (
-            <div key={t.id} className="alert alert-info shadow-lg max-w-xs animate-in slide-in-from-right-4">
+            <div key={t.id} className="alert alert-info shadow-mc max-w-xs rounded-2xl">
               <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                   d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
               </svg>
               <div className="flex-1">
                 <p className="font-semibold text-sm">{t.message}</p>
-                <p className="text-xs opacity-80">
-                  {t.count} งานใหม่เข้ามาใน RFQ
-                </p>
+                <p className="text-xs opacity-80">{t.count} งานใหม่เข้ามาใน RFQ</p>
               </div>
-              <button
-                className="btn btn-ghost btn-xs"
-                onClick={() => dismissToast(t.id)}
-              >✕</button>
+              <button className="btn btn-ghost btn-xs" onClick={() => dismissToast(t.id)}>✕</button>
             </div>
           ))}
         </div>
       )}
 
-      <div className="p-4 lg:p-6">
-        <main className="flex flex-col gap-5 max-w-5xl mx-auto">
+      <div className="relative p-4 lg:p-8">
+        <main className="flex flex-col gap-8 max-w-5xl mx-auto">
 
-          {/* Summary cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-
-            {/* ── Manage RFQ ── */}
-            <div className="card bg-base-100 border border-base-300 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 overflow-hidden">
-              <div className="h-0.5 bg-linear-to-r from-primary/50 to-primary rounded-t-2xl" />
-              <div className="card-body p-5">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-[10px] text-base-content/40 font-semibold uppercase tracking-widest">RFQ</p>
-                    <h2 className="text-base font-bold text-base-content mt-1">Manage RFQ</h2>
-                    <p className="text-[11px] text-base-content/40 mt-0.5">ดูและจัดการใบเสนอราคา</p>
-                  </div>
-                  <div className="relative shrink-0">
-                    <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
-                      <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75}
-                          d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                      </svg>
-                    </div>
-                    {newRfqCount > 0 && (
-                      <span className="absolute -top-1.5 -right-1.5 min-w-5 h-5 px-1 rounded-full bg-error text-white text-[10px] font-bold flex items-center justify-center animate-pulse shadow-sm">
-                        {newRfqCount > 99 ? '99+' : newRfqCount}
-                      </span>
-                    )}
-                  </div>
-                </div>
-                <div className="card-actions mt-4">
-                  <button
-                    className="btn btn-primary btn-sm rounded-lg w-full font-semibold gap-2"
-                    onClick={() => router.push('/Admin/rfq')}
-                  >
-                    ดูทั้งหมด
-                    {newRfqCount > 0 && (
-                      <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-white/20 rounded-full px-2 py-0.5 leading-none">
-                        <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-                        {newRfqCount} ใหม่
-                      </span>
-                    )}
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* ── Manage PO ── */}
-            <div className="card bg-base-100 border border-base-300 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 overflow-hidden">
-              <div className="h-0.5 bg-linear-to-r from-secondary/50 to-secondary rounded-t-2xl" />
-              <div className="card-body p-5">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-[10px] text-base-content/40 font-semibold uppercase tracking-widest">Purchase Order</p>
-                    <h2 className="text-base font-bold text-base-content mt-1">Manage PO</h2>
-                    <p className="text-[11px] text-base-content/40 mt-0.5">ดูและจัดการใบสั่งซื้อ</p>
-                  </div>
-                  <div className="relative shrink-0">
-                    <div className="w-10 h-10 rounded-xl bg-secondary/10 flex items-center justify-center">
-                      <svg className="w-5 h-5 text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75}
-                          d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
-                      </svg>
-                    </div>
-                    {pendingPoCount > 0 && (
-                      <span className="absolute -top-1.5 -right-1.5 min-w-5 h-5 px-1 rounded-full bg-error text-white text-[10px] font-bold flex items-center justify-center animate-pulse shadow-sm">
-                        {pendingPoCount > 99 ? '99+' : pendingPoCount}
-                      </span>
-                    )}
-                  </div>
-                </div>
-                <div className="card-actions mt-4">
-                  <button
-                    className="btn btn-secondary btn-sm rounded-lg w-full font-semibold gap-2"
-                    onClick={() => router.push('/Admin/po')}
-                  >
-                    ดูทั้งหมด
-                    {pendingPoCount > 0 && (
-                      <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-white/20 rounded-full px-2 py-0.5 leading-none">
-                        <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-                        {pendingPoCount} ใหม่
-                      </span>
-                    )}
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* ── จัดการใบวางบิล ── */}
-            <div className="card bg-base-100 border border-base-300 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 overflow-hidden">
-              <div className="h-0.5 bg-linear-to-r from-accent/50 to-accent rounded-t-2xl" />
-              <div className="card-body p-5">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-[10px] text-base-content/40 font-semibold uppercase tracking-widest">Billing</p>
-                    <h2 className="text-base font-bold text-base-content mt-1">จัดการใบวางบิล</h2>
-                    <p className="text-[11px] text-base-content/40 mt-0.5">ดูและจัดการใบวางบิลทั้งหมด</p>
-                  </div>
-                  <div className="relative shrink-0">
-                    <div className="w-10 h-10 rounded-xl bg-accent/10 flex items-center justify-center">
-                      <svg className="w-5 h-5 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75}
-                          d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
-                      </svg>
-                    </div>
-                  </div>
-                </div>
-                <div className="card-actions mt-4">
-                  <button
-                    className="btn btn-accent btn-sm rounded-lg w-full font-semibold"
-                    onClick={() => router.push('/Admin/billing')}
-                  >
-                    ดูทั้งหมด
-                  </button>
-                </div>
-              </div>
-            </div>
-
+          {/* ── Header ──────────────────────────────────────────────────── */}
+          <div className="pt-2">
+            <p className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.16em] text-base-content/55 mb-3">
+              <span className="w-1.5 h-1.5 rounded-full bg-accent" />
+              Admin Console
+            </p>
+            <h1 className="text-4xl md:text-5xl font-medium tracking-mc leading-[1.05]">
+              แดชบอร์ด<span className="text-accent">ผู้ดูแลระบบ</span>
+            </h1>
+            <p className="text-base text-base-content/55 mt-3 max-w-lg leading-relaxed">
+              จัดการใบเสนอราคา ใบสั่งซื้อ การชำระเงิน และดูประวัติย้อนหลังได้จากที่นี่
+            </p>
           </div>
 
-          {/* History cards row */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {/* ── Management section ──────────────────────────────────────── */}
+          <section className="flex flex-col gap-4">
+            <SectionHeader label="การจัดการ" />
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
 
-            {/* ── ประวัติแชท ── */}
-            <div className="card bg-base-100 border border-base-300 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 overflow-hidden">
-              <div className="h-0.5 bg-linear-to-r from-info/50 to-info rounded-t-2xl" />
-              <div className="card-body p-5">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-[10px] text-base-content/40 font-semibold uppercase tracking-widest">Archive</p>
-                    <h2 className="text-base font-bold text-base-content mt-1">ประวัติแชท</h2>
-                    <p className="text-[11px] text-base-content/40 mt-0.5">บทสนทนาที่ถูก archive แล้ว</p>
-                  </div>
-                  <div className="shrink-0">
-                    <div className="w-10 h-10 rounded-xl bg-info/10 flex items-center justify-center">
-                      <svg className="w-5 h-5 text-info" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75}
-                          d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                      </svg>
-                    </div>
-                  </div>
-                </div>
-                <div className="card-actions mt-4">
-                  <button
-                    className="btn btn-info btn-sm btn-outline rounded-lg w-full font-semibold"
-                    onClick={() => router.push('/Admin/history/chats')}
-                  >
-                    ดูประวัติ
-                  </button>
-                </div>
-              </div>
+              <NavCard
+                category="RFQ"
+                title="Manage RFQ"
+                desc="ดูและจัดการใบเสนอราคา"
+                count={newRfqCount}
+                iconWrap="bg-primary/10 text-primary"
+                onClick={() => router.push('/Admin/rfq')}
+                icon={
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75}
+                      d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                }
+              />
+
+              <NavCard
+                category="Purchase Order"
+                title="Manage PO"
+                desc="ดูและจัดการใบสั่งซื้อ"
+                count={pendingPoCount}
+                iconWrap="bg-secondary/10 text-secondary"
+                onClick={() => router.push('/Admin/po')}
+                icon={
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75}
+                      d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+                  </svg>
+                }
+              />
+
+              <NavCard
+                category="Payment"
+                title="จัดการการชำระเงิน"
+                desc="ตรวจสอบและอนุมัติหลักฐานการโอน"
+                count={pendingPaymentCount}
+                iconWrap="bg-success/10 text-success"
+                onClick={() => router.push('/Admin/payments')}
+                icon={
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <rect x="2" y="6" width="20" height="12" rx="2" strokeWidth={1.75} />
+                    <circle cx="12" cy="12" r="2.5" strokeWidth={1.75} />
+                    <path strokeWidth={1.75} strokeLinecap="round" d="M6 12h.01M18 12h.01" />
+                  </svg>
+                }
+              />
+
+              <NavCard
+                category="Billing"
+                title="จัดการใบวางบิล"
+                desc="ดูและจัดการใบวางบิลทั้งหมด"
+                iconWrap="bg-accent/10 text-accent"
+                onClick={() => router.push('/Admin/billing')}
+                icon={
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75}
+                      d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+                  </svg>
+                }
+              />
+
             </div>
+          </section>
 
-            {/* ── ประวัติใบวางบิล ── */}
-            <div className="card bg-base-100 border border-base-300 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 overflow-hidden">
-              <div className="h-0.5 bg-linear-to-r from-warning/50 to-warning rounded-t-2xl" />
-              <div className="card-body p-5">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-[10px] text-base-content/40 font-semibold uppercase tracking-widest">Archive</p>
-                    <h2 className="text-base font-bold text-base-content mt-1">ประวัติใบวางบิล</h2>
-                    <p className="text-[11px] text-base-content/40 mt-0.5">ใบวางบิลที่ถูก archive แล้ว</p>
-                  </div>
-                  <div className="shrink-0">
-                    <div className="w-10 h-10 rounded-xl bg-warning/10 flex items-center justify-center">
-                      <svg className="w-5 h-5 text-warning" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75}
-                          d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-                      </svg>
-                    </div>
-                  </div>
-                </div>
-                <div className="card-actions mt-4">
-                  <button
-                    className="btn btn-warning btn-sm btn-outline rounded-lg w-full font-semibold"
-                    onClick={() => router.push('/Admin/history/billings')}
-                  >
-                    ดูประวัติ
-                  </button>
-                </div>
-              </div>
+          {/* ── Archive section ─────────────────────────────────────────── */}
+          <section className="flex flex-col gap-4">
+            <SectionHeader label="ประวัติย้อนหลัง" />
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+
+              <NavCard
+                category="Archive"
+                title="ประวัติแชท"
+                desc="บทสนทนาที่ถูก archive แล้ว"
+                cta="ดูประวัติ"
+                iconWrap="bg-info/10 text-info"
+                onClick={() => router.push('/Admin/history/chats')}
+                icon={
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75}
+                      d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                  </svg>
+                }
+              />
+
+              <NavCard
+                category="Archive"
+                title="ประวัติใบวางบิล"
+                desc="ใบวางบิลที่ถูก archive แล้ว"
+                cta="ดูประวัติ"
+                iconWrap="bg-warning/10 text-warning"
+                onClick={() => router.push('/Admin/history/billings')}
+                icon={
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75}
+                      d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                  </svg>
+                }
+              />
+
+              <NavCard
+                category="Archive"
+                title="ประวัติ RFQ"
+                desc="ใบเสนอราคาที่ถูก archive แล้ว"
+                cta="ดูประวัติ"
+                iconWrap="bg-base-200 text-base-content/50"
+                onClick={() => router.push('/Admin/history/rfqs')}
+                icon={
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75}
+                      d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+                  </svg>
+                }
+              />
+
             </div>
-
-            {/* ── ประวัติ RFQ ── */}
-            <div className="card bg-base-100 border border-base-300 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 overflow-hidden">
-              <div className="h-0.5 bg-linear-to-r from-neutral/30 to-neutral/60 rounded-t-2xl" />
-              <div className="card-body p-5">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-[10px] text-base-content/40 font-semibold uppercase tracking-widest">Archive</p>
-                    <h2 className="text-base font-bold text-base-content mt-1">ประวัติ RFQ</h2>
-                    <p className="text-[11px] text-base-content/40 mt-0.5">ใบเสนอราคาที่ถูก archive แล้ว</p>
-                  </div>
-                  <div className="shrink-0">
-                    <div className="w-10 h-10 rounded-xl bg-base-200 flex items-center justify-center">
-                      <svg className="w-5 h-5 text-base-content/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75}
-                          d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
-                      </svg>
-                    </div>
-                  </div>
-                </div>
-                <div className="card-actions mt-4">
-                  <button
-                    className="btn btn-ghost btn-sm rounded-lg w-full font-semibold border border-base-300"
-                    onClick={() => router.push('/Admin/history/rfqs')}
-                  >
-                    ดูประวัติ
-                  </button>
-                </div>
-              </div>
-            </div>
-
-          </div>
+          </section>
 
           {/* ── Chat panel: desktop only (mobile uses floating button) ── */}
-          <div className="hidden lg:block bg-base-100 border border-base-300 rounded-2xl overflow-hidden shadow-sm" style={{ height: '480px' }}>
+          <div className="hidden lg:block bg-base-100 border border-base-300/70 rounded-[2rem] overflow-hidden shadow-mc-sm" style={{ height: '480px' }}>
             <InlineChatPanel onRfqCount={handleRfqCount} />
           </div>
 
           {/* ── จัดการใบเสนอราคา — collapse ── */}
-          <div className="collapse collapse-arrow bg-base-100 border border-base-300 rounded-2xl shadow-sm">
+          <div className="collapse collapse-arrow bg-base-100 border border-base-300/70 rounded-[2rem] shadow-mc-sm">
             <input type="checkbox" />
-            <div className="collapse-title min-h-0 py-4 px-5">
-              <div className="flex items-center gap-3">
+            <div className="collapse-title min-h-0 py-5 px-6">
+              <div className="flex items-center gap-3 flex-wrap">
                 <svg className="w-4 h-4 text-base-content/40 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                     d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
-                <span className="font-semibold text-sm text-base-content">จัดการใบเสนอราคา</span>
-                <span className="badge badge-ghost badge-sm text-[10px]">
-                  {quotations.length} รายการ
-                </span>
+                <span className="font-medium text-base tracking-mc text-base-content">จัดการใบเสนอราคา</span>
+                <span className="badge badge-ghost badge-sm text-[10px]">{quotations.length} รายการ</span>
                 <span className="badge badge-warning badge-sm text-[10px]">Debug</span>
               </div>
             </div>
 
             <div className="collapse-content px-0 pb-0">
-              <div className="border-t border-base-200 px-5 pt-4 pb-5 space-y-3">
+              <div className="border-t border-base-200 px-6 pt-4 pb-6 space-y-3">
                 {/* Refresh button */}
                 <div className="flex justify-end">
                   <button
                     onClick={fetchQuotations}
-                    className="btn btn-ghost btn-xs gap-1.5 rounded-lg"
+                    className="btn btn-ghost btn-xs gap-1.5"
                     disabled={loading}
                   >
                     {loading ? (
@@ -443,7 +444,7 @@ export default function AdminPage() {
                     <p className="text-sm">ยังไม่มีเอกสารที่ส่งเข้ามา</p>
                   </div>
                 ) : (
-                  <div className="overflow-x-auto rounded-xl border border-base-200">
+                  <div className="overflow-x-auto rounded-2xl border border-base-200">
                     <table className="table table-sm w-full">
                       <thead>
                         <tr className="bg-base-200/60 text-[10px] uppercase tracking-wider text-base-content/40">
@@ -477,7 +478,7 @@ export default function AdminPage() {
                                   <button
                                     onClick={() => updateStatus(q._id, next)}
                                     disabled={updating === q._id}
-                                    className="btn btn-xs btn-outline rounded-lg"
+                                    className="btn btn-xs btn-outline"
                                   >
                                     {updating === q._id
                                       ? <span className="loading loading-spinner loading-xs" />
@@ -492,7 +493,7 @@ export default function AdminPage() {
                                   <button
                                     onClick={() => deleteQuotation(q._id)}
                                     disabled={updating === q._id || resetting === q._id}
-                                    className="btn btn-xs btn-error btn-outline rounded-lg"
+                                    className="btn btn-xs btn-error btn-outline"
                                   >
                                     {updating === q._id
                                       ? <span className="loading loading-spinner loading-xs" />
@@ -502,7 +503,7 @@ export default function AdminPage() {
                                     <button
                                       onClick={() => handleReset(q)}
                                       disabled={resetting === q._id || updating === q._id}
-                                      className="btn btn-xs btn-warning rounded-lg"
+                                      className="btn btn-xs btn-warning"
                                       title="Archive แชท+RFQ แล้วลบทุกอย่าง เพื่อเริ่มใหม่"
                                     >
                                       {resetting === q._id

@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 @plugin "daisyui" {
-  themes: light --default, dark --prefersdark, halloween;
+  themes: light --default, dark --prefersdark, cupcake, corporate, emerald, synthwave, retro, halloween;
 }
 
 /* ── Mastercard editorial theme ───────────────────────────────────────────────
@@ -75,3 +75,4 @@
 @utility tracking-mc {
   letter-spacing: -0.02em;
 }
+

@@ -172,6 +172,18 @@ export default function Page(): JSX.Element {
   const { data: session } = useSession();
   const router = useRouter();
 
+  // ── Theme ────────────────────────────────────────────────────────────────
+  // Follow the global Theme picker (navbar) but default to the Mastercard
+  // editorial theme when the user hasn't explicitly chosen one.
+  const [theme, setTheme] = useState("mastercard");
+  useEffect(() => {
+    const pick = () => setTheme(localStorage.getItem("theme") || "mastercard");
+    pick();
+    const obs = new MutationObserver(pick);
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+    return () => obs.disconnect();
+  }, []);
+
   // ── Page state ───────────────────────────────────────────────────────────
   const [loading, setLoading] = useState(true);
   const [quotations, setQuotations] = useState<Quotation[]>([]);
@@ -722,12 +734,12 @@ export default function Page(): JSX.Element {
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
     <main
-      data-theme="mastercard"
+      data-theme={theme}
       className="font-mc relative min-h-screen bg-base-200 text-base-content overflow-hidden"
     >
       {/* ── Decorative orbital rings — true circles bleeding off the corners,
              cradling the content from outside rather than crossing it ─────── */}
-      <div aria-hidden className="pointer-events-none fixed inset-0 overflow-hidden">
+      <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
         <div className="absolute -top-[30rem] -right-[18rem] w-[58rem] h-[58rem] rounded-full border border-accent/15" />
         <div className="absolute -top-[22rem] -right-[10rem] w-[42rem] h-[42rem] rounded-full border border-accent/10" />
         <div className="absolute -bottom-[34rem] -left-[20rem] w-[58rem] h-[58rem] rounded-full border border-secondary/12" />

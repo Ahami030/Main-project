@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 
 const themes = [
+  "mastercard",
   "light",
   "dark",
   "cupcake",
