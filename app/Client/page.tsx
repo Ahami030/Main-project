@@ -582,52 +582,52 @@ export default function Page(): JSX.Element {
 
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
-    <main className="relative min-h-screen bg-base-200 text-base-content overflow-hidden">
-      {/* ── Decorative aurora background ─────────────────────────── */}
-      <div aria-hidden className="pointer-events-none fixed inset-0 overflow-hidden">
-        <div className="absolute -top-40 -left-32 w-[34rem] h-[34rem] rounded-full bg-primary/20 blur-[120px] opacity-50" />
-        <div className="absolute top-32 -right-40 w-[32rem] h-[32rem] rounded-full bg-accent/20 blur-[120px] opacity-40" />
-        <div className="absolute bottom-[-10rem] left-1/3 w-[30rem] h-[30rem] rounded-full bg-secondary/15 blur-[120px] opacity-40" />
-        <div
-          className="absolute inset-0 opacity-[0.025]"
-          style={{
-            backgroundImage:
-              "linear-gradient(to right, currentColor 1px, transparent 1px), linear-gradient(to bottom, currentColor 1px, transparent 1px)",
-            backgroundSize: "44px 44px",
-          }}
-        />
-      </div>
+    <main
+      data-theme="mastercard"
+      className="font-mc relative min-h-screen bg-base-200 text-base-content overflow-hidden"
+    >
+      {/* ── Decorative orbital arcs (Light Signal Orange, hand-drawn feel) ── */}
+      <svg
+        aria-hidden
+        className="pointer-events-none fixed inset-0 w-full h-full opacity-[0.18]"
+        preserveAspectRatio="none"
+        viewBox="0 0 1440 900"
+        fill="none"
+      >
+        <path d="M-100 180 C 360 60, 1080 60, 1560 220" stroke="#f37338" strokeWidth="1.2" />
+        <path d="M-100 760 C 420 880, 1040 840, 1560 700" stroke="#f37338" strokeWidth="1.2" />
+        <circle cx="1320" cy="150" r="220" stroke="#f37338" strokeWidth="1" opacity="0.5" />
+        <circle cx="120" cy="780" r="180" stroke="#f37338" strokeWidth="1" opacity="0.5" />
+      </svg>
 
-      <div className="relative max-w-6xl mx-auto px-4 md:px-8 py-6 md:py-10 space-y-4 md:space-y-5">
+      <div className="relative max-w-6xl mx-auto px-4 md:px-8 py-8 md:py-14 space-y-5 md:space-y-7">
 
         {/* ── User Card ─────────────────────────────────────────── */}
-        <div className="card relative overflow-hidden border border-base-300/60 bg-base-100/80 backdrop-blur-xl rounded-3xl shadow-xl shadow-base-300/30 transition-all duration-300 hover:shadow-2xl">
-          {/* gradient banner */}
-          <div className="absolute inset-x-0 top-0 h-20 bg-gradient-to-r from-primary/20 via-accent/15 to-secondary/20" />
-          <div className="absolute inset-x-0 top-0 h-20 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-accent/20 to-transparent" />
-          <div className="card-body relative py-5 px-6">
+        <div className="card bg-base-100 border border-base-300/70 rounded-[2.5rem] shadow-mc transition-shadow duration-300 hover:shadow-mc-lg">
+          <div className="card-body py-7 px-7 md:px-9">
             <div className="flex items-center justify-between gap-4">
-              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-5">
+                {/* Circular ink portrait */}
                 <div className="avatar placeholder shrink-0">
-                  <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-primary to-accent text-primary-content font-bold text-xl flex items-center justify-center ring-4 ring-base-100 shadow-lg shadow-primary/30">
+                  <div className="w-16 h-16 rounded-full bg-primary text-primary-content font-medium text-2xl tracking-mc flex items-center justify-center">
                     <span>{name[0]?.toUpperCase()}</span>
                   </div>
                 </div>
                 <div>
-                  <h2 className="font-bold text-lg leading-snug tracking-tight">
-                    Welcome &ldquo;{name}&rdquo;
-                  </h2>
-                  <p className="text-sm text-base-content/55 mt-0.5">
-                    You are logged in as {email}
+                  {/* Eyebrow */}
+                  <p className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.16em] text-base-content/55 mb-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-accent" />
+                    Dashboard
                   </p>
-                  {uid && (
-                    <p className="text-xs text-base-content/35 mt-0.5 font-mono">
-                      ID · {uid}
-                    </p>
-                  )}
+                  <h2 className="font-medium text-2xl leading-tight tracking-mc">
+                    สวัสดี, {name}
+                  </h2>
+                  <p className="text-sm text-base-content/55 mt-1">
+                    {email}
+                  </p>
                 </div>
               </div>
-              <div className="flex items-center gap-1.5 text-xs text-success font-medium shrink-0 rounded-full border border-success/25 bg-success/10 px-3 py-1.5 backdrop-blur-sm">
+              <div className="flex items-center gap-2 text-xs font-medium shrink-0 rounded-full border-[1.5px] border-base-content/15 bg-base-100 px-4 py-2">
                 <span className="relative flex h-2 w-2">
                   <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75" />
                   <span className="relative inline-flex h-2 w-2 rounded-full bg-success" />
@@ -641,7 +641,7 @@ export default function Page(): JSX.Element {
         {/* ── Main Section ──────────────────────────────────────── */}
         {loading ? (
 
-          <div className="card bg-base-100/85 backdrop-blur-xl border border-base-300/60 rounded-3xl shadow-xl shadow-base-300/30 transition-all duration-300 hover:shadow-2xl">
+          <div className="card bg-base-100 border border-base-300/70 rounded-[2.5rem] shadow-mc transition-shadow duration-300 hover:shadow-mc-lg">
             <div className="card-body items-center py-24 gap-3">
               <span className="loading loading-spinner loading-lg text-primary" />
               <p className="text-sm text-base-content/40">กำลังโหลด...</p>
@@ -651,21 +651,21 @@ export default function Page(): JSX.Element {
         ) : latest && meta && currentStep ? (
 
           /* ── Status Card (มี quotation อยู่) ── */
-          <div className="card bg-base-100/85 backdrop-blur-xl border border-base-300/60 rounded-3xl shadow-xl shadow-base-300/30 transition-all duration-300 hover:shadow-2xl overflow-hidden">
-            <div className={`h-1.5 bg-gradient-to-r ${meta.bar}`} />
-            <div className="card-body gap-5 pt-5 px-6 md:px-8">
+          <div className="card bg-base-100 border border-base-300/70 rounded-[2.5rem] shadow-mc transition-shadow duration-300 hover:shadow-mc-lg overflow-hidden">
+            <div className="card-body gap-5 pt-7 px-7 md:px-9">
 
               {/* File header */}
               <div className="flex items-start justify-between gap-4">
                 <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-base-200 flex items-center justify-center shrink-0 text-base-content/35">
+                  <div className="w-12 h-12 rounded-full bg-base-200 flex items-center justify-center shrink-0 text-base-content/40">
                     <IconDoc />
                   </div>
                   <div className="min-w-0">
-                    <p className="text-xs tracking-widest uppercase text-primary/60 font-medium mb-0.5">
+                    <p className="inline-flex items-center gap-2 text-xs tracking-[0.16em] uppercase text-base-content/55 font-bold mb-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-accent" />
                       Quotation Request
                     </p>
-                    <p className="font-semibold leading-snug truncate max-w-lg">
+                    <p className="font-medium text-xl tracking-mc leading-snug truncate max-w-lg">
                       {latest.filename}
                     </p>
                     <p className="text-xs text-base-content/40 mt-0.5">
@@ -691,7 +691,7 @@ export default function Page(): JSX.Element {
                         ? () => setModalQuotation(latest)
                         : undefined
                     }
-                    className={`rounded-2xl border px-5 py-5 flex items-center gap-4 ${meta.spotlight} ${
+                    className={`rounded-[1.75rem] border px-6 py-5 flex items-center gap-4 ${meta.spotlight} ${
                       latest.status === "bargaining" || latest.status === "confirmed"
                         ? "cursor-pointer hover:opacity-90 transition-opacity"
                         : ""
@@ -799,22 +799,21 @@ export default function Page(): JSX.Element {
         ) : (
 
           /* ── Hero CTA (ยังไม่มี quotation) ── */
-          <div className="card bg-base-100/85 backdrop-blur-xl border border-base-300/60 rounded-3xl shadow-xl shadow-base-300/30 transition-all duration-300 hover:shadow-2xl overflow-hidden">
-            <div className="h-1.5 bg-gradient-to-r from-primary to-accent" />
-            <div className="card-body py-10 px-8 gap-0">
+          <div className="card bg-base-100 border border-base-300/70 rounded-[2.5rem] shadow-mc transition-shadow duration-300 hover:shadow-mc-lg overflow-hidden">
+            <div className="card-body py-12 px-8 md:px-12 gap-0">
               <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-10">
 
                 {/* Left: text */}
                 <div className="flex-1">
-                  <span className="inline-flex w-fit items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-medium text-primary mb-6">
-                    <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+                  <p className="inline-flex w-fit items-center gap-2 text-xs font-bold uppercase tracking-[0.16em] text-base-content/55 mb-6">
+                    <span className="w-1.5 h-1.5 rounded-full bg-accent" />
                     Quotation Request System
-                  </span>
-                  <h1 className="text-4xl md:text-5xl font-bold tracking-tight leading-[1.2] mb-4">
+                  </p>
+                  <h1 className="text-5xl md:text-6xl font-medium tracking-mc leading-[1.05] mb-5">
                     ส่งเอกสาร<br />
-                    เพื่อจัดทำ<span className="text-primary">ใบเสนอราคา</span>
+                    เพื่อจัดทำ<span className="text-accent">ใบเสนอราคา</span>
                   </h1>
-                  <p className="text-base text-base-content/50 leading-relaxed max-w-md mb-8">
+                  <p className="text-base text-base-content/55 leading-relaxed max-w-md mb-8">
                     อัปโหลดไฟล์รายการสินค้า ทีมงานจะจัดทำใบเสนอราคา
                     และพร้อมต่อรองกับคุณในทุกขั้นตอน
                   </p>
@@ -843,7 +842,7 @@ export default function Page(): JSX.Element {
                     { label: "ออกใบเสนอราคา",    sub: "ทีมงานจัดทำให้ทันที" },
                     { label: "ต่อรองราคาออนไลน์", sub: "Chat โดยตรงกับทีมงาน" },
                   ].map((item, i) => (
-                    <div key={i} className="flex items-center gap-3 rounded-xl bg-base-200 px-4 py-3">
+                    <div key={i} className="flex items-center gap-3 rounded-2xl bg-base-200/70 px-4 py-3.5">
                       <div className="w-6 h-6 rounded-full bg-primary/15 text-primary text-xs font-bold flex items-center justify-center shrink-0">
                         {i + 1}
                       </div>
@@ -864,7 +863,7 @@ export default function Page(): JSX.Element {
         {/* ── PO Section ────────────────────────────────────────── */}
         {poLoading ? (
 
-          <div className="card bg-base-100/85 backdrop-blur-xl border border-base-300/60 rounded-3xl shadow-xl shadow-base-300/30 transition-all duration-300 hover:shadow-2xl">
+          <div className="card bg-base-100 border border-base-300/70 rounded-[2.5rem] shadow-mc transition-shadow duration-300 hover:shadow-mc-lg">
             <div className="card-body items-center py-12 gap-3">
               <span className="loading loading-spinner loading-lg text-secondary" />
               <p className="text-sm text-base-content/40">กำลังโหลดใบสั่งซื้อ...</p>
@@ -874,20 +873,20 @@ export default function Page(): JSX.Element {
         ) : poLatest && poMeta && poCurrentStep ? (
 
           /* ── PO Status Card ── */
-          <div className="card bg-base-100/85 backdrop-blur-xl border border-base-300/60 rounded-3xl shadow-xl shadow-base-300/30 transition-all duration-300 hover:shadow-2xl overflow-hidden">
-            <div className={`h-1.5 bg-linear-to-r ${poMeta.bar}`} />
-            <div className="card-body gap-5 pt-5 px-6 md:px-8">
+          <div className="card bg-base-100 border border-base-300/70 rounded-[2.5rem] shadow-mc transition-shadow duration-300 hover:shadow-mc-lg overflow-hidden">
+            <div className="card-body gap-5 pt-7 px-7 md:px-9">
 
               <div className="flex items-start justify-between gap-4">
                 <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-base-200 flex items-center justify-center shrink-0 text-base-content/35">
+                  <div className="w-12 h-12 rounded-full bg-base-200 flex items-center justify-center shrink-0 text-base-content/40">
                     <IconDoc />
                   </div>
                   <div className="min-w-0">
-                    <p className="text-xs tracking-widest uppercase text-secondary/60 font-medium mb-0.5">
+                    <p className="inline-flex items-center gap-2 text-xs tracking-[0.16em] uppercase text-base-content/55 font-bold mb-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-secondary" />
                       Purchase Order
                     </p>
-                    <p className="font-semibold leading-snug">{poLatest.poNumber}</p>
+                    <p className="font-medium text-xl tracking-mc leading-snug">{poLatest.poNumber}</p>
                     <p className="text-xs text-base-content/40 mt-0.5 truncate max-w-xs">
                       {poLatest.fileOrigName} · {new Date(poLatest.createdAt).toLocaleDateString("th-TH", {
                         year: "numeric", month: "short", day: "numeric",
@@ -908,7 +907,7 @@ export default function Page(): JSX.Element {
                   {poLatest.status === "billed" && billingButtons.length > 0 ? (
 
                     /* ── Billing list card ── */
-                    <div className="rounded-2xl border border-success/30 overflow-hidden shadow-sm">
+                    <div className="rounded-[1.75rem] border border-success/30 overflow-hidden shadow-mc-sm">
 
                       {/* Header */}
                       <div className={`px-5 py-4 flex items-center gap-3 ${poMeta.spotlight}`}>
@@ -1175,7 +1174,7 @@ export default function Page(): JSX.Element {
 
                     /* ── Normal spotlight (pending / accepted) ── */
                     <>
-                      <div className={`rounded-2xl border px-5 py-5 flex items-center gap-4 ${poMeta.spotlight}`}>
+                      <div className={`rounded-[1.75rem] border px-6 py-5 flex items-center gap-4 ${poMeta.spotlight}`}>
                         <span className={`w-3 h-3 rounded-full shrink-0 ${poMeta.dot} ${poIsInProgress ? "animate-pulse" : ""}`} />
                         <div className="flex-1 min-w-0">
                           <p className="font-semibold">{poCurrentStep.label}</p>
@@ -1262,22 +1261,21 @@ export default function Page(): JSX.Element {
         ) : (
 
           /* ── PO Hero CTA ── */
-          <div className="card bg-base-100/85 backdrop-blur-xl border border-base-300/60 rounded-3xl shadow-xl shadow-base-300/30 transition-all duration-300 hover:shadow-2xl overflow-hidden">
-            <div className="h-1.5 bg-linear-to-r from-secondary to-info" />
-            <div className="card-body py-10 px-8 gap-0">
+          <div className="card bg-base-100 border border-base-300/70 rounded-[2.5rem] shadow-mc transition-shadow duration-300 hover:shadow-mc-lg overflow-hidden">
+            <div className="card-body py-12 px-8 md:px-12 gap-0">
               <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-10">
 
                 {/* Left: text */}
                 <div className="flex-1">
-                  <span className="inline-flex w-fit items-center gap-2 rounded-full border border-secondary/20 bg-secondary/10 px-3 py-1 text-xs font-medium text-secondary mb-6">
-                    <span className="w-1.5 h-1.5 rounded-full bg-secondary animate-pulse" />
+                  <p className="inline-flex w-fit items-center gap-2 text-xs font-bold uppercase tracking-[0.16em] text-base-content/55 mb-6">
+                    <span className="w-1.5 h-1.5 rounded-full bg-secondary" />
                     Purchase Order System
-                  </span>
-                  <h2 className="text-4xl md:text-5xl font-bold tracking-tight leading-[1.2] mb-4">
+                  </p>
+                  <h2 className="text-5xl md:text-6xl font-medium tracking-mc leading-[1.05] mb-5">
                     ส่งรายการสินค้า<br />
                     เพื่อ<span className="text-secondary">สั่งซื้อ</span>
                   </h2>
-                  <p className="text-base text-base-content/50 leading-relaxed max-w-md mb-8">
+                  <p className="text-base text-base-content/55 leading-relaxed max-w-md mb-8">
                     อัปโหลดรายการสินค้าที่ต้องการสั่งซื้อ ทีมงานจะจัดของและออกใบวางบิลให้คุณ
                   </p>
                   <div className="flex flex-wrap gap-3">
@@ -1299,7 +1297,7 @@ export default function Page(): JSX.Element {
                     { label: "ออกใบกำกับภาษี/ใบส่งของ", sub: "เขียนบนกระดาษพร้อมส่ง" },
                     { label: "รับใบวางบิล",            sub: "ดูและพิมพ์ใบวางบิลออนไลน์" },
                   ].map((item, i) => (
-                    <div key={i} className="flex items-center gap-3 rounded-xl bg-base-200 px-4 py-3">
+                    <div key={i} className="flex items-center gap-3 rounded-2xl bg-base-200/70 px-4 py-3.5">
                       <div className="w-6 h-6 rounded-full bg-secondary/15 text-secondary text-xs font-bold flex items-center justify-center shrink-0">
                         {i + 1}
                       </div>
@@ -1422,8 +1420,11 @@ export default function Page(): JSX.Element {
                 onClick={() => setLearnMore(false)}
                 className="btn btn-sm btn-circle btn-ghost absolute right-4 top-4"
               >✕</button>
-              <p className="text-xs font-semibold text-primary uppercase tracking-widest mb-1">How it works</p>
-              <h3 className="font-bold text-lg">ขั้นตอนการใช้งาน</h3>
+              <p className="inline-flex items-center gap-2 text-xs font-bold text-base-content/55 uppercase tracking-[0.16em] mb-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-accent" />
+                How it works
+              </p>
+              <h3 className="font-medium text-2xl tracking-mc">ขั้นตอนการใช้งาน</h3>
               <p className="text-sm text-base-content/50 mt-0.5">ระบบออกใบเสนอราคาทำงานอย่างไร</p>
             </div>
             <div className="px-6 py-6 space-y-0">
