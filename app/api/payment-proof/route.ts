@@ -19,9 +19,13 @@ export async function GET(req: NextRequest) {
 
   await connectMongoDB();
 
+  // Guard against literal "null"/"undefined" strings reaching ObjectId casting
+  const isValidId = (v: string | null): v is string =>
+    !!v && v !== "null" && v !== "undefined";
+
   const query: Record<string, unknown> = {};
-  if (billingId) query.billingId = billingId;
-  else if (poId) query.poId = poId;
+  if (isValidId(billingId)) query.billingId = billingId;
+  else if (isValidId(poId)) query.poId = poId;
   if (!isAdmin) query.customerId = userId;
 
   const proofs = await PaymentProof.find(query).sort({ createdAt: -1 }).lean();

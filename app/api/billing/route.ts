@@ -19,8 +19,41 @@ export async function GET(_req: NextRequest) {
   // Fire-and-forget: clean up any expired billings automatically
   runCleanup().catch(() => {});
 
-  const billings = await Billing.find().sort({ createdAt: -1 }).lean();
-  return NextResponse.json(billings);
+  // Unified billing-note list:
+  //  • "group"  — Billing documents (one note combining one or more POs)
+  //  • "single" — POs billed directly (status "billed", no billing group)
+  const [groups, singlePOs] = await Promise.all([
+    Billing.find().sort({ createdAt: -1 }).lean(),
+    PurchaseOrder.find({ status: "billed", billingId: null }).sort({ billedAt: -1 }).lean(),
+  ]);
+
+  type AnyDoc = Record<string, unknown> & { createdAt?: string | Date };
+
+  const groupItems = (groups as AnyDoc[]).map((b) => ({ ...b, type: "group" as const }));
+
+  const singleItems = (singlePOs as Array<AnyDoc & {
+    _id: unknown; poNumber?: string; userId?: string; userName?: string;
+    userEmail?: string; taxInvoices?: unknown[]; billedAt?: Date | null;
+  }>).map((po) => ({
+    _id:           po._id,
+    type:          "single" as const,
+    billingNumber: po.poNumber,
+    customerId:    po.userId,
+    customerName:  po.userName,
+    customerEmail: po.userEmail,
+    poNumbers:     po.poNumber ? [po.poNumber] : [],
+    taxInvoices:   po.taxInvoices ?? [],
+    status:        "finalized",
+    billingDate:   po.billedAt ?? null,
+    expiresAt:     null,
+    createdAt:     po.createdAt,
+  }));
+
+  const all = [...groupItems, ...singleItems].sort(
+    (a, b) => new Date(b.createdAt as string).getTime() - new Date(a.createdAt as string).getTime()
+  );
+
+  return NextResponse.json(all);
 }
 
 export async function POST(req: NextRequest) {
