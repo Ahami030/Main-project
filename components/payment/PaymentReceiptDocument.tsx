@@ -31,19 +31,38 @@ const METHOD_LABEL: Record<string, string> = {
   cheque:        "เช็ค",
 };
 
+// ─── Palette (fixed hex). Structure relies on borders + text colour so it stays
+// legible in B&W / when browsers drop background colours on print. ─────────────
+const GREEN  = "#166534";
+const GREEN2 = "#15803d";
+const INK     = "#1f2937";
+const MUTED   = "#6b7280";
+const FAINT   = "#9ca3af";
+const LINE    = "#e5e7eb";
+const TINT     = "#f0fdf4"; // green-50 — near-white / low ink
+
 export default function PaymentReceiptDocument({ receipt }: PaymentReceiptProps) {
+  const references = [
+    { label: "อ้างอิงใบวางบิล", value: receipt.billingNumber },
+    ...(receipt.poNumbers.length > 0 && receipt.poNumbers.join(", ") !== receipt.billingNumber
+      ? [{ label: "เลขที่ PO", value: receipt.poNumbers.join(", ") }]
+      : []),
+    { label: "วิธีชำระ", value: `${METHOD_LABEL[receipt.paymentMethod] ?? receipt.paymentMethod}${receipt.bankName ? ` — ${receipt.bankName}` : ""}` },
+    ...(receipt.referenceNumber ? [{ label: "เลขอ้างอิง", value: receipt.referenceNumber }] : []),
+    { label: "วันที่โอน", value: fmtDate(receipt.paymentDate) },
+  ];
+
   return (
     <>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700;800&display=swap');
         .pr-page { font-family: 'Sarabun', 'Noto Sans Thai', sans-serif; }
         @media print {
+          @page { margin: 0; size: A4; }
+          html, body { margin: 0 !important; padding: 0 !important; background: #ffffff !important; }
+          #client-dashboard-content { display: none !important; }
           body * { visibility: hidden !important; }
           #payment-receipt-print-area, #payment-receipt-print-area * { visibility: visible !important; }
-          #payment-receipt-print-area {
-            position: absolute !important;
-            top: 0; left: 0; width: 100%;
-          }
           .receipt-print-dialog, .receipt-print-box {
             position: static !important;
             overflow: visible !important;
@@ -57,6 +76,16 @@ export default function PaymentReceiptDocument({ receipt }: PaymentReceiptProps)
             box-shadow: none !important;
             display: block !important;
           }
+          #payment-receipt-print-area {
+            position: absolute !important;
+            top: 0 !important; left: 0 !important;
+            width: 210mm !important;
+            margin: 0 !important;
+          }
+          #payment-receipt-print-area.pr-page {
+            box-shadow: none !important;
+            min-height: 0 !important;
+          }
         }
       `}</style>
 
@@ -64,11 +93,13 @@ export default function PaymentReceiptDocument({ receipt }: PaymentReceiptProps)
         id="payment-receipt-print-area"
         className="pr-page"
         style={{
+          position: "relative",
           backgroundColor: "#ffffff",
-          color: "#1e293b",
+          color: INK,
           width: "210mm",
           minHeight: "297mm",
-          padding: "14mm 16mm",
+          padding: "14mm 16mm 16mm",
+          borderTop: `4px solid ${GREEN}`,
           fontSize: "13px",
           lineHeight: "1.6",
           boxSizing: "border-box",
@@ -76,147 +107,146 @@ export default function PaymentReceiptDocument({ receipt }: PaymentReceiptProps)
           boxShadow: "0 4px 24px rgba(0,0,0,0.10)",
         }}
       >
-        {/* Header */}
+        {/* ── Header ──────────────────────────────────────────────── */}
         <div style={{
-          backgroundColor: "#166534",
-          borderRadius: "8px",
-          padding: "16px 20px",
-          marginBottom: "20px",
           display: "flex",
-          alignItems: "center",
+          alignItems: "flex-start",
           justifyContent: "space-between",
+          paddingBottom: "14px",
+          borderBottom: `2px solid ${GREEN}`,
+          marginBottom: "20px",
         }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
             <div style={{
-              width: "44px", height: "44px",
-              border: "2px dashed rgba(255,255,255,0.3)",
-              borderRadius: "8px",
+              width: "50px", height: "50px",
+              border: `2px dashed ${GREEN}`,
+              borderRadius: "10px",
               display: "flex", alignItems: "center", justifyContent: "center",
-              color: "rgba(255,255,255,0.3)", fontSize: "9px", textAlign: "center",
+              color: GREEN, fontSize: "9px", textAlign: "center", fontWeight: 600,
             }}>LOGO</div>
             <div>
-              <p style={{ color: "rgba(255,255,255,0.5)", fontSize: "9px", letterSpacing: "0.15em", textTransform: "uppercase", margin: 0 }}>บริษัท / Company</p>
-              <p style={{ color: "#ffffff", fontSize: "16px", fontWeight: 700, margin: "2px 0 0" }}>หจก.แพร่สงวนพาณิชย์</p>
-              <p style={{ color: "rgba(255,255,255,0.45)", fontSize: "10px", margin: "2px 0 0", lineHeight: "1.6" }}>
+              <p style={{ color: GREEN, fontSize: "9px", letterSpacing: "0.18em", textTransform: "uppercase", margin: 0, fontWeight: 700 }}>บริษัท / Company</p>
+              <p style={{ color: INK, fontSize: "18px", fontWeight: 800, margin: "3px 0 0" }}>หจก.แพร่สงวนพาณิชย์</p>
+              <p style={{ color: MUTED, fontSize: "10.5px", margin: "5px 0 0", lineHeight: "1.6" }}>
                 38/10 ม.3 ต.ทุ่งกวาว อ.เมือง จ.แพร่ 54000
               </p>
-              <p style={{ color: "rgba(255,255,255,0.35)", fontSize: "9.5px", margin: "1px 0 0" }}>
+              <p style={{ color: FAINT, fontSize: "9.5px", margin: "1px 0 0" }}>
                 โทร. 093-1625696 &nbsp;|&nbsp; เลขภาษี: 0543543000476
               </p>
             </div>
           </div>
           <div style={{ textAlign: "right" }}>
-            <p style={{ color: "#ffffff", fontSize: "22px", fontWeight: 700, margin: 0, letterSpacing: "0.05em" }}>ใบเสร็จรับเงิน</p>
-            <p style={{ color: "rgba(255,255,255,0.5)", fontSize: "10px", letterSpacing: "0.2em", margin: "2px 0 0" }}>PAYMENT RECEIPT</p>
-            <p style={{ color: "rgba(255,255,255,0.85)", fontSize: "11px", letterSpacing: "0.05em", margin: "6px 0 0", fontWeight: 600 }}>
+            <p style={{ color: GREEN, fontSize: "26px", fontWeight: 800, margin: 0, letterSpacing: "0.04em" }}>ใบเสร็จรับเงิน</p>
+            <p style={{ color: FAINT, fontSize: "9.5px", letterSpacing: "0.22em", margin: "2px 0 0", fontWeight: 600 }}>PAYMENT RECEIPT</p>
+            <p style={{ color: INK, fontSize: "12px", letterSpacing: "0.04em", margin: "8px 0 0", fontWeight: 700 }}>
               เลขที่ {receipt.proofNumber}
             </p>
           </div>
         </div>
 
-        {/* Approved stamp */}
-        <div style={{
-          display: "inline-block",
-          backgroundColor: "#dcfce7",
-          border: "1.5px solid #16a34a",
-          borderRadius: "999px",
-          padding: "5px 16px 5px 8px",
-          marginBottom: "20px",
-        }}>
-          <span style={{
-            display: "inline-block",
-            width: "20px", height: "20px", borderRadius: "50%",
-            backgroundColor: "#16a34a",
-            color: "#ffffff", fontSize: "12px", fontWeight: 700,
-            textAlign: "center", lineHeight: "20px",
-            verticalAlign: "middle",
-            marginRight: "8px",
-          }}>✓</span>
-          <span style={{ color: "#15803d", fontWeight: 700, fontSize: "13px", letterSpacing: "0.08em", verticalAlign: "middle" }}>
-            รับชำระเงินแล้ว
-          </span>
-        </div>
+        {/* ── From + amount ───────────────────────────────────────── */}
+        <div style={{ display: "grid", gridTemplateColumns: "1.35fr 1fr", gap: "14px", marginBottom: "20px" }}>
 
-        {/* Meta */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "20px" }}>
-          <div style={{ border: "1px solid #e2e8f0", borderLeft: "3px solid #94a3b8", borderRadius: "6px", padding: "10px 14px", backgroundColor: "#f8fafc" }}>
-            <p style={{ color: "#94a3b8", fontSize: "9px", textTransform: "uppercase", letterSpacing: "0.12em", margin: "0 0 4px" }}>รับจาก / From</p>
-            <p style={{ color: "#1e293b", fontWeight: 600, fontSize: "13px", margin: "0 0 2px" }}>{receipt.customerName}</p>
-            <p style={{ color: "#64748b", fontSize: "11px", margin: 0 }}>{receipt.customerEmail}</p>
+          {/* From + references */}
+          <div style={{ border: `1px solid ${LINE}`, borderRadius: "12px", padding: "16px 18px" }}>
+            <p style={{ color: FAINT, fontSize: "9px", textTransform: "uppercase", letterSpacing: "0.14em", margin: "0 0 6px", fontWeight: 700 }}>รับจาก / From</p>
+            <p style={{ color: INK, fontWeight: 700, fontSize: "15px", margin: "0 0 2px" }}>{receipt.customerName}</p>
+            <p style={{ color: MUTED, fontSize: "11px", margin: 0 }}>{receipt.customerEmail}</p>
+
+            <div style={{ borderTop: `1px dashed ${LINE}`, margin: "12px 0 0", paddingTop: "10px", display: "flex", flexDirection: "column", gap: "6px" }}>
+              {references.map(({ label, value }) => (
+                <div key={label} style={{ display: "flex", justifyContent: "space-between", fontSize: "12px", gap: "10px" }}>
+                  <span style={{ color: FAINT, flexShrink: 0 }}>{label}</span>
+                  <span style={{ color: INK, fontWeight: 600, textAlign: "right" }}>{value}</span>
+                </div>
+              ))}
+            </div>
           </div>
-          <div style={{ border: "1px solid #e2e8f0", borderLeft: "3px solid #16a34a", borderRadius: "6px", padding: "10px 14px", backgroundColor: "#f8fafc", display: "flex", flexDirection: "column", gap: "4px" }}>
-            {[
-              { label: "อ้างอิงใบวางบิล", value: receipt.billingNumber },
-              ...(receipt.poNumbers.length > 0 && receipt.poNumbers.join(", ") !== receipt.billingNumber
-                ? [{ label: "เลขที่ PO", value: receipt.poNumbers.join(", ") }]
-                : []),
-              { label: "วิธีชำระ",        value: `${METHOD_LABEL[receipt.paymentMethod] ?? receipt.paymentMethod}${receipt.bankName ? ` — ${receipt.bankName}` : ""}` },
-              ...(receipt.referenceNumber ? [{ label: "เลขอ้างอิง", value: receipt.referenceNumber }] : []),
-              { label: "วันที่โอน",       value: fmtDate(receipt.paymentDate) },
-              { label: "วันที่อนุมัติ",    value: fmtDate(receipt.approvedAt) },
-            ].map(({ label, value }) => (
-              <div key={label} style={{ display: "flex", justifyContent: "space-between", fontSize: "12px" }}>
-                <span style={{ color: "#94a3b8", flexShrink: 0, marginRight: "8px" }}>{label}</span>
-                <span style={{ color: "#1e293b", fontWeight: 500, textAlign: "right" }}>{value}</span>
+
+          {/* Amount received — outlined card */}
+          <div style={{
+            borderRadius: "12px",
+            border: `2px solid ${GREEN}`,
+            backgroundColor: TINT,
+            padding: "16px 18px",
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "space-between",
+          }}>
+            <div>
+              {/* paid badge */}
+              <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", marginBottom: "8px" }}>
+                <span style={{
+                  display: "inline-flex", alignItems: "center", justifyContent: "center",
+                  width: "18px", height: "18px", borderRadius: "50%",
+                  border: `1.5px solid ${GREEN2}`, color: GREEN2, fontSize: "11px", fontWeight: 800,
+                }}>✓</span>
+                <span style={{ color: GREEN2, fontWeight: 700, fontSize: "11px", letterSpacing: "0.04em" }}>รับชำระเงินแล้ว</span>
               </div>
-            ))}
+              <p style={{ color: GREEN, fontSize: "9.5px", textTransform: "uppercase", letterSpacing: "0.14em", margin: 0, fontWeight: 700 }}>ยอดที่รับชำระ</p>
+              <p style={{ color: GREEN, fontSize: "30px", fontWeight: 800, margin: "2px 0 0" }}>
+                {fmt(receipt.amount)} <span style={{ fontSize: "16px", fontWeight: 700 }}>฿</span>
+              </p>
+            </div>
+            <div style={{ marginTop: "12px", borderTop: `1px solid ${GREEN}`, paddingTop: "10px", display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+              <span style={{ color: MUTED, fontSize: "10.5px" }}>วันที่อนุมัติ</span>
+              <span style={{ color: INK, fontSize: "12.5px", fontWeight: 700 }}>{fmtDate(receipt.approvedAt)}</span>
+            </div>
           </div>
         </div>
 
-        {/* Payment details table */}
+        {/* ── Line item table ─────────────────────────────────────── */}
         <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "16px" }}>
           <thead>
-            <tr style={{ backgroundColor: "#166534", color: "#ffffff" }}>
-              <th style={{ padding: "10px 12px", textAlign: "left", fontWeight: 600, fontSize: "12px", borderRight: "1px solid #15803d" }}>รายการ</th>
-              <th style={{ padding: "10px 12px", textAlign: "right", fontWeight: 600, fontSize: "12px", width: "28%" }}>จำนวนเงิน (บาท)</th>
+            <tr style={{ backgroundColor: TINT }}>
+              <th style={{ padding: "11px 14px", textAlign: "left", fontWeight: 700, fontSize: "12px", color: GREEN, borderTop: `2px solid ${GREEN}`, borderBottom: `2px solid ${GREEN}` }}>รายการ</th>
+              <th style={{ padding: "11px 14px", textAlign: "right", fontWeight: 700, fontSize: "12px", color: GREEN, width: "30%", borderTop: `2px solid ${GREEN}`, borderBottom: `2px solid ${GREEN}` }}>จำนวนเงิน (บาท)</th>
             </tr>
           </thead>
           <tbody>
-            <tr style={{ backgroundColor: "#f0fdf4" }}>
-              <td style={{ padding: "12px", borderBottom: "1px solid #dcfce7", borderRight: "1px solid #dcfce7" }}>
-                <p style={{ margin: 0, fontWeight: 600, fontSize: "13px" }}>
-                  {receipt.proofNumber}
-                </p>
-                <p style={{ margin: "4px 0 0", fontSize: "11px", color: "#64748b" }}>
+            <tr>
+              <td style={{ padding: "12px 14px", borderBottom: `1px solid ${LINE}` }}>
+                <p style={{ margin: 0, fontWeight: 700, fontSize: "13px", color: INK }}>{receipt.proofNumber}</p>
+                <p style={{ margin: "3px 0 0", fontSize: "11px", color: MUTED }}>
                   ค่าสินค้า/บริการ{receipt.installmentNumber && receipt.installmentNumber > 1 ? ` (งวดที่ ${receipt.installmentNumber})` : ""}
                 </p>
               </td>
-              <td style={{ padding: "12px", textAlign: "right", borderBottom: "1px solid #dcfce7", fontWeight: 600, fontSize: "14px" }}>
+              <td style={{ padding: "12px 14px", textAlign: "right", borderBottom: `1px solid ${LINE}`, fontWeight: 600, fontSize: "14px", color: INK }}>
                 {fmt(receipt.amount)}
               </td>
             </tr>
           </tbody>
           <tfoot>
-            <tr style={{ backgroundColor: "#166534" }}>
-              <td style={{ padding: "11px 12px", color: "#ffffff", fontWeight: 700, fontSize: "13px" }}>
+            <tr>
+              <td style={{ padding: "12px 14px", color: GREEN, fontWeight: 700, fontSize: "13px", textAlign: "right", borderTop: `2px solid ${GREEN}` }}>
                 ยอดรวมทั้งสิ้น
               </td>
-              <td style={{ padding: "11px 12px", textAlign: "right", color: "#ffffff", fontWeight: 700, fontSize: "15px" }}>
+              <td style={{ padding: "12px 14px", textAlign: "right", color: GREEN, fontWeight: 800, fontSize: "15px", borderTop: `2px solid ${GREEN}` }}>
                 {fmt(receipt.amount)} ฿
               </td>
             </tr>
           </tfoot>
         </table>
 
-        {/* Signatures */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "40px", marginTop: "40px" }}>
+        {/* ── Signatures ──────────────────────────────────────────── */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "48px", marginTop: "30px" }}>
           {[
             { role: "ผู้รับเงิน / Receiver", name: "หจก.แพร่สงวนพาณิชย์" },
             { role: "ผู้ชำระเงิน / Payer", name: receipt.customerName },
           ].map(({ role, name }) => (
             <div key={role} style={{ textAlign: "center" }}>
-              <p style={{ fontSize: "11px", color: "#64748b", margin: "0 0 8px" }}>{role}</p>
-              <div style={{ height: "48px", borderBottom: "1px solid #94a3b8", marginBottom: "8px" }} />
-              <p style={{ fontSize: "11px", color: "#475569", margin: "0 0 4px" }}>ลงชื่อ .............................................</p>
-              <p style={{ fontSize: "11px", color: "#94a3b8", margin: "4px 0" }}>( {name} )</p>
-              <p style={{ fontSize: "10px", color: "#94a3b8", margin: "6px 0 0" }}>วันที่ ....../....../........</p>
+              <div style={{ height: "44px" }} />
+              <div style={{ borderBottom: `1px dashed ${FAINT}`, marginBottom: "8px" }} />
+              <p style={{ fontSize: "11px", color: INK, fontWeight: 600, margin: "0 0 2px" }}>{role}</p>
+              <p style={{ fontSize: "11px", color: MUTED, margin: "2px 0" }}>( {name} )</p>
+              <p style={{ fontSize: "10px", color: FAINT, margin: "6px 0 0" }}>วันที่ ....../....../........</p>
             </div>
           ))}
         </div>
 
-        {/* Footer note */}
-        <div style={{ marginTop: "32px", paddingTop: "12px", borderTop: "1px dashed #e2e8f0", textAlign: "center" }}>
-          <p style={{ fontSize: "10.5px", color: "#94a3b8", margin: 0 }}>
+        {/* ── Footer note ─────────────────────────────────────────── */}
+        <div style={{ marginTop: "28px", paddingTop: "12px", borderTop: `1px dashed ${LINE}`, textAlign: "center" }}>
+          <p style={{ fontSize: "10.5px", color: FAINT, margin: 0 }}>
             ขอบคุณที่ใช้บริการ — เอกสารนี้ออกโดยระบบอัตโนมัติ
           </p>
         </div>

@@ -746,7 +746,7 @@ export default function Page(): JSX.Element {
         <div className="absolute -bottom-[26rem] -left-[12rem] w-[42rem] h-[42rem] rounded-full border border-secondary/[0.08]" />
       </div>
 
-      <div className="relative max-w-6xl mx-auto px-4 md:px-8 py-8 md:py-14 space-y-5 md:space-y-7">
+      <div id="client-dashboard-content" className="relative max-w-6xl mx-auto px-4 md:px-8 py-8 md:py-14 space-y-5 md:space-y-7">
 
         {/* ── User Card ─────────────────────────────────────────── */}
         <div className="card bg-base-100 border border-base-300/70 rounded-[2.5rem] shadow-mc transition-shadow duration-300 hover:shadow-mc-lg">
@@ -1292,7 +1292,7 @@ export default function Page(): JSX.Element {
                   <span className="loading loading-spinner loading-lg text-primary" />
                 </div>
               ) : modalBilling ? (
-                <BillingNoteDocument po={modalBilling} />
+                <BillingNoteDocument po={modalBilling} domId="" />
               ) : (
                 <div className="flex flex-col items-center justify-center h-full gap-2 text-base-content/30">
                   <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1410,6 +1410,27 @@ export default function Page(): JSX.Element {
           }
         >
           <QuotationDocument rfq={rfqForModal} confirmed={printConfirmed} showHighlights={showHighlights} />
+        </div>
+      )}
+
+      {/* Collapse the (tall) dashboard while printing the billing note so it
+          doesn't leave a trailing blank page behind the print area. */}
+      {billingPrintReady && (
+        <style>{`@media print { #client-dashboard-content { display: none !important; } }`}</style>
+      )}
+
+      {/* ── Billing print/download area (rendered at page root, outside modal) ── */}
+      {(billingPrintReady || billingDownloadReady) && modalBilling && (
+        <div
+          id="billing-note-print-area"
+          aria-hidden="true"
+          style={
+            billingDownloadReady
+              ? { position: "fixed", top: 0, left: 0, zIndex: -1, pointerEvents: "none" }
+              : { position: "fixed", top: "-9999px", left: "-9999px", pointerEvents: "none" }
+          }
+        >
+          <BillingNoteDocument po={modalBilling} domId="" />
         </div>
       )}
 
