@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import ChatNotificationBubble from "@/components/client/ChatNotificationBubble";
 import QuotationDocument, { RFQData } from "@/components/QuotationDocument";
 import BillingNoteDocument from "@/components/BillingNoteDocument";
+import PaymentStatusBadge from "@/components/payment/PaymentStatusBadge";
+import PaymentHistoryModal from "@/components/payment/PaymentHistoryModal";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type QuotationStatus = "sent" | "reviewing" | "completed" | "bargaining" | "confirmed";
@@ -118,10 +120,69 @@ function IconDoc() {
   );
 }
 
+function IconBanknote() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="w-5 h-5">
+      <rect x="2" y="6" width="20" height="12" rx="2" strokeWidth={2} />
+      <circle cx="12" cy="12" r="2" strokeWidth={2} />
+      <path strokeWidth={2} strokeLinecap="round" d="M6 12h.01M18 12h.01" />
+    </svg>
+  );
+}
+
+function IconClock() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="w-5 h-5">
+      <circle cx="12" cy="12" r="9" strokeWidth={2} />
+      <path strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" d="M12 7v5l3 3" />
+    </svg>
+  );
+}
+
+function IconXCircle() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="w-5 h-5">
+      <circle cx="12" cy="12" r="9" strokeWidth={2} />
+      <path strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" d="M15 9l-6 6m0-6l6 6" />
+    </svg>
+  );
+}
+
+function IconCheckCircle() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="w-5 h-5">
+      <circle cx="12" cy="12" r="9" strokeWidth={2} />
+      <path strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4" />
+    </svg>
+  );
+}
+
+function IconHistory() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="w-4 h-4">
+      <path strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" d="M3 12a9 9 0 1 0 2.64-6.36L3 8" />
+      <path strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" d="M3 3v5h5" />
+      <path strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" d="M12 7v5l3 3" />
+    </svg>
+  );
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function Page(): JSX.Element {
   const { data: session } = useSession();
   const router = useRouter();
+
+  // ── Theme ────────────────────────────────────────────────────────────────
+  // Follow the global Theme picker (navbar) but default to the Mastercard
+  // editorial theme when the user hasn't explicitly chosen one.
+  const [theme, setTheme] = useState("mastercard");
+  useEffect(() => {
+    const pick = () => setTheme(localStorage.getItem("theme") || "mastercard");
+    pick();
+    const obs = new MutationObserver(pick);
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+    return () => obs.disconnect();
+  }, []);
 
   // ── Page state ───────────────────────────────────────────────────────────
   const [loading, setLoading] = useState(true);
@@ -179,6 +240,99 @@ export default function Page(): JSX.Element {
     return () => clearInterval(id);
   }, [fetchPOOrders]);
 
+  // ── Fetch payment proofs ─────────────────────────────────────────────────
+  type PaymentInfo = {
+    status: "unpaid" | "pending" | "rejected" | "partial" | "approved";
+    totalPaid: number;
+    billingTotal: number;
+    remaining: number;
+    lastReviewedAt: string | null;
+  };
+  const [paymentProofs, setPaymentProofs] = useState<Record<string, PaymentInfo>>({});
+
+  // ── Track which billings the client has already "seen" the latest admin review for ──
+  const [seenReviews, setSeenReviews] = useState<Record<string, string>>({});
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("payment_seen_reviews");
+      if (raw) setSeenReviews(JSON.parse(raw));
+    } catch {}
+  }, []);
+
+  const markReviewSeen = useCallback((key: string, reviewedAt: string | null) => {
+    if (!reviewedAt) return;
+    setSeenReviews((prev) => {
+      const next = { ...prev, [key]: reviewedAt };
+      try { localStorage.setItem("payment_seen_reviews", JSON.stringify(next)); } catch {}
+      return next;
+    });
+  }, []);
+
+  const hasUnseenReview = (key: string) => {
+    const info = paymentProofs[key];
+    if (!info?.lastReviewedAt) return false;
+    const seen = seenReviews[key];
+    return !seen || new Date(info.lastReviewedAt) > new Date(seen);
+  };
+
+  const fetchPaymentProofs = useCallback(async (buttons: { key: string; isGroup: boolean }[]) => {
+    if (buttons.length === 0) return;
+    try {
+      const results = await Promise.all(
+        buttons.map(async ({ key, isGroup }) => {
+          const param = isGroup ? `billingId=${key}` : `poId=${key}`;
+          const proofs: { status: string; amount: number; reviewedAt: string | null }[] = await fetch(`/api/payment-proof?${param}`)
+            .then((r) => r.ok ? r.json() : [])
+            .catch(() => []);
+
+          let billingTotal = 0;
+          try {
+            const infoRes = await fetch(isGroup ? `/api/billing/${key}` : `/api/po/${key}`);
+            if (infoRes.ok) {
+              const info = await infoRes.json();
+              billingTotal = (info.taxInvoices ?? []).reduce(
+                (s: number, inv: { amount: number }) => s + (inv.amount ?? 0), 0
+              );
+            }
+          } catch {}
+
+          return { key, proofs, billingTotal };
+        })
+      );
+
+      const map: Record<string, PaymentInfo> = {};
+      results.forEach(({ key, proofs, billingTotal }) => {
+        const totalPaid = (proofs ?? [])
+          .filter((p) => p.status === "approved")
+          .reduce((s, p) => s + (p.amount ?? 0), 0);
+        const remaining = billingTotal > 0 ? Math.max(0, billingTotal - totalPaid) : 0;
+
+        let status: PaymentInfo["status"];
+        if (!proofs || proofs.length === 0) {
+          status = "unpaid";
+        } else if (proofs.every((p) => p.status === "approved")) {
+          status = billingTotal > 0 && remaining > 0 ? "partial" : "approved";
+        } else if (proofs.some((p) => p.status === "pending")) {
+          status = "pending";
+        } else if (proofs.some((p) => p.status === "rejected")) {
+          status = "rejected";
+        } else {
+          status = "unpaid";
+        }
+
+        const reviewedTimestamps = (proofs ?? [])
+          .map((p) => p.reviewedAt)
+          .filter((d): d is string => !!d);
+        const lastReviewedAt = reviewedTimestamps.length > 0
+          ? reviewedTimestamps.reduce((a, b) => (new Date(a) > new Date(b) ? a : b))
+          : null;
+
+        map[key] = { status, totalPaid, billingTotal, remaining, lastReviewedAt };
+      });
+      setPaymentProofs(map);
+    } catch {}
+  }, []);
+
   // ── Fetch RFQ when document modal opens ─────────────────────────────────
   useEffect(() => {
     if (!modalQuotation || !userId || userId === "ไม่พบข้อมูล") return;
@@ -202,6 +356,9 @@ export default function Page(): JSX.Element {
   const [billingModalLoading, setBillingModalLoading] = useState(false);
   const [billingPrintReady, setBillingPrintReady]   = useState(false);
   const [billingDownloadReady, setBillingDownloadReady] = useState(false);
+
+  // ── Payment history modal state ──────────────────────────────────────
+  const [historyModal, setHistoryModal] = useState<{ key: string; isGroup: boolean; label: string } | null>(null);
 
   // ── Billing modal handlers ───────────────────────────────────────────
   const handleOpenBillingModal = async (btn: BillingButton) => {
@@ -428,37 +585,199 @@ export default function Page(): JSX.Element {
     return [...singles, ...groups];
   })();
 
+  // Fetch payment proofs whenever billing buttons change (both group and single-PO)
+  useEffect(() => {
+    if (billingButtons.length === 0) return;
+    fetchPaymentProofs(billingButtons.map((b) => ({ key: b.key, isGroup: b.isGroup })));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [billingButtons.map((b) => b.key).join(",")]);
+
+  // ── PO status timeline (shared by billed & in-progress layouts) ──────────
+  const poTimeline = poLatest ? (
+    <div className="md:w-64 shrink-0 flex flex-col gap-0">
+      {PO_STEPS.map((step, i) => {
+        const done    = i <= PO_STATUS_ORDER[poLatest.status];
+        const current = i === PO_STATUS_ORDER[poLatest.status];
+        return (
+          <div key={step.key} className="flex gap-3">
+            <div className="flex flex-col items-center">
+              <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 transition-colors
+                ${done ? "bg-secondary text-secondary-content" : "bg-base-200 text-base-content/30"}`}>
+                {done ? "✓" : i + 1}
+              </div>
+              <div className={`w-px flex-1 my-1 ${done ? "bg-secondary/40" : "bg-base-300"}`} />
+            </div>
+            <div className="pb-4 pt-1 min-w-0">
+              <p className={`text-sm font-medium leading-tight ${current ? "text-base-content" : done ? "text-base-content/70" : "text-base-content/30"}`}>
+                {step.label}
+              </p>
+              {current && (
+                <p className="text-xs text-base-content/45 mt-0.5">{step.sublabel}</p>
+              )}
+            </div>
+          </div>
+        );
+      })}
+      {/* Step 4: ชำระเงินแล้ว (derived from payment proof status) */}
+      {(() => {
+        const anyBillingId = billingButtons[0]?.key;
+        const info = anyBillingId ? paymentProofs[anyBillingId] : undefined;
+        const pStatus = info?.status;
+        const paid = pStatus === "approved";
+        return (
+          <div className="flex gap-3">
+            <div className="flex flex-col items-center">
+              <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 transition-colors
+                ${paid ? "bg-success text-success-content" : "bg-base-200 text-base-content/30"}`}>
+                {paid ? "✓" : "4"}
+              </div>
+            </div>
+            <div className="pb-4 pt-1 min-w-0">
+              <p className={`text-sm font-medium leading-tight ${paid ? "text-success" : "text-base-content/30"}`}>
+                ชำระเงินแล้ว
+              </p>
+              {paid && (
+                <p className="text-xs text-base-content/45 mt-0.5">ยืนยันการชำระเงินเรียบร้อย</p>
+              )}
+              {pStatus === "pending" && (
+                <p className="text-xs text-warning mt-0.5">รอการตรวจสอบ</p>
+              )}
+              {pStatus === "partial" && (
+                <p className="text-xs text-info mt-0.5">
+                  ชำระบางส่วนแล้ว เหลืออีก {info!.remaining.toLocaleString("th-TH", { minimumFractionDigits: 2 })} ฿
+                </p>
+              )}
+            </div>
+          </div>
+        );
+      })()}
+    </div>
+  ) : null;
+
+  // ── Payment panel — full-width, spacious; each billing gets its own card ──
+  const paymentPanel = (poLatest?.status === "billed" && billingButtons.length > 0) ? (
+    <div>
+      <p className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.16em] text-base-content/55 mb-4">
+        <span className="w-1.5 h-1.5 rounded-full bg-accent" />
+        การชำระเงิน
+      </p>
+      <div className={`grid gap-4 ${billingButtons.length > 1 ? "lg:grid-cols-2" : "grid-cols-1"}`}>
+        {billingButtons.map((btn) => {
+          const info         = paymentProofs[btn.key];
+          const pStatus      = info?.status ?? "unpaid";
+          const billingKey   = btn.key;
+          const billingLabel = btn.isGroup ? `ใบวางบิล ${btn.label}` : btn.label;
+          const qs           = !btn.isGroup ? "?t=po" : "";
+
+          const STAT: Record<string, {
+            wrap: string; iconWrap: string; titleColor: string;
+            Icon: () => JSX.Element; title: string; desc: JSX.Element | string;
+            cta: string; btnClass: string; pulse?: boolean; toStatus?: boolean;
+          }> = {
+            pending:  { wrap: "border-warning/30 bg-warning/5", iconWrap: "bg-warning/15 text-warning", titleColor: "text-warning", Icon: IconClock, title: "รอตรวจสอบการชำระเงิน", desc: "ทีมงานกำลังตรวจสอบหลักฐานการโอนเงินของคุณ", cta: "ดูสถานะ", btnClass: "btn-outline btn-warning", pulse: true, toStatus: true },
+            rejected: { wrap: "border-error/30 bg-error/5", iconWrap: "bg-error/15 text-error", titleColor: "text-error", Icon: IconXCircle, title: "หลักฐานถูกปฏิเสธ", desc: "กรุณาตรวจสอบและส่งหลักฐานการโอนเงินใหม่อีกครั้ง", cta: "ส่งหลักฐานใหม่", btnClass: "btn-error" },
+            partial:  { wrap: "border-info/30 bg-info/5", iconWrap: "bg-info/15 text-info", titleColor: "text-info", Icon: IconBanknote, title: "ชำระเงินบางส่วนแล้ว", desc: <>ยังเหลืออีก <span className="font-semibold text-info">{info?.remaining.toLocaleString("th-TH", { minimumFractionDigits: 2 })} ฿</span></>, cta: "ชำระส่วนที่เหลือ", btnClass: "btn-info" },
+            approved: { wrap: "border-success/30 bg-success/5", iconWrap: "bg-success/15 text-success", titleColor: "text-success", Icon: IconCheckCircle, title: "ชำระเงินเรียบร้อยแล้ว", desc: "ยืนยันการชำระเงินเรียบร้อย พร้อมดาวน์โหลดใบเสร็จ", cta: "ดูใบเสร็จ", btnClass: "btn-success", toStatus: true },
+            unpaid:   { wrap: "border-primary/25 bg-primary/5", iconWrap: "bg-primary/10 text-primary", titleColor: "text-base-content", Icon: IconBanknote, title: "รอการชำระเงิน", desc: "กรุณาอัปโหลดหลักฐานการโอนเงินเพื่อยืนยันคำสั่งซื้อ", cta: "ส่งหลักฐานการโอนเงิน", btnClass: "btn-primary" },
+          };
+          const cfg  = STAT[pStatus] ?? STAT.unpaid;
+          const Icon = cfg.Icon;
+          const href = cfg.toStatus
+            ? `/Client/payment/status/${billingKey}${qs}`
+            : `/Client/payment/${billingKey}${qs}`;
+
+          return (
+            <div key={`pay-${btn.key}`} className={`rounded-[1.75rem] border ${cfg.wrap} p-5 sm:p-6 flex flex-col gap-5`}>
+              <div className="flex items-start gap-4">
+                <div className={`w-12 h-12 rounded-full flex items-center justify-center shrink-0 ${cfg.iconWrap} ${cfg.pulse ? "animate-pulse" : ""}`}>
+                  <Icon />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className={`font-medium text-base tracking-mc leading-tight ${cfg.titleColor}`}>
+                    {cfg.title}
+                  </p>
+                  <p className="text-sm text-base-content/55 mt-1">{cfg.desc}</p>
+                  <p className="inline-flex items-center gap-1.5 text-xs text-base-content/40 mt-2 font-medium">
+                    <span className="w-1 h-1 rounded-full bg-base-content/30" />
+                    {billingLabel}
+                  </p>
+                </div>
+                {pStatus !== "unpaid" && (
+                  <button
+                    className="btn btn-ghost btn-sm btn-circle indicator shrink-0"
+                    title="ประวัติการชำระเงิน"
+                    onClick={() => {
+                      setHistoryModal({ key: billingKey, isGroup: btn.isGroup, label: billingLabel });
+                      markReviewSeen(billingKey, info?.lastReviewedAt ?? null);
+                    }}
+                  >
+                    {hasUnseenReview(billingKey) && (
+                      <span className="indicator-item indicator-top indicator-end w-2.5 h-2.5 bg-error rounded-full ring-2 ring-base-100" />
+                    )}
+                    <IconHistory />
+                  </button>
+                )}
+              </div>
+              <button
+                className={`btn ${cfg.btnClass} w-full`}
+                onClick={() => router.push(href)}
+              >
+                {cfg.cta}
+              </button>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  ) : null;
+
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
-    <main className="min-h-screen bg-base-200 text-base-content">
-      <div className="max-w-6xl mx-auto px-4 md:px-8 py-6 md:py-10 space-y-4 md:space-y-5">
+    <main
+      data-theme={theme}
+      className="font-mc relative min-h-screen bg-base-200 text-base-content overflow-hidden"
+    >
+      {/* ── Decorative orbital rings — true circles bleeding off the corners,
+             cradling the content from outside rather than crossing it ─────── */}
+      <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div className="absolute -top-[30rem] -right-[18rem] w-[58rem] h-[58rem] rounded-full border border-accent/15" />
+        <div className="absolute -top-[22rem] -right-[10rem] w-[42rem] h-[42rem] rounded-full border border-accent/10" />
+        <div className="absolute -bottom-[34rem] -left-[20rem] w-[58rem] h-[58rem] rounded-full border border-secondary/12" />
+        <div className="absolute -bottom-[26rem] -left-[12rem] w-[42rem] h-[42rem] rounded-full border border-secondary/[0.08]" />
+      </div>
+
+      <div className="relative max-w-6xl mx-auto px-4 md:px-8 py-8 md:py-14 space-y-5 md:space-y-7">
 
         {/* ── User Card ─────────────────────────────────────────── */}
-        <div className="card bg-base-100 border border-base-300 shadow-sm">
-          <div className="card-body py-5 px-6">
+        <div className="card bg-base-100 border border-base-300/70 rounded-[2.5rem] shadow-mc transition-shadow duration-300 hover:shadow-mc-lg">
+          <div className="card-body py-7 px-7 md:px-9">
             <div className="flex items-center justify-between gap-4">
-              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-5">
+                {/* Circular ink portrait */}
                 <div className="avatar placeholder shrink-0">
-                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary to-accent text-primary-content font-bold text-lg flex items-center justify-center">
+                  <div className="w-16 h-16 rounded-full bg-primary text-primary-content font-medium text-2xl tracking-mc flex items-center justify-center">
                     <span>{name[0]?.toUpperCase()}</span>
                   </div>
                 </div>
                 <div>
-                  <h2 className="font-semibold text-base leading-snug">
-                    Welcome &ldquo;{name}&rdquo;
-                  </h2>
-                  <p className="text-sm text-base-content/55 mt-0.5">
-                    You are logged in as {email}
+                  {/* Eyebrow */}
+                  <p className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.16em] text-base-content/55 mb-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-accent" />
+                    Dashboard
                   </p>
-                  {uid && (
-                    <p className="text-xs text-base-content/35 mt-0.5">
-                      Your id is: {uid}
-                    </p>
-                  )}
+                  <h2 className="font-medium text-2xl leading-tight tracking-mc">
+                    สวัสดี, {name}
+                  </h2>
+                  <p className="text-sm text-base-content/55 mt-1">
+                    {email}
+                  </p>
                 </div>
               </div>
-              <div className="flex items-center gap-1.5 text-xs text-success font-medium shrink-0">
-                <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
+              <div className="flex items-center gap-2 text-xs font-medium shrink-0 rounded-full border-[1.5px] border-base-content/15 bg-base-100 px-4 py-2">
+                <span className="relative flex h-2 w-2">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75" />
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-success" />
+                </span>
                 ออนไลน์
               </div>
             </div>
@@ -468,7 +787,7 @@ export default function Page(): JSX.Element {
         {/* ── Main Section ──────────────────────────────────────── */}
         {loading ? (
 
-          <div className="card bg-base-100 border border-base-300 shadow-sm">
+          <div className="card bg-base-100 border border-base-300/70 rounded-[2.5rem] shadow-mc transition-shadow duration-300 hover:shadow-mc-lg">
             <div className="card-body items-center py-24 gap-3">
               <span className="loading loading-spinner loading-lg text-primary" />
               <p className="text-sm text-base-content/40">กำลังโหลด...</p>
@@ -478,21 +797,21 @@ export default function Page(): JSX.Element {
         ) : latest && meta && currentStep ? (
 
           /* ── Status Card (มี quotation อยู่) ── */
-          <div className="card bg-base-100 border border-base-300 shadow-sm overflow-hidden">
-            <div className={`h-1 bg-gradient-to-r ${meta.bar}`} />
-            <div className="card-body gap-5 pt-5 px-6 md:px-8">
+          <div className="card bg-base-100 border border-base-300/70 rounded-[2.5rem] shadow-mc transition-shadow duration-300 hover:shadow-mc-lg overflow-hidden">
+            <div className="card-body gap-5 pt-7 px-7 md:px-9">
 
               {/* File header */}
               <div className="flex items-start justify-between gap-4">
                 <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-base-200 flex items-center justify-center shrink-0 text-base-content/35">
+                  <div className="w-12 h-12 rounded-full bg-base-200 flex items-center justify-center shrink-0 text-base-content/40">
                     <IconDoc />
                   </div>
                   <div className="min-w-0">
-                    <p className="text-xs tracking-widest uppercase text-primary/60 font-medium mb-0.5">
+                    <p className="inline-flex items-center gap-2 text-xs tracking-[0.16em] uppercase text-base-content/55 font-bold mb-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-accent" />
                       Quotation Request
                     </p>
-                    <p className="font-semibold leading-snug truncate max-w-lg">
+                    <p className="font-medium text-xl tracking-mc leading-snug truncate max-w-lg">
                       {latest.filename}
                     </p>
                     <p className="text-xs text-base-content/40 mt-0.5">
@@ -518,7 +837,7 @@ export default function Page(): JSX.Element {
                         ? () => setModalQuotation(latest)
                         : undefined
                     }
-                    className={`rounded-2xl border px-5 py-5 flex items-center gap-4 ${meta.spotlight} ${
+                    className={`rounded-[1.75rem] border px-6 py-5 flex items-center gap-4 ${meta.spotlight} ${
                       latest.status === "bargaining" || latest.status === "confirmed"
                         ? "cursor-pointer hover:opacity-90 transition-opacity"
                         : ""
@@ -626,29 +945,28 @@ export default function Page(): JSX.Element {
         ) : (
 
           /* ── Hero CTA (ยังไม่มี quotation) ── */
-          <div className="card bg-base-100 border border-base-300 shadow-sm overflow-hidden">
-            <div className="h-1 bg-gradient-to-r from-primary to-accent" />
-            <div className="card-body py-10 px-8 gap-0">
+          <div className="card bg-base-100 border border-base-300/70 rounded-[2.5rem] shadow-mc transition-shadow duration-300 hover:shadow-mc-lg overflow-hidden">
+            <div className="card-body py-12 px-8 md:px-12 gap-0">
               <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-10">
 
                 {/* Left: text */}
                 <div className="flex-1">
-                  <span className="inline-flex w-fit items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-medium text-primary mb-6">
-                    <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+                  <p className="inline-flex w-fit items-center gap-2 text-xs font-bold uppercase tracking-[0.16em] text-base-content/55 mb-6">
+                    <span className="w-1.5 h-1.5 rounded-full bg-accent" />
                     Quotation Request System
-                  </span>
-                  <h1 className="text-4xl md:text-5xl font-bold tracking-tight leading-[1.2] mb-4">
+                  </p>
+                  <h1 className="text-5xl md:text-6xl font-medium tracking-mc leading-[1.05] mb-5">
                     ส่งเอกสาร<br />
-                    เพื่อจัดทำ<span className="text-primary">ใบเสนอราคา</span>
+                    เพื่อจัดทำ<span className="text-accent">ใบเสนอราคา</span>
                   </h1>
-                  <p className="text-base text-base-content/50 leading-relaxed max-w-md mb-8">
+                  <p className="text-base text-base-content/55 leading-relaxed max-w-md mb-8">
                     อัปโหลดไฟล์รายการสินค้า ทีมงานจะจัดทำใบเสนอราคา
                     และพร้อมต่อรองกับคุณในทุกขั้นตอน
                   </p>
                   <div className="flex flex-wrap gap-3">
                     <button
                       onClick={() => router.push("/Client/quotation")}
-                      className="btn btn-primary btn-lg gap-2 shadow-lg shadow-primary/20"
+                      className="btn btn-primary btn-lg gap-2 shadow-lg shadow-primary/30 transition-transform hover:scale-[1.03] active:scale-95"
                     >
                       เริ่มต้นเลย
                       <IconArrow />
@@ -670,7 +988,7 @@ export default function Page(): JSX.Element {
                     { label: "ออกใบเสนอราคา",    sub: "ทีมงานจัดทำให้ทันที" },
                     { label: "ต่อรองราคาออนไลน์", sub: "Chat โดยตรงกับทีมงาน" },
                   ].map((item, i) => (
-                    <div key={i} className="flex items-center gap-3 rounded-xl bg-base-200 px-4 py-3">
+                    <div key={i} className="flex items-center gap-3 rounded-2xl bg-base-200/70 px-4 py-3.5">
                       <div className="w-6 h-6 rounded-full bg-primary/15 text-primary text-xs font-bold flex items-center justify-center shrink-0">
                         {i + 1}
                       </div>
@@ -691,7 +1009,7 @@ export default function Page(): JSX.Element {
         {/* ── PO Section ────────────────────────────────────────── */}
         {poLoading ? (
 
-          <div className="card bg-base-100 border border-base-300 shadow-sm">
+          <div className="card bg-base-100 border border-base-300/70 rounded-[2.5rem] shadow-mc transition-shadow duration-300 hover:shadow-mc-lg">
             <div className="card-body items-center py-12 gap-3">
               <span className="loading loading-spinner loading-lg text-secondary" />
               <p className="text-sm text-base-content/40">กำลังโหลดใบสั่งซื้อ...</p>
@@ -701,20 +1019,20 @@ export default function Page(): JSX.Element {
         ) : poLatest && poMeta && poCurrentStep ? (
 
           /* ── PO Status Card ── */
-          <div className="card bg-base-100 border border-base-300 shadow-sm overflow-hidden">
-            <div className={`h-1 bg-linear-to-r ${poMeta.bar}`} />
-            <div className="card-body gap-5 pt-5 px-6 md:px-8">
+          <div className="card bg-base-100 border border-base-300/70 rounded-[2.5rem] shadow-mc transition-shadow duration-300 hover:shadow-mc-lg overflow-hidden">
+            <div className="card-body gap-5 pt-7 px-7 md:px-9">
 
               <div className="flex items-start justify-between gap-4">
                 <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-base-200 flex items-center justify-center shrink-0 text-base-content/35">
+                  <div className="w-12 h-12 rounded-full bg-base-200 flex items-center justify-center shrink-0 text-base-content/40">
                     <IconDoc />
                   </div>
                   <div className="min-w-0">
-                    <p className="text-xs tracking-widest uppercase text-secondary/60 font-medium mb-0.5">
+                    <p className="inline-flex items-center gap-2 text-xs tracking-[0.16em] uppercase text-base-content/55 font-bold mb-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-secondary" />
                       Purchase Order
                     </p>
-                    <p className="font-semibold leading-snug">{poLatest.poNumber}</p>
+                    <p className="font-medium text-xl tracking-mc leading-snug">{poLatest.poNumber}</p>
                     <p className="text-xs text-base-content/40 mt-0.5 truncate max-w-xs">
                       {poLatest.fileOrigName} · {new Date(poLatest.createdAt).toLocaleDateString("th-TH", {
                         year: "numeric", month: "short", day: "numeric",
@@ -728,6 +1046,7 @@ export default function Page(): JSX.Element {
 
               <div className="divider my-0" />
 
+              <div className="flex flex-col gap-6">
               <div className="flex flex-col md:flex-row gap-6">
 
                 {/* Left: spotlight (non-billed) OR billing list (billed) */}
@@ -735,7 +1054,7 @@ export default function Page(): JSX.Element {
                   {poLatest.status === "billed" && billingButtons.length > 0 ? (
 
                     /* ── Billing list card ── */
-                    <div className="rounded-2xl border border-success/30 overflow-hidden shadow-sm">
+                    <div className="rounded-[1.75rem] border border-success/30 overflow-hidden shadow-mc-sm">
 
                       {/* Header */}
                       <div className={`px-5 py-4 flex items-center gap-3 ${poMeta.spotlight}`}>
@@ -791,6 +1110,12 @@ export default function Page(): JSX.Element {
                                 {btn.isGroup && (
                                   <span className="badge badge-primary badge-xs">กลุ่ม</span>
                                 )}
+                                {btn.isGroup && paymentProofs[btn.key] && (
+                                  <PaymentStatusBadge
+                                    status={paymentProofs[btn.key].status}
+                                    size="xs"
+                                  />
+                                )}
                               </div>
                               <p className="text-xs text-base-content/45 mt-0.5 truncate">
                                 {btn.isGroup ? `· ${btn.sublabel}` : btn.sublabel}
@@ -813,7 +1138,7 @@ export default function Page(): JSX.Element {
 
                     /* ── Normal spotlight (pending / accepted) ── */
                     <>
-                      <div className={`rounded-2xl border px-5 py-5 flex items-center gap-4 ${poMeta.spotlight}`}>
+                      <div className={`rounded-[1.75rem] border px-6 py-5 flex items-center gap-4 ${poMeta.spotlight}`}>
                         <span className={`w-3 h-3 rounded-full shrink-0 ${poMeta.dot} ${poIsInProgress ? "animate-pulse" : ""}`} />
                         <div className="flex-1 min-w-0">
                           <p className="font-semibold">{poCurrentStep.label}</p>
@@ -833,35 +1158,10 @@ export default function Page(): JSX.Element {
                   )}
                 </div>
 
-                {/* Right: steps timeline */}
-                <div className="md:w-64 shrink-0 flex flex-col gap-0">
-                  {PO_STEPS.map((step, i) => {
-                    const done    = i <= PO_STATUS_ORDER[poLatest.status];
-                    const current = i === PO_STATUS_ORDER[poLatest.status];
-                    return (
-                      <div key={step.key} className="flex gap-3">
-                        <div className="flex flex-col items-center">
-                          <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 transition-colors
-                            ${done ? "bg-secondary text-secondary-content" : "bg-base-200 text-base-content/30"}`}>
-                            {done ? "✓" : i + 1}
-                          </div>
-                          {i < PO_STEPS.length - 1 && (
-                            <div className={`w-px flex-1 my-1 ${done ? "bg-secondary/40" : "bg-base-300"}`} />
-                          )}
-                        </div>
-                        <div className="pb-4 pt-1 min-w-0">
-                          <p className={`text-sm font-medium leading-tight ${current ? "text-base-content" : done ? "text-base-content/70" : "text-base-content/30"}`}>
-                            {step.label}
-                          </p>
-                          {current && (
-                            <p className="text-xs text-base-content/45 mt-0.5">{step.sublabel}</p>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
+                {poTimeline}
 
+              </div>
+                {paymentPanel}
               </div>
             </div>
           </div>
@@ -869,28 +1169,27 @@ export default function Page(): JSX.Element {
         ) : (
 
           /* ── PO Hero CTA ── */
-          <div className="card bg-base-100 border border-base-300 shadow-sm overflow-hidden">
-            <div className="h-1 bg-linear-to-r from-secondary to-info" />
-            <div className="card-body py-10 px-8 gap-0">
+          <div className="card bg-base-100 border border-base-300/70 rounded-[2.5rem] shadow-mc transition-shadow duration-300 hover:shadow-mc-lg overflow-hidden">
+            <div className="card-body py-12 px-8 md:px-12 gap-0">
               <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-10">
 
                 {/* Left: text */}
                 <div className="flex-1">
-                  <span className="inline-flex w-fit items-center gap-2 rounded-full border border-secondary/20 bg-secondary/10 px-3 py-1 text-xs font-medium text-secondary mb-6">
-                    <span className="w-1.5 h-1.5 rounded-full bg-secondary animate-pulse" />
+                  <p className="inline-flex w-fit items-center gap-2 text-xs font-bold uppercase tracking-[0.16em] text-base-content/55 mb-6">
+                    <span className="w-1.5 h-1.5 rounded-full bg-secondary" />
                     Purchase Order System
-                  </span>
-                  <h2 className="text-4xl md:text-5xl font-bold tracking-tight leading-[1.2] mb-4">
+                  </p>
+                  <h2 className="text-5xl md:text-6xl font-medium tracking-mc leading-[1.05] mb-5">
                     ส่งรายการสินค้า<br />
                     เพื่อ<span className="text-secondary">สั่งซื้อ</span>
                   </h2>
-                  <p className="text-base text-base-content/50 leading-relaxed max-w-md mb-8">
+                  <p className="text-base text-base-content/55 leading-relaxed max-w-md mb-8">
                     อัปโหลดรายการสินค้าที่ต้องการสั่งซื้อ ทีมงานจะจัดของและออกใบวางบิลให้คุณ
                   </p>
                   <div className="flex flex-wrap gap-3">
                     <button
                       onClick={() => router.push("/Client/po")}
-                      className="btn btn-secondary btn-lg gap-2 shadow-lg shadow-secondary/20"
+                      className="btn btn-secondary btn-lg gap-2 shadow-lg shadow-secondary/30 transition-transform hover:scale-[1.03] active:scale-95"
                     >
                       เริ่มสั่งซื้อ
                       <IconArrow />
@@ -906,7 +1205,7 @@ export default function Page(): JSX.Element {
                     { label: "ออกใบกำกับภาษี/ใบส่งของ", sub: "เขียนบนกระดาษพร้อมส่ง" },
                     { label: "รับใบวางบิล",            sub: "ดูและพิมพ์ใบวางบิลออนไลน์" },
                   ].map((item, i) => (
-                    <div key={i} className="flex items-center gap-3 rounded-xl bg-base-200 px-4 py-3">
+                    <div key={i} className="flex items-center gap-3 rounded-2xl bg-base-200/70 px-4 py-3.5">
                       <div className="w-6 h-6 rounded-full bg-secondary/15 text-secondary text-xs font-bold flex items-center justify-center shrink-0">
                         {i + 1}
                       </div>
@@ -1010,6 +1309,16 @@ export default function Page(): JSX.Element {
         </dialog>
       )}
 
+      {/* ── Payment History Modal ─────────────────────────────── */}
+      {historyModal && (
+        <PaymentHistoryModal
+          billingKey={historyModal.key}
+          isGroup={historyModal.isGroup}
+          label={historyModal.label}
+          onClose={() => setHistoryModal(null)}
+        />
+      )}
+
       {/* ── Learn More Modal ──────────────────────────────────── */}
       {learnMore && (
         <div className="modal modal-open modal-bottom sm:modal-middle">
@@ -1019,8 +1328,11 @@ export default function Page(): JSX.Element {
                 onClick={() => setLearnMore(false)}
                 className="btn btn-sm btn-circle btn-ghost absolute right-4 top-4"
               >✕</button>
-              <p className="text-xs font-semibold text-primary uppercase tracking-widest mb-1">How it works</p>
-              <h3 className="font-bold text-lg">ขั้นตอนการใช้งาน</h3>
+              <p className="inline-flex items-center gap-2 text-xs font-bold text-base-content/55 uppercase tracking-[0.16em] mb-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-accent" />
+                How it works
+              </p>
+              <h3 className="font-medium text-2xl tracking-mc">ขั้นตอนการใช้งาน</h3>
               <p className="text-sm text-base-content/50 mt-0.5">ระบบออกใบเสนอราคาทำงานอย่างไร</p>
             </div>
             <div className="px-6 py-6 space-y-0">

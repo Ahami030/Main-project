@@ -22,6 +22,12 @@ const BillingSchema = new mongoose.Schema(
     taxInvoices:   { type: [TaxInvoiceSchema], default: [] },
     status:        { type: String, enum: ["draft", "finalized"], default: "draft" },
     billingDate:   { type: Date, default: null },
+    // Payment tracking
+    paymentStatus: {
+      type: String,
+      enum: ["unpaid", "partial", "paid"],
+      default: "unpaid",
+    },
     // Lifecycle management
     expiresAt:          { type: Date, default: null },    // null = no expiry set
     fullResetOnExpiry:  { type: Boolean, default: false }, // true = delete PO files+records on expiry

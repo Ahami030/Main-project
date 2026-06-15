@@ -26,7 +26,7 @@ export default function Navbar() {
   }, [role]);
 
   return (
-    <nav className="w-full border-b border-base-300 bg-base-100">
+    <nav className="w-full border-b border-base-300 bg-base-100 sticky top-0 z-40">
       <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
 
         {/* LOGO */}

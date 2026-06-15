@@ -1,6 +1,78 @@
 @import "tailwindcss";
 
-
 @plugin "daisyui" {
-  themes: light --default, dark --prefersdark, halloween;
+  themes: light --default, dark --prefersdark, cupcake, corporate, emerald, synthwave, retro, halloween;
 }
+
+/* ── Mastercard editorial theme ───────────────────────────────────────────────
+   Declared as a plain data-theme block (not @plugin "daisyui/theme", which is
+   skipped when an explicit `themes:` list is present). DaisyUI utilities already
+   reference var(--color-*) / var(--radius-*), so overriding them on a scoped
+   [data-theme="mastercard"] element re-themes that subtree. Applied only to the
+   Client dashboard <main>, so the global ThemeSwitcher is untouched.
+   Sofia Sans (the .font-mc family) is loaded via <link> in app/layout.tsx. */
+[data-theme="mastercard"] {
+  color-scheme: light;
+
+  /* Surfaces: canvas cream → lifted cream → cream border */
+  --color-base-100: #fcfbfa; /* lifted cream — cards, raised paper */
+  --color-base-200: #f3f0ee; /* canvas cream — page body */
+  --color-base-300: #e7e1d9; /* whisper cream — borders, dividers */
+  --color-base-content: #141413; /* ink black */
+
+  /* Primary = Ink Black pill */
+  --color-primary: #141413;
+  --color-primary-content: #f3f0ee;
+
+  /* Secondary = Clay Brown (PO section identity) */
+  --color-secondary: #9a3a0a;
+  --color-secondary-content: #fcfbfa;
+
+  /* Accent = Signal Orange (the page's single bright color) */
+  --color-accent: #cf4500;
+  --color-accent-content: #ffffff;
+
+  --color-neutral: #141413;
+  --color-neutral-content: #f3f0ee;
+
+  /* Semantic — warm editorial tones */
+  --color-info: #3860be;
+  --color-info-content: #ffffff;
+  --color-success: #2e7d57;
+  --color-success-content: #ffffff;
+  --color-warning: #b06f12;
+  --color-warning-content: #ffffff;
+  --color-error: #b3261e;
+  --color-error-content: #ffffff;
+
+  /* Radius scale — 20px buttons / 40px boxes; full pills via rounded-full */
+  --radius-selector: 2rem;
+  --radius-field: 1.2rem;
+  --radius-box: 2.5rem;
+
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+
+  --border: 1.5px;
+  --depth: 0;
+  --noise: 0;
+}
+
+/* ── Mastercard atmospheric shadows + editorial type (Tailwind v4 @utility) ── */
+@utility shadow-mc-sm {
+  box-shadow: rgba(0, 0, 0, 0.04) 0px 4px 24px 0px;
+}
+@utility shadow-mc {
+  box-shadow: rgba(0, 0, 0, 0.06) 0px 18px 40px 0px;
+}
+@utility shadow-mc-lg {
+  box-shadow: rgba(0, 0, 0, 0.10) 0px 30px 60px 0px;
+}
+@utility font-mc {
+  font-family: "Sofia Sans", system-ui, Arial, sans-serif;
+  font-weight: 450;
+}
+@utility tracking-mc {
+  letter-spacing: -0.02em;
+}
+

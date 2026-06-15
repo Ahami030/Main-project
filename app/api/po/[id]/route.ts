@@ -97,6 +97,20 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     return NextResponse.json(po);
   }
 
+  if (action === "unbill") {
+    if (po.status !== "billed") {
+      return NextResponse.json({ message: "PO นี้ยังไม่ได้วางบิล" }, { status: 400 });
+    }
+    if (po.billingId) {
+      return NextResponse.json({ message: "PO นี้อยู่ในใบวางบิลรวม กรุณาจัดการผ่านหน้าใบวางบิลรวม" }, { status: 400 });
+    }
+    // Revert a single-PO billing note back to editable state (keeps taxInvoices)
+    po.status   = "accepted";
+    po.billedAt = null;
+    await po.save();
+    return NextResponse.json(po);
+  }
+
   return NextResponse.json({ message: "Unknown action" }, { status: 400 });
 }
 
