@@ -60,7 +60,6 @@ export default function PaymentReceiptDocument({ receipt }: PaymentReceiptProps)
         @media print {
           @page { margin: 0; size: A4; }
           html, body { margin: 0 !important; padding: 0 !important; background: #ffffff !important; }
-          #client-dashboard-content { display: none !important; }
           body * { visibility: hidden !important; }
           #payment-receipt-print-area, #payment-receipt-print-area * { visibility: visible !important; }
           .receipt-print-dialog, .receipt-print-box {

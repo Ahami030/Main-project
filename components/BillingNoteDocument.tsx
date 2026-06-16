@@ -79,8 +79,7 @@ export default function BillingNoteDocument({ po, domId = "billing-note-print-ar
             width: 210mm !important;
             margin: 0 !important;
           }
-          #billing-note-print-area .bn-page,
-          #billing-note-print-area.bn-page {
+          #billing-note-print-area .bn-page {
             box-shadow: none !important;
             min-height: 0 !important;
             margin: 0 !important;

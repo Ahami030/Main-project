@@ -167,6 +167,13 @@ function IconHistory() {
   );
 }
 
+const stripStyles = (clonedDoc: Document) => {
+  clonedDoc.querySelectorAll('link[rel="stylesheet"]').forEach(e => e.remove());
+  clonedDoc.querySelectorAll("style").forEach(e => {
+    if (!e.textContent?.includes("fonts.googleapis.com")) e.remove();
+  });
+};
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function Page(): JSX.Element {
   const { data: session } = useSession();
@@ -420,7 +427,8 @@ export default function Page(): JSX.Element {
     const generate = async () => {
       await new Promise<void>((r) => setTimeout(r, 200));
       try { await document.fonts.ready; } catch {}
-      const el = document.getElementById("billing-note-print-area");
+      const wrapper = document.getElementById("billing-note-print-area");
+      const el = wrapper?.querySelector<HTMLElement>(".bn-page") ?? wrapper;
       if (!el) { setBillingDownloadReady(false); return; }
       try {
         const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
@@ -430,8 +438,10 @@ export default function Page(): JSX.Element {
         const canvas = await html2canvas(el, {
           scale: 2,
           useCORS: true,
+          allowTaint: true,
           backgroundColor: "#ffffff",
           logging: false,
+          onclone: stripStyles,
         });
         const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
         pdf.addImage(canvas.toDataURL("image/jpeg", 0.92), "JPEG", 0, 0, 210, 297);
@@ -508,12 +518,7 @@ export default function Page(): JSX.Element {
           import("html2canvas"),
           import("jspdf"),
         ]);
-        const stripStyles = (clonedDoc: Document) => {
-          clonedDoc.querySelectorAll('link[rel="stylesheet"]').forEach(el => el.remove());
-          clonedDoc.querySelectorAll("style").forEach(el => {
-            if (!el.textContent?.includes("fonts.googleapis.com")) el.remove();
-          });
-        };
+
         const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
         for (let i = 0; i < pageEls.length; i++) {
           if (i > 0) pdf.addPage();
