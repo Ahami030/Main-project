@@ -1,15 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import type { AuthOptions } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { requireSession, requireAdmin, getUser } from "@/lib/apiAuth";
 import { connectMongoDB } from "@/lib/mongo";
 import PurchaseOrder from "@/app/models/PurchaseOrder";
 
 type Params = { params: Promise<{ id: string }> };
 
 export async function GET(_req: NextRequest, { params }: Params) {
-  const session = await getServerSession(authOptions as AuthOptions);
-  if (!session) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  const sessionOrRes = await requireSession();
+  if (sessionOrRes instanceof NextResponse) return sessionOrRes;
+  const session = sessionOrRes;
 
   const { id } = await params;
   await connectMongoDB();
@@ -17,9 +16,8 @@ export async function GET(_req: NextRequest, { params }: Params) {
   const po = await PurchaseOrder.findById(id).lean();
   if (!po) return NextResponse.json({ message: "Not found" }, { status: 404 });
 
-  const isAdmin = (session.user as { role?: string }).role === "admin";
-  const userId  = (session.user as { id?: string }).id;
-  if (!isAdmin && (po as { userId?: string }).userId !== userId) {
+  const user = getUser(session);
+  if (user.role !== "admin" && (po as { userId?: string }).userId !== user.id) {
     return NextResponse.json({ message: "Forbidden" }, { status: 403 });
   }
 
@@ -27,11 +25,8 @@ export async function GET(_req: NextRequest, { params }: Params) {
 }
 
 export async function PATCH(req: NextRequest, { params }: Params) {
-  const session = await getServerSession(authOptions as AuthOptions);
-  if (!session) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-
-  const isAdmin = (session.user as { role?: string }).role === "admin";
-  if (!isAdmin) return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+  const sessionOrRes = await requireAdmin();
+  if (sessionOrRes instanceof NextResponse) return sessionOrRes;
 
   const { id } = await params;
   const body   = await req.json();
@@ -104,7 +99,6 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     if (po.billingId) {
       return NextResponse.json({ message: "PO นี้อยู่ในใบวางบิลรวม กรุณาจัดการผ่านหน้าใบวางบิลรวม" }, { status: 400 });
     }
-    // Revert a single-PO billing note back to editable state (keeps taxInvoices)
     po.status   = "accepted";
     po.billedAt = null;
     await po.save();
@@ -115,11 +109,8 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 }
 
 export async function DELETE(_req: NextRequest, { params }: Params) {
-  const session = await getServerSession(authOptions as AuthOptions);
-  if (!session) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-
-  const isAdmin = (session.user as { role?: string }).role === "admin";
-  if (!isAdmin) return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+  const sessionOrRes = await requireAdmin();
+  if (sessionOrRes instanceof NextResponse) return sessionOrRes;
 
   const { id } = await params;
   await connectMongoDB();

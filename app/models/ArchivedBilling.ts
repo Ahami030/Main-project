@@ -1,13 +1,6 @@
 import mongoose from "mongoose";
-
-const TaxInvoiceSchema = new mongoose.Schema(
-  {
-    invoiceNumber: { type: String },
-    invoiceDate:   { type: String },
-    amount:        { type: Number },
-  },
-  { _id: true }
-);
+import { TaxInvoiceSchema } from "@/lib/schemas";
+import { clearDevModel } from "@/lib/mongoHelpers";
 
 const ArchivedBillingSchema = new mongoose.Schema(
   {
@@ -19,9 +12,9 @@ const ArchivedBillingSchema = new mongoose.Schema(
     poIds:             [{ type: String }],
     poNumbers:         [{ type: String }],
     taxInvoices:       { type: [TaxInvoiceSchema], default: [] },
-    billingStatus:     { type: String },        // status at time of archive
+    billingStatus:     { type: String },
     billingDate:       { type: Date },
-    expiresAt:         { type: Date },          // what expiry was set to
+    expiresAt:         { type: Date },
     originalCreatedAt: { type: Date },
     archivedAt:        { type: Date, default: Date.now },
     archiveReason:     {
@@ -33,10 +26,7 @@ const ArchivedBillingSchema = new mongoose.Schema(
   { timestamps: false }
 );
 
-// Clear cache in development
-if (process.env.NODE_ENV === "development" && mongoose.models.ArchivedBilling) {
-  delete mongoose.models.ArchivedBilling;
-}
+clearDevModel("ArchivedBilling");
 
 export default mongoose.models.ArchivedBilling ||
   mongoose.model("ArchivedBilling", ArchivedBillingSchema);

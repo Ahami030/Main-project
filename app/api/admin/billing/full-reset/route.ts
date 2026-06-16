@@ -1,25 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import type { AuthOptions } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { requireAdmin } from "@/lib/apiAuth";
 import { connectMongoDB } from "@/lib/mongo";
 import Billing, { archiveBilling } from "@/app/models/Billing";
 import PurchaseOrder from "@/app/models/PurchaseOrder";
 
-// POST /api/admin/billing/full-reset
-// Body: { customerId: string }
-//
-// Full Reset for a customer:
-//   1. Archive all their Billing documents → archived_billings (reason: full_reset)
-//   2. Delete PO files from filesystem
-//   3. Delete all PO records
-//   4. Delete all Billing records
 export async function POST(req: NextRequest) {
-  const session = await getServerSession(authOptions as AuthOptions);
-  if (!session) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-
-  const isAdmin = (session.user as { role?: string }).role === "admin";
-  if (!isAdmin) return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+  const sessionOrRes = await requireAdmin();
+  if (sessionOrRes instanceof NextResponse) return sessionOrRes;
 
   const { customerId } = await req.json() as { customerId: string };
   if (!customerId) {
@@ -28,7 +15,6 @@ export async function POST(req: NextRequest) {
 
   await connectMongoDB();
 
-  // ── 1. Archive all Billing documents for this customer ──────────────
   type BillingLean = {
     _id: { toString(): string };
     billingNumber: string;
@@ -48,20 +34,13 @@ export async function POST(req: NextRequest) {
   const billings = await Billing.find({ customerId }).lean() as BillingLean[];
   const archivedBillingCount = billings.length;
 
-  // Track all poIds across all billings to avoid double-processing
-  const allPoIds = new Set<string>();
   for (const b of billings) {
-    for (const pid of (b.poIds ?? [])) {
-      allPoIds.add(String(pid));
-    }
-    // Archive billing WITHOUT touching POs (we'll handle POs below)
     await archiveBilling(b, "full_reset", {
       deletePOFiles: false,
       deletePORecords: false,
     });
   }
 
-  // ── 2. Delete PO files from filesystem ──────────────────────────────
   const { unlink } = await import("fs/promises");
   const nodePath = await import("path");
 
@@ -75,10 +54,7 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // ── 3. Delete all PO records ─────────────────────────────────────────
   const poResult = await PurchaseOrder.deleteMany({ userId: customerId });
-
-  // ── 4. Delete all Billing records ────────────────────────────────────
   await Billing.deleteMany({ customerId });
 
   return NextResponse.json({

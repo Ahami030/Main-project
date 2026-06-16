@@ -1,14 +1,12 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { requireSession, getUser } from "@/lib/apiAuth";
 import { connectMongoDB } from "@/lib/mongo";
 import Quotation from "@/app/models/Quotation";
 
 export async function POST(req: Request) {
-  const session = await getServerSession(authOptions as any);
-  if (!session) {
-    return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-  }
+  const sessionOrRes = await requireSession();
+  if (sessionOrRes instanceof NextResponse) return sessionOrRes;
+  const session = sessionOrRes;
 
   const { filename, pdfId, pdfPath } = await req.json();
   if (!filename) {
@@ -17,21 +15,20 @@ export async function POST(req: Request) {
 
   await connectMongoDB();
 
-  const userId = (session.user as any)?.id ?? (session as any)?.id ?? "unknown";
+  const userId = getUser(session).id ?? "unknown";
   const quotation = await Quotation.create({ userId, filename, pdfId, pdfPath, status: "sent" });
 
   return NextResponse.json({ quotation }, { status: 201 });
 }
 
-export async function GET(req: Request) {
-  const session = await getServerSession(authOptions as any);
-  if (!session) {
-    return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-  }
+export async function GET() {
+  const sessionOrRes = await requireSession();
+  if (sessionOrRes instanceof NextResponse) return sessionOrRes;
+  const session = sessionOrRes;
 
   await connectMongoDB();
 
-  const userId = (session.user as any)?.id ?? (session as any)?.id ?? "unknown";
+  const userId = getUser(session).id ?? "unknown";
   const quotations = await Quotation.find({ userId }).sort({ createdAt: -1 });
 
   return NextResponse.json({ quotations });

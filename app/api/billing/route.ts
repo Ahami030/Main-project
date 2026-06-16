@@ -1,27 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import type { AuthOptions } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { requireAdmin } from "@/lib/apiAuth";
 import { connectMongoDB } from "@/lib/mongo";
 import Billing, { generateBillingNumber } from "@/app/models/Billing";
 import PurchaseOrder from "@/app/models/PurchaseOrder";
 import { runCleanup } from "@/app/api/admin/billing/cleanup/route";
 
 export async function GET(_req: NextRequest) {
-  const session = await getServerSession(authOptions as AuthOptions);
-  if (!session) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-
-  const isAdmin = (session.user as { role?: string }).role === "admin";
-  if (!isAdmin) return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+  const sessionOrRes = await requireAdmin();
+  if (sessionOrRes instanceof NextResponse) return sessionOrRes;
 
   await connectMongoDB();
-
-  // Fire-and-forget: clean up any expired billings automatically
   runCleanup().catch(() => {});
 
-  // Unified billing-note list:
-  //  • "group"  — Billing documents (one note combining one or more POs)
-  //  • "single" — POs billed directly (status "billed", no billing group)
   const [groups, singlePOs] = await Promise.all([
     Billing.find().sort({ createdAt: -1 }).lean(),
     PurchaseOrder.find({ status: "billed", billingId: null }).sort({ billedAt: -1 }).lean(),
@@ -57,11 +47,8 @@ export async function GET(_req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const session = await getServerSession(authOptions as AuthOptions);
-  if (!session) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-
-  const isAdmin = (session.user as { role?: string }).role === "admin";
-  if (!isAdmin) return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+  const sessionOrRes = await requireAdmin();
+  if (sessionOrRes instanceof NextResponse) return sessionOrRes;
 
   const { poIds } = await req.json() as { poIds: string[] };
   if (!poIds || poIds.length === 0) {

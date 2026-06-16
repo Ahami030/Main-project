@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import type { AuthOptions } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { requireSession, getUser } from "@/lib/apiAuth";
 import { connectMongoDB } from "@/lib/mongo";
 import PaymentProof from "@/app/models/PaymentProof";
 import Billing from "@/app/models/Billing";
@@ -9,8 +7,9 @@ import Billing from "@/app/models/Billing";
 type Params = { params: Promise<{ id: string }> };
 
 export async function GET(_req: NextRequest, { params }: Params) {
-  const session = await getServerSession(authOptions as AuthOptions);
-  if (!session) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  const sessionOrRes = await requireSession();
+  if (sessionOrRes instanceof NextResponse) return sessionOrRes;
+  const session = sessionOrRes;
 
   const { id } = await params;
   await connectMongoDB();
@@ -21,9 +20,8 @@ export async function GET(_req: NextRequest, { params }: Params) {
   } | null;
   if (!proof) return NextResponse.json({ message: "Not found" }, { status: 404 });
 
-  const isAdmin = (session.user as { role?: string }).role === "admin";
-  const userId  = (session.user as { id?: string }).id;
-  if (!isAdmin && proof.customerId !== userId) {
+  const user = getUser(session);
+  if (user.role !== "admin" && proof.customerId !== user.id) {
     return NextResponse.json({ message: "Forbidden" }, { status: 403 });
   }
 
@@ -31,12 +29,14 @@ export async function GET(_req: NextRequest, { params }: Params) {
 }
 
 export async function PATCH(req: NextRequest, { params }: Params) {
-  const session = await getServerSession(authOptions as AuthOptions);
-  if (!session) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  const sessionOrRes = await requireSession();
+  if (sessionOrRes instanceof NextResponse) return sessionOrRes;
+  const session = sessionOrRes;
 
-  const isAdmin  = (session.user as { role?: string }).role === "admin";
-  const userId   = (session.user as { id?: string }).id;
-  const userName = (session.user as { name?: string }).name ?? "";
+  const user     = getUser(session);
+  const isAdmin  = user.role === "admin";
+  const userId   = user.id;
+  const userName = session.user?.name ?? "";
 
   const { id } = await params;
   const body = await req.json();
@@ -64,7 +64,6 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     });
     await proof.save();
 
-    // Update Billing.paymentStatus only if this proof has a billingId (not legacy PO path)
     if (proof.billingId) {
       const allProofs = await PaymentProof.find({
         billingId: proof.billingId,
@@ -102,7 +101,6 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     });
     await proof.save();
 
-    // Update Billing.paymentStatus only if billingId exists
     if (proof.billingId) {
       const approvedProofs = await PaymentProof.countDocuments({
         billingId: proof.billingId,
@@ -117,7 +115,6 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   }
 
   if (action === "resubmit") {
-    // Client-callable: only allowed if status is "rejected" and it's their proof
     if (!isAdmin && proof.customerId !== userId) {
       return NextResponse.json({ message: "Forbidden" }, { status: 403 });
     }

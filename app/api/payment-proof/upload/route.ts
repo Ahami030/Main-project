@@ -1,18 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { writeFile, mkdir } from "fs/promises";
 import path from "path";
-import { getServerSession } from "next-auth";
-import type { AuthOptions } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { requireSession } from "@/lib/apiAuth";
 import crypto from "crypto";
 
-const MAX_SIZE = 20 * 1024 * 1024; // 20MB
+const MAX_SIZE = 20 * 1024 * 1024;
 
 export async function POST(req: NextRequest) {
-  const session = await getServerSession(authOptions as AuthOptions);
-  if (!session) {
-    return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-  }
+  const sessionOrRes = await requireSession();
+  if (sessionOrRes instanceof NextResponse) return sessionOrRes;
 
   const data = await req.formData();
   const file = data.get("file") as File | null;

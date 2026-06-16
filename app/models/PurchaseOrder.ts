@@ -1,15 +1,8 @@
 import mongoose from "mongoose";
+import { TaxInvoiceSchema } from "@/lib/schemas";
+import { clearDevModel, generateDocumentNumber } from "@/lib/mongoHelpers";
 
 export type POStatus = "pending" | "accepted" | "billed";
-
-const TaxInvoiceSchema = new mongoose.Schema(
-  {
-    invoiceNumber: { type: String, required: true },
-    invoiceDate:   { type: String, required: true },
-    amount:        { type: Number, required: true },
-  },
-  { _id: true }
-);
 
 const PurchaseOrderSchema = new mongoose.Schema(
   {
@@ -27,33 +20,16 @@ const PurchaseOrderSchema = new mongoose.Schema(
     fileMimeType: { type: String, default: "" },
     taxInvoices:  { type: [TaxInvoiceSchema], default: [] },
     billedAt:     { type: Date, default: null },
-    // Reference to Billing collection (set when PO is added to a billing group)
     billingId:    { type: mongoose.Schema.Types.ObjectId, ref: "Billing", default: null },
   },
   { timestamps: true }
 );
 
 export async function generatePONumber(): Promise<string> {
-  const PO = mongoose.models.PurchaseOrder ||
-    mongoose.model("PurchaseOrder", PurchaseOrderSchema);
-  const year = new Date().getFullYear();
-  const prefix = `PO-${year}-`;
-  const last = await PO.findOne(
-    { poNumber: { $regex: `^${prefix}` } },
-    { poNumber: 1 }
-  ).sort({ poNumber: -1 }).lean() as { poNumber?: string } | null;
-
-  const lastNum = last?.poNumber
-    ? parseInt(last.poNumber.replace(prefix, ""), 10)
-    : 0;
-  const next = String(lastNum + 1).padStart(3, "0");
-  return `${prefix}${next}`;
+  return generateDocumentNumber("PurchaseOrder", "poNumber", "PO");
 }
 
-// Clear model cache in development so schema changes are picked up on hot-reload
-if (process.env.NODE_ENV === "development" && mongoose.models.PurchaseOrder) {
-  delete mongoose.models.PurchaseOrder;
-}
+clearDevModel("PurchaseOrder");
 
 export default mongoose.models.PurchaseOrder ||
   mongoose.model("PurchaseOrder", PurchaseOrderSchema);

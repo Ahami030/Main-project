@@ -1,11 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import type { AuthOptions } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { requireAdmin } from "@/lib/apiAuth";
 import { connectMongoDB } from "@/lib/mongo";
 import Billing, { archiveBilling } from "@/app/models/Billing";
 
-// Shared cleanup logic used by both the manual trigger and auto-trigger
 export async function runCleanup(): Promise<{ cleaned: number; billingNumbers: string[] }> {
   await connectMongoDB();
 
@@ -48,21 +45,16 @@ export async function runCleanup(): Promise<{ cleaned: number; billingNumbers: s
   return { cleaned: billingNumbers.length, billingNumbers };
 }
 
-// POST /api/admin/billing/cleanup  — manual trigger (admin only)
-export async function POST(req: NextRequest) {
-  const session = await getServerSession(authOptions as AuthOptions);
-  if (!session) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-
-  const isAdmin = (session.user as { role?: string }).role === "admin";
-  if (!isAdmin) return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+export async function POST(_req: NextRequest) {
+  const sessionOrRes = await requireAdmin();
+  if (sessionOrRes instanceof NextResponse) return sessionOrRes;
 
   const result = await runCleanup();
   return NextResponse.json({ success: true, ...result });
 }
 
-// GET /api/admin/billing/cleanup  — used as internal auto-trigger (no auth check intentional,
-// called server-side from GET /api/billing in fire-and-forget mode)
-export async function GET(_req: NextRequest) {
+// GET — internal auto-trigger (no auth, called server-side fire-and-forget)
+export async function GET() {
   try {
     const result = await runCleanup();
     return NextResponse.json(result);

@@ -1,15 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import type { AuthOptions } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { requireSession, getUser } from "@/lib/apiAuth";
 import { connectMongoDB } from "@/lib/mongo";
 import User from "@/app/models/User";
 
 export async function GET() {
-  const session = await getServerSession(authOptions as AuthOptions);
-  if (!session) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  const sessionOrRes = await requireSession();
+  if (sessionOrRes instanceof NextResponse) return sessionOrRes;
+  const session = sessionOrRes;
 
-  const userId = (session.user as { id?: string }).id;
+  const userId = getUser(session).id;
 
   await connectMongoDB();
 
@@ -23,10 +22,11 @@ export async function GET() {
 }
 
 export async function PUT(req: NextRequest) {
-  const session = await getServerSession(authOptions as AuthOptions);
-  if (!session) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  const sessionOrRes = await requireSession();
+  if (sessionOrRes instanceof NextResponse) return sessionOrRes;
+  const session = sessionOrRes;
 
-  const userId = (session.user as { id?: string }).id;
+  const userId = getUser(session).id;
 
   const body = await req.json() as {
     name?: string;
