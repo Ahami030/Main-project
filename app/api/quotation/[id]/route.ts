@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireSession, requireAdmin, getUser } from "@/lib/apiAuth";
+import { requireSession, requireEmployee, getUser } from "@/lib/apiAuth";
 import { connectMongoDB } from "@/lib/mongo";
 import Quotation from "@/app/models/Quotation";
 
@@ -7,7 +7,7 @@ export async function DELETE(
   _req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const sessionOrRes = await requireAdmin();
+  const sessionOrRes = await requireEmployee("quotation");
   if (sessionOrRes instanceof NextResponse) return sessionOrRes;
 
   await connectMongoDB();
@@ -31,7 +31,8 @@ export async function PATCH(
   const session = sessionOrRes;
 
   const user = getUser(session);
-  const isAdmin = user.role === "admin";
+  const canManage = user.role === "admin" ||
+    (user.role === "employee" && (user.permissions ?? []).includes("quotation"));
   const sessionUserId = user.id ?? "";
 
   const { status } = await req.json();
@@ -53,7 +54,7 @@ export async function PATCH(
     status === "confirmed" &&
     quotation.status === "bargaining";
 
-  if (!isAdmin && !isClientConfirm) {
+  if (!canManage && !isClientConfirm) {
     return NextResponse.json({ message: "Forbidden" }, { status: 403 });
   }
 

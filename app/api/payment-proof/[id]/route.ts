@@ -21,7 +21,8 @@ export async function GET(_req: NextRequest, { params }: Params) {
   if (!proof) return NextResponse.json({ message: "Not found" }, { status: 404 });
 
   const user = getUser(session);
-  if (user.role !== "admin" && proof.customerId !== user.id) {
+  const canViewAll = user.role === "admin" || user.role === "employee";
+  if (!canViewAll && proof.customerId !== user.id) {
     return NextResponse.json({ message: "Forbidden" }, { status: 403 });
   }
 
@@ -34,7 +35,8 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   const session = sessionOrRes;
 
   const user     = getUser(session);
-  const isAdmin  = user.role === "admin";
+  const isAdmin  = user.role === "admin" ||
+    (user.role === "employee" && (user.permissions ?? []).includes("payments"));
   const userId   = user.id;
   const userName = session.user?.name ?? "";
 

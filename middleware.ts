@@ -6,11 +6,13 @@ export default withAuth(
     const token = req.nextauth.token;
     const pathname = req.nextUrl.pathname;
 
-    if (pathname.startsWith("/Admin") && token?.role !== "admin") {
+    const isStaff = token?.role === "admin" || token?.role === "employee";
+
+    if (pathname.startsWith("/Admin") && !isStaff) {
       return NextResponse.redirect(new URL("/Login", req.url));
     }
 
-    if (pathname.startsWith("/Client") && token?.role === "admin") {
+    if (pathname.startsWith("/Client") && isStaff) {
       return NextResponse.redirect(new URL("/Admin", req.url));
     }
   },

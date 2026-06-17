@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
   const query: Record<string, unknown> = {};
   if (isValidId(billingId)) query.billingId = billingId;
   else if (isValidId(poId)) query.poId = poId;
-  if (user.role !== "admin") query.customerId = user.id;
+  if (user.role !== "admin" && user.role !== "employee") query.customerId = user.id;
 
   const proofs = await PaymentProof.find(query).sort({ createdAt: -1 }).lean();
   return NextResponse.json(proofs);

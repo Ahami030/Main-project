@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/apiAuth";
+import { requireEmployee } from "@/lib/apiAuth";
 import { connectMongoDB } from "@/lib/mongo";
 import Quotation from "@/app/models/Quotation";
 
 export async function GET() {
-  const sessionOrRes = await requireAdmin();
+  const sessionOrRes = await requireEmployee("quotation");
   if (sessionOrRes instanceof NextResponse) return sessionOrRes;
 
   await connectMongoDB();

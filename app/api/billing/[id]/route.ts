@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireSession, requireAdmin, getUser } from "@/lib/apiAuth";
+import { requireSession, requireEmployee, getUser } from "@/lib/apiAuth";
 import { connectMongoDB } from "@/lib/mongo";
 import Billing from "@/app/models/Billing";
 import PurchaseOrder from "@/app/models/PurchaseOrder";
@@ -23,7 +23,8 @@ export async function GET(_req: NextRequest, { params }: Params) {
     if (!billing) return NextResponse.json({ message: "Not found" }, { status: 404 });
 
     const user = getUser(session);
-    if (user.role !== "admin" && billing.customerId !== user.id) {
+    const canViewAll = user.role === "admin" || user.role === "employee";
+    if (!canViewAll && billing.customerId !== user.id) {
       return NextResponse.json({ message: "Forbidden" }, { status: 403 });
     }
 
@@ -34,7 +35,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
 }
 
 export async function PATCH(req: NextRequest, { params }: Params) {
-  const sessionOrRes = await requireAdmin();
+  const sessionOrRes = await requireEmployee("billing");
   if (sessionOrRes instanceof NextResponse) return sessionOrRes;
 
   const { id } = await params;
@@ -130,7 +131,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 }
 
 export async function DELETE(_req: NextRequest, { params }: Params) {
-  const sessionOrRes = await requireAdmin();
+  const sessionOrRes = await requireEmployee("billing");
   if (sessionOrRes instanceof NextResponse) return sessionOrRes;
 
   const { id } = await params;

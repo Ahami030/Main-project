@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/apiAuth";
+import { requireEmployee } from "@/lib/apiAuth";
 import { connectMongoDB } from "@/lib/mongo";
 import Billing, { generateBillingNumber } from "@/app/models/Billing";
 import PurchaseOrder from "@/app/models/PurchaseOrder";
 import { runCleanup } from "@/app/api/admin/billing/cleanup/route";
 
 export async function GET(_req: NextRequest) {
-  const sessionOrRes = await requireAdmin();
+  const sessionOrRes = await requireEmployee("billing");
   if (sessionOrRes instanceof NextResponse) return sessionOrRes;
 
   await connectMongoDB();
@@ -47,7 +47,7 @@ export async function GET(_req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const sessionOrRes = await requireAdmin();
+  const sessionOrRes = await requireEmployee("billing");
   if (sessionOrRes instanceof NextResponse) return sessionOrRes;
 
   const { poIds } = await req.json() as { poIds: string[] };
