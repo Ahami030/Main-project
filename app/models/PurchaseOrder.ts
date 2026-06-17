@@ -25,9 +25,7 @@ const PurchaseOrderSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-export async function generatePONumber(): Promise<string> {
-  return generateDocumentNumber("PurchaseOrder", "poNumber", "PO");
-}
+export const generatePONumber = () => generateDocumentNumber("PurchaseOrder", "poNumber", "PO");
 
 clearDevModel("PurchaseOrder");
 

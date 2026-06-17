@@ -16,11 +16,11 @@ export async function requireSession(): Promise<Session | NextResponse> {
 }
 
 export async function requireAdmin(): Promise<Session | NextResponse> {
-  const session = await getServerSession(authOptions as AuthOptions);
-  if (!session) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-  if ((session.user as SessionUser).role !== "admin")
+  const s = await requireSession();
+  if (s instanceof NextResponse) return s;
+  if ((s.user as SessionUser).role !== "admin")
     return NextResponse.json({ message: "Forbidden" }, { status: 403 });
-  return session;
+  return s;
 }
 
 export function buildUserQuery(

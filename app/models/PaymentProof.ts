@@ -55,9 +55,7 @@ const PaymentProofSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-export async function generateProofNumber(): Promise<string> {
-  return generateDocumentNumber("PaymentProof", "proofNumber", "PAY");
-}
+export const generateProofNumber = () => generateDocumentNumber("PaymentProof", "proofNumber", "PAY");
 
 clearDevModel("PaymentProof");
 

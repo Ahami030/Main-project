@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/apiAuth";
 import { connectMongoDB } from "@/lib/mongo";
 import Billing, { archiveBilling } from "@/app/models/Billing";
@@ -45,7 +45,7 @@ export async function runCleanup(): Promise<{ cleaned: number; billingNumbers: s
   return { cleaned: billingNumbers.length, billingNumbers };
 }
 
-export async function POST(_req: NextRequest) {
+export async function POST() {
   const sessionOrRes = await requireAdmin();
   if (sessionOrRes instanceof NextResponse) return sessionOrRes;
 
