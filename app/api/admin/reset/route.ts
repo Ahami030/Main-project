@@ -52,8 +52,7 @@ export async function POST(req: Request) {
 
   let archivedRfq = false;
   if (rfq) {
-    const rfqObj = rfq.toObject();
-    delete rfqObj._id;
+    const { _id: _rfqId, ...rfqObj } = rfq.toObject();
     await ArchivedRFQ.create({
       ...rfqObj,
       archivedAt: new Date(),
