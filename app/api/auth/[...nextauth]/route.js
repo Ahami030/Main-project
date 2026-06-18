@@ -27,12 +27,12 @@ export const authOptions = {
 
           if (!passwordMatch) return null;
 
-          // ✅ ตรงนี้ถูกแล้ว
           return {
             id: user._id.toString(),
             email: user.email,
             name: user.name,
             role: user.role,
+            permissions: user.permissions ?? [],
           };
         } catch (error) {
           console.log("Error in authorize:", error);
@@ -52,6 +52,7 @@ export const authOptions = {
       if (user) {
         token.id = user.id;
         token.role = user.role;
+        token.permissions = user.permissions ?? [];
       }
       if (trigger === "update" && session?.name) {
         token.name = session.name;
@@ -64,6 +65,7 @@ export const authOptions = {
         session.user.id = token.id;
         session.user.role = token.role;
         session.user.name = token.name;
+        session.user.permissions = token.permissions ?? [];
       }
       return session;
     },

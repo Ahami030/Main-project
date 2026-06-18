@@ -1,44 +1,43 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import type { AuthOptions } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { requireSession, getUser } from "@/lib/apiAuth";
 import { connectMongoDB } from "@/lib/mongo";
 import PaymentProof, { generateProofNumber } from "@/app/models/PaymentProof";
 import Billing from "@/app/models/Billing";
 import PurchaseOrder from "@/app/models/PurchaseOrder";
 
 export async function GET(req: NextRequest) {
-  const session = await getServerSession(authOptions as AuthOptions);
-  if (!session) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  const sessionOrRes = await requireSession();
+  if (sessionOrRes instanceof NextResponse) return sessionOrRes;
+  const session = sessionOrRes;
 
-  const isAdmin = (session.user as { role?: string }).role === "admin";
-  const userId  = (session.user as { id?: string }).id;
+  const user = getUser(session);
   const { searchParams } = new URL(req.url);
   const billingId = searchParams.get("billingId");
   const poId      = searchParams.get("poId");
 
   await connectMongoDB();
 
-  // Guard against literal "null"/"undefined" strings reaching ObjectId casting
   const isValidId = (v: string | null): v is string =>
     !!v && v !== "null" && v !== "undefined";
 
   const query: Record<string, unknown> = {};
   if (isValidId(billingId)) query.billingId = billingId;
   else if (isValidId(poId)) query.poId = poId;
-  if (!isAdmin) query.customerId = userId;
+  if (user.role !== "admin" && user.role !== "employee") query.customerId = user.id;
 
   const proofs = await PaymentProof.find(query).sort({ createdAt: -1 }).lean();
   return NextResponse.json(proofs);
 }
 
 export async function POST(req: NextRequest) {
-  const session = await getServerSession(authOptions as AuthOptions);
-  if (!session) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  const sessionOrRes = await requireSession();
+  if (sessionOrRes instanceof NextResponse) return sessionOrRes;
+  const session = sessionOrRes;
 
-  const userId   = (session.user as { id?: string }).id;
-  const userName = (session.user as { name?: string }).name ?? "";
-  const isAdmin  = (session.user as { role?: string }).role === "admin";
+  const user = getUser(session);
+  const userId   = user.id;
+  const userName = session.user?.name ?? "";
+  const isAdmin  = user.role === "admin";
 
   const body = await req.json() as {
     billingId?: string;
@@ -69,7 +68,6 @@ export async function POST(req: NextRequest) {
 
   await connectMongoDB();
 
-  // ── Billing Group path (has Billing document) ─────────────────────────────
   if (billingId) {
     const billing = await Billing.findById(billingId).lean() as {
       _id: { toString(): string };
@@ -124,7 +122,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(proof, { status: 201 });
   }
 
-  // ── Legacy single-PO path (no Billing document) ───────────────────────────
   const po = await PurchaseOrder.findById(poId).lean() as {
     _id: { toString(): string };
     poNumber: string;

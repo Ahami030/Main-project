@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { requireAdmin } from "@/lib/apiAuth";
 import { connectMongoDB } from "@/lib/mongo";
 import { unlink } from "fs/promises";
 import path from "path";
@@ -12,15 +11,8 @@ import ArchivedChat from "@/app/models/ArchivedChat";
 import ArchivedRFQ from "@/app/models/ArchivedRFQ";
 
 export async function POST(req: Request) {
-  const session = await getServerSession(authOptions as any);
-  if (!session) {
-    return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-  }
-
-  const role = (session as any)?.user?.role ?? (session as any)?.role;
-  if (role !== "admin") {
-    return NextResponse.json({ message: "Forbidden" }, { status: 403 });
-  }
+  const sessionOrRes = await requireAdmin();
+  if (sessionOrRes instanceof NextResponse) return sessionOrRes;
 
   const { userId } = await req.json();
   if (!userId) {
@@ -40,11 +32,9 @@ export async function POST(req: Request) {
 
   const quotationId = quotation._id.toString();
 
-  // ── Fetch data to archive ──────────────────────────────────────────
   const chats = await Chat.find({ userId });
   const rfq = await RFQ.findOne({ USER_ID: userId });
 
-  // ── Archive chats (single log document per session) ───────────────
   let archivedChats = 0;
   if (chats.length > 0) {
     await ArchivedChat.create({
@@ -60,7 +50,6 @@ export async function POST(req: Request) {
     archivedChats = chats.length;
   }
 
-  // ── Archive RFQ ────────────────────────────────────────────────────
   let archivedRfq = false;
   if (rfq) {
     const rfqObj = rfq.toObject();
@@ -73,25 +62,18 @@ export async function POST(req: Request) {
     archivedRfq = true;
   }
 
-  // ── Delete PDF file from filesystem ───────────────────────────────
   if (quotation.pdfPath) {
     const filePath = path.join(process.cwd(), quotation.pdfPath.replace(/^\//, ""));
     try { await unlink(filePath); } catch {}
   }
 
-  // ── Delete PDF record ──────────────────────────────────────────────
   if (quotation.pdfId) {
     await PDF.findByIdAndDelete(quotation.pdfId);
   }
 
-  // ── Delete live data ───────────────────────────────────────────────
   await Chat.deleteMany({ userId });
   if (rfq) await RFQ.deleteOne({ USER_ID: userId });
   await Quotation.findByIdAndDelete(quotation._id);
 
-  return NextResponse.json({
-    success: true,
-    archivedChats,
-    archivedRfq,
-  });
+  return NextResponse.json({ success: true, archivedChats, archivedRfq });
 }

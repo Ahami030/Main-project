@@ -9,7 +9,7 @@ export default async function LoginPage() {
   // ✅ ถ้า login แล้ว → redirect ทันที (ไม่มี flash)
   if (session) {
     const role = (session.user as any)?.role;
-    redirect(role === 'admin' ? '/Admin' : '/Client');
+    redirect((role === 'admin' || role === 'employee') ? '/Admin' : '/Client');
   }
 
   return <LoginForm />;

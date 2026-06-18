@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { readFile } from "fs/promises";
 import path from "path";
-import { getServerSession } from "next-auth";
-import type { AuthOptions } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { requireSession, getUser } from "@/lib/apiAuth";
 import { connectMongoDB } from "@/lib/mongo";
 import PaymentProof from "@/app/models/PaymentProof";
 
@@ -17,10 +15,9 @@ const MIME_BY_EXT: Record<string, string> = {
 };
 
 export async function GET(req: NextRequest) {
-  const session = await getServerSession(authOptions as AuthOptions);
-  if (!session) {
-    return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-  }
+  const sessionOrRes = await requireSession();
+  if (sessionOrRes instanceof NextResponse) return sessionOrRes;
+  const session = sessionOrRes;
 
   const { searchParams } = new URL(req.url);
   const proofId = searchParams.get("id");
@@ -38,9 +35,8 @@ export async function GET(req: NextRequest) {
 
   if (!proof) return NextResponse.json({ message: "Not found" }, { status: 404 });
 
-  const isAdmin = (session.user as { role?: string }).role === "admin";
-  const userId = (session.user as { id?: string }).id;
-  if (!isAdmin && proof.customerId !== userId) {
+  const user = getUser(session);
+  if (user.role !== "admin" && proof.customerId !== user.id) {
     return NextResponse.json({ message: "Forbidden" }, { status: 403 });
   }
 

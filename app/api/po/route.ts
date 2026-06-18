@@ -1,26 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import type { AuthOptions } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { requireSession, getUser, buildUserQuery } from "@/lib/apiAuth";
 import { connectMongoDB } from "@/lib/mongo";
 import PurchaseOrder, { generatePONumber } from "@/app/models/PurchaseOrder";
-import "@/app/models/Billing"; // register Billing model for populate
+import "@/app/models/Billing";
 
 export async function GET(req: NextRequest) {
-  const session = await getServerSession(authOptions as AuthOptions);
-  if (!session) {
-    return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-  }
+  const sessionOrRes = await requireSession();
+  if (sessionOrRes instanceof NextResponse) return sessionOrRes;
+  const session = sessionOrRes;
 
   await connectMongoDB();
 
   const { searchParams } = new URL(req.url);
   const statusFilter = searchParams.get("status");
 
-  const isAdmin = (session.user as { role?: string }).role === "admin";
-
-  const query: Record<string, unknown> = {};
-  if (!isAdmin) query.userId = (session.user as { id?: string }).id;
+  const query = buildUserQuery(session);
   if (statusFilter) query.status = statusFilter;
 
   const orders = await PurchaseOrder.find(query)
@@ -31,10 +25,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const session = await getServerSession(authOptions as AuthOptions);
-  if (!session) {
-    return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-  }
+  const sessionOrRes = await requireSession();
+  if (sessionOrRes instanceof NextResponse) return sessionOrRes;
+  const session = sessionOrRes;
 
   const body = await req.json();
   const { filePath, fileOrigName, fileMimeType } = body;
@@ -56,11 +49,12 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  const user = getUser(session);
   const po = await PurchaseOrder.create({
     poNumber,
-    userId: (session.user as { id?: string }).id,
-    userName: session.user?.name ?? "",
-    userEmail: session.user?.email ?? "",
+    userId:       user.id,
+    userName:     session.user?.name ?? "",
+    userEmail:    session.user?.email ?? "",
     filePath,
     fileOrigName,
     fileMimeType: fileMimeType ?? "",

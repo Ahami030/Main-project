@@ -76,7 +76,7 @@ export default function PaymentReceiptPage({ params }: { params: Promise<{ proof
   }
 
   return (
-    <div className="min-h-screen bg-base-200 py-6">
+    <div className="min-h-screen bg-base-200 py-6 print:min-h-0 print:bg-white print:py-0">
       <div className="print:hidden max-w-3xl mx-auto px-4 mb-4 flex items-center justify-between">
         <button className="btn btn-sm btn-ghost gap-1.5" onClick={() => router.back()}>
           <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">

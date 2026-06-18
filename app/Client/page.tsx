@@ -167,6 +167,13 @@ function IconHistory() {
   );
 }
 
+const stripStyles = (clonedDoc: Document) => {
+  clonedDoc.querySelectorAll('link[rel="stylesheet"]').forEach(e => e.remove());
+  clonedDoc.querySelectorAll("style").forEach(e => {
+    if (!e.textContent?.includes("fonts.googleapis.com")) e.remove();
+  });
+};
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function Page(): JSX.Element {
   const { data: session } = useSession();
@@ -420,7 +427,8 @@ export default function Page(): JSX.Element {
     const generate = async () => {
       await new Promise<void>((r) => setTimeout(r, 200));
       try { await document.fonts.ready; } catch {}
-      const el = document.getElementById("billing-note-print-area");
+      const wrapper = document.getElementById("billing-note-print-area");
+      const el = wrapper?.querySelector<HTMLElement>(".bn-page") ?? wrapper;
       if (!el) { setBillingDownloadReady(false); return; }
       try {
         const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
@@ -430,8 +438,10 @@ export default function Page(): JSX.Element {
         const canvas = await html2canvas(el, {
           scale: 2,
           useCORS: true,
+          allowTaint: true,
           backgroundColor: "#ffffff",
           logging: false,
+          onclone: stripStyles,
         });
         const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
         pdf.addImage(canvas.toDataURL("image/jpeg", 0.92), "JPEG", 0, 0, 210, 297);
@@ -508,12 +518,7 @@ export default function Page(): JSX.Element {
           import("html2canvas"),
           import("jspdf"),
         ]);
-        const stripStyles = (clonedDoc: Document) => {
-          clonedDoc.querySelectorAll('link[rel="stylesheet"]').forEach(el => el.remove());
-          clonedDoc.querySelectorAll("style").forEach(el => {
-            if (!el.textContent?.includes("fonts.googleapis.com")) el.remove();
-          });
-        };
+
         const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
         for (let i = 0; i < pageEls.length; i++) {
           if (i > 0) pdf.addPage();
@@ -746,7 +751,7 @@ export default function Page(): JSX.Element {
         <div className="absolute -bottom-[26rem] -left-[12rem] w-[42rem] h-[42rem] rounded-full border border-secondary/[0.08]" />
       </div>
 
-      <div className="relative max-w-6xl mx-auto px-4 md:px-8 py-8 md:py-14 space-y-5 md:space-y-7">
+      <div id="client-dashboard-content" className="relative max-w-6xl mx-auto px-4 md:px-8 py-8 md:py-14 space-y-5 md:space-y-7">
 
         {/* ── User Card ─────────────────────────────────────────── */}
         <div className="card bg-base-100 border border-base-300/70 rounded-[2.5rem] shadow-mc transition-shadow duration-300 hover:shadow-mc-lg">
@@ -1292,7 +1297,7 @@ export default function Page(): JSX.Element {
                   <span className="loading loading-spinner loading-lg text-primary" />
                 </div>
               ) : modalBilling ? (
-                <BillingNoteDocument po={modalBilling} />
+                <BillingNoteDocument po={modalBilling} domId="" />
               ) : (
                 <div className="flex flex-col items-center justify-center h-full gap-2 text-base-content/30">
                   <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1410,6 +1415,27 @@ export default function Page(): JSX.Element {
           }
         >
           <QuotationDocument rfq={rfqForModal} confirmed={printConfirmed} showHighlights={showHighlights} />
+        </div>
+      )}
+
+      {/* Collapse the (tall) dashboard while printing the billing note so it
+          doesn't leave a trailing blank page behind the print area. */}
+      {billingPrintReady && (
+        <style>{`@media print { #client-dashboard-content { display: none !important; } }`}</style>
+      )}
+
+      {/* ── Billing print/download area (rendered at page root, outside modal) ── */}
+      {(billingPrintReady || billingDownloadReady) && modalBilling && (
+        <div
+          id="billing-note-print-area"
+          aria-hidden="true"
+          style={
+            billingDownloadReady
+              ? { position: "fixed", top: 0, left: 0, zIndex: -1, pointerEvents: "none" }
+              : { position: "fixed", top: "-9999px", left: "-9999px", pointerEvents: "none" }
+          }
+        >
+          <BillingNoteDocument po={modalBilling} domId="" />
         </div>
       )}
 

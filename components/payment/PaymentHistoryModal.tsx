@@ -211,6 +211,10 @@ export default function PaymentHistoryModal({ billingKey, isGroup, label, onClos
 
     {viewingProof && typeof document !== "undefined" && createPortal(
       <dialog className="modal modal-open receipt-print-dialog" style={{ zIndex: 1000 }}>
+        {/* While printing the receipt, hide the entire app behind it (the
+            dashboard's min-h-screen would otherwise leave a blank first page).
+            The receipt dialog is portaled directly under <body>. */}
+        <style>{`@media print { body > *:not(.receipt-print-dialog) { display: none !important; } }`}</style>
         <div className="modal-box receipt-print-box max-w-4xl p-0 overflow-hidden">
           <div className="print:hidden sticky top-0 z-10 bg-base-100 border-b border-base-300 px-4 py-3 flex items-center justify-between">
             <h3 className="font-semibold text-sm">ใบเสร็จรับเงิน</h3>

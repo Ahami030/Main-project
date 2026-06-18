@@ -1,6 +1,7 @@
 'use client';
 import { JSX, useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import InlineChatPanel from '@/components/admin/InlineChatPanel';
 
 type QuotationStatus = 'sent' | 'reviewing' | 'completed' | 'bargaining' | 'confirmed';
@@ -98,6 +99,16 @@ function SectionHeader({ label }: { label: string }) {
 
 export default function AdminPage() {
   const router = useRouter();
+  const { data: session } = useSession();
+  const role = (session?.user as any)?.role as string | undefined;
+  const permissions = ((session?.user as any)?.permissions ?? []) as string[];
+
+  function canAccess(module: string | null): boolean {
+    if (!module || role === 'admin') return true;
+    if (module === 'chat') return true;
+    if (role !== 'employee') return false;
+    return permissions.includes(module);
+  }
   const [quotations, setQuotations] = useState<Quotation[]>([]);
   const [loading, setLoading] = useState(false);
   const [updating, setUpdating] = useState<string | null>(null);
@@ -274,121 +285,147 @@ export default function AdminPage() {
             <SectionHeader label="การจัดการ" />
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
 
-              <NavCard
-                category="RFQ"
-                title="Manage RFQ"
-                desc="ดูและจัดการใบเสนอราคา"
-                count={newRfqCount}
-                iconWrap="bg-primary/10 text-primary"
-                onClick={() => router.push('/Admin/rfq')}
-                icon={
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75}
-                      d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                }
-              />
+              {canAccess('quotation') && (
+                <NavCard
+                  category="RFQ"
+                  title="Manage RFQ"
+                  desc="ดูและจัดการใบเสนอราคา"
+                  count={newRfqCount}
+                  iconWrap="bg-primary/10 text-primary"
+                  onClick={() => router.push('/Admin/rfq')}
+                  icon={
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75}
+                        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                  }
+                />
+              )}
 
-              <NavCard
-                category="Purchase Order"
-                title="Manage PO"
-                desc="ดูและจัดการใบสั่งซื้อ"
-                count={pendingPoCount}
-                iconWrap="bg-secondary/10 text-secondary"
-                onClick={() => router.push('/Admin/po')}
-                icon={
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75}
-                      d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
-                  </svg>
-                }
-              />
+              {canAccess('po') && (
+                <NavCard
+                  category="Purchase Order"
+                  title="Manage PO"
+                  desc="ดูและจัดการใบสั่งซื้อ"
+                  count={pendingPoCount}
+                  iconWrap="bg-secondary/10 text-secondary"
+                  onClick={() => router.push('/Admin/po')}
+                  icon={
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75}
+                        d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+                    </svg>
+                  }
+                />
+              )}
 
-              <NavCard
-                category="Payment"
-                title="จัดการการชำระเงิน"
-                desc="ตรวจสอบและอนุมัติหลักฐานการโอน"
-                count={pendingPaymentCount}
-                iconWrap="bg-success/10 text-success"
-                onClick={() => router.push('/Admin/payments')}
-                icon={
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <rect x="2" y="6" width="20" height="12" rx="2" strokeWidth={1.75} />
-                    <circle cx="12" cy="12" r="2.5" strokeWidth={1.75} />
-                    <path strokeWidth={1.75} strokeLinecap="round" d="M6 12h.01M18 12h.01" />
-                  </svg>
-                }
-              />
+              {canAccess('payments') && (
+                <NavCard
+                  category="Payment"
+                  title="จัดการการชำระเงิน"
+                  desc="ตรวจสอบและอนุมัติหลักฐานการโอน"
+                  count={pendingPaymentCount}
+                  iconWrap="bg-success/10 text-success"
+                  onClick={() => router.push('/Admin/payments')}
+                  icon={
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <rect x="2" y="6" width="20" height="12" rx="2" strokeWidth={1.75} />
+                      <circle cx="12" cy="12" r="2.5" strokeWidth={1.75} />
+                      <path strokeWidth={1.75} strokeLinecap="round" d="M6 12h.01M18 12h.01" />
+                    </svg>
+                  }
+                />
+              )}
 
-              <NavCard
-                category="Billing"
-                title="จัดการใบวางบิล"
-                desc="ดูและจัดการใบวางบิลทั้งหมด"
-                iconWrap="bg-accent/10 text-accent"
-                onClick={() => router.push('/Admin/billing')}
-                icon={
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75}
-                      d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
-                  </svg>
-                }
-              />
+              {canAccess('billing') && (
+                <NavCard
+                  category="Billing"
+                  title="จัดการใบวางบิล"
+                  desc="ดูและจัดการใบวางบิลทั้งหมด"
+                  iconWrap="bg-accent/10 text-accent"
+                  onClick={() => router.push('/Admin/billing')}
+                  icon={
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75}
+                        d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+                    </svg>
+                  }
+                />
+              )}
 
-            </div>
-          </section>
-
-          {/* ── Archive section ─────────────────────────────────────────── */}
-          <section className="flex flex-col gap-4">
-            <SectionHeader label="ประวัติย้อนหลัง" />
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-
-              <NavCard
-                category="Archive"
-                title="ประวัติแชท"
-                desc="บทสนทนาที่ถูก archive แล้ว"
-                cta="ดูประวัติ"
-                iconWrap="bg-info/10 text-info"
-                onClick={() => router.push('/Admin/history/chats')}
-                icon={
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75}
-                      d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                  </svg>
-                }
-              />
-
-              <NavCard
-                category="Archive"
-                title="ประวัติใบวางบิล"
-                desc="ใบวางบิลที่ถูก archive แล้ว"
-                cta="ดูประวัติ"
-                iconWrap="bg-warning/10 text-warning"
-                onClick={() => router.push('/Admin/history/billings')}
-                icon={
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75}
-                      d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-                  </svg>
-                }
-              />
-
-              <NavCard
-                category="Archive"
-                title="ประวัติ RFQ"
-                desc="ใบเสนอราคาที่ถูก archive แล้ว"
-                cta="ดูประวัติ"
-                iconWrap="bg-base-200 text-base-content/50"
-                onClick={() => router.push('/Admin/history/rfqs')}
-                icon={
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75}
-                      d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
-                  </svg>
-                }
-              />
+              {role === 'admin' && (
+                <NavCard
+                  category="System"
+                  title="จัดการ User"
+                  desc="เพิ่ม แก้ไข และกำหนดสิทธิ์ผู้ใช้"
+                  iconWrap="bg-neutral/10 text-neutral-content"
+                  onClick={() => router.push('/Admin/users')}
+                  icon={
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75}
+                        d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                  }
+                />
+              )}
 
             </div>
           </section>
+
+          {/* ── Archive section (admin only) ─────────────────────────────── */}
+          {role === 'admin' && (
+            <section className="flex flex-col gap-4">
+              <SectionHeader label="ประวัติย้อนหลัง" />
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+
+                <NavCard
+                  category="Archive"
+                  title="ประวัติแชท"
+                  desc="บทสนทนาที่ถูก archive แล้ว"
+                  cta="ดูประวัติ"
+                  iconWrap="bg-info/10 text-info"
+                  onClick={() => router.push('/Admin/history/chats')}
+                  icon={
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75}
+                        d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                    </svg>
+                  }
+                />
+
+                <NavCard
+                  category="Archive"
+                  title="ประวัติใบวางบิล"
+                  desc="ใบวางบิลที่ถูก archive แล้ว"
+                  cta="ดูประวัติ"
+                  iconWrap="bg-warning/10 text-warning"
+                  onClick={() => router.push('/Admin/history/billings')}
+                  icon={
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75}
+                        d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                    </svg>
+                  }
+                />
+
+                <NavCard
+                  category="Archive"
+                  title="ประวัติ RFQ"
+                  desc="ใบเสนอราคาที่ถูก archive แล้ว"
+                  cta="ดูประวัติ"
+                  iconWrap="bg-base-200 text-base-content/50"
+                  onClick={() => router.push('/Admin/history/rfqs')}
+                  icon={
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75}
+                        d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+                    </svg>
+                  }
+                />
+
+              </div>
+            </section>
+          )}
 
           {/* ── Chat panel: desktop only (mobile uses floating button) ── */}
           <div className="hidden lg:block bg-base-100 border border-base-300/70 rounded-[2rem] overflow-hidden shadow-mc-sm" style={{ height: '480px' }}>
