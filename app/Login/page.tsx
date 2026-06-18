@@ -4,11 +4,11 @@ import { redirect } from "next/navigation";
 import LoginForm from "./LoginForm";
 
 export default async function LoginPage() {
-  const session = await getServerSession(authOptions as any);
+  const session: any = await getServerSession(authOptions as any);
 
   // ✅ ถ้า login แล้ว → redirect ทันที (ไม่มี flash)
   if (session) {
-    const role = (session.user as any)?.role;
+    const role = session.user?.role;
     redirect((role === 'admin' || role === 'employee') ? '/Admin' : '/Client');
   }
 
