@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { writeFile, mkdir } from "fs/promises";
-import path from "path";
+import { put } from "@vercel/blob";
 import { requireSession } from "@/lib/apiAuth";
 import crypto from "crypto";
 
@@ -22,15 +21,12 @@ export async function POST(req: NextRequest) {
   }
 
   const ext = file.name.split(".").pop()?.toLowerCase() ?? "bin";
-  const filename = `${crypto.randomUUID()}.${ext}`;
-  const dir = path.join(process.cwd(), "PaymentProof");
-  const dest = path.join(dir, filename);
+  const filename = `PaymentProof/${crypto.randomUUID()}.${ext}`;
 
-  await mkdir(dir, { recursive: true });
-  await writeFile(dest, Buffer.from(await file.arrayBuffer()));
+  const blob = await put(filename, file, { access: "public" });
 
   return NextResponse.json({
-    filePath: `/PaymentProof/${filename}`,
+    filePath: blob.url,
     originalName: file.name,
     mimeType: file.type,
   });

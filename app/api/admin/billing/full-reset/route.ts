@@ -41,16 +41,14 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  const { unlink } = await import("fs/promises");
-  const nodePath = await import("path");
+  const { del } = await import("@vercel/blob");
 
   const allPOs = await PurchaseOrder.find({ userId: customerId }, { filePath: 1 }).lean() as Array<{ filePath?: string; _id: unknown }>;
 
   let deletedFiles = 0;
   for (const po of allPOs) {
-    if (po.filePath) {
-      const abs = nodePath.default.join(process.cwd(), po.filePath.replace(/^\//, ""));
-      try { await unlink(abs); deletedFiles++; } catch {}
+    if (po.filePath?.startsWith("http")) {
+      try { await del(po.filePath); deletedFiles++; } catch {}
     }
   }
 
