@@ -24,7 +24,10 @@ export async function GET(req) {
     pdf = await PDF.findOne(isAdmin ? { _id: id } : { _id: id, userId: session.user.id });
   }
   if (!pdf && filenameParam) {
-    pdf = await PDF.findOne(isAdmin ? { filename: filenameParam } : { filename: filenameParam, userId: session.user.id });
+    // filenameParam อาจเป็น blob URL หรือ filename ธรรมดา
+    const isUrl = filenameParam.startsWith("http");
+    const query = isUrl ? { path: filenameParam } : { filename: filenameParam };
+    pdf = await PDF.findOne(isAdmin ? query : { ...query, userId: session.user.id });
   }
 
   if (!pdf) {
