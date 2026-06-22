@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { writeFile, unlink } from "fs/promises";
-import path from "path";
+import { put, del } from "@vercel/blob";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { connectMongoDB } from "@/lib/mongo";
@@ -10,10 +9,7 @@ export async function POST(req) {
   const session = await getServerSession(authOptions);
 
   if (!session) {
-    return NextResponse.json(
-      { message: "Unauthorized" },
-      { status: 401 }
-    );
+    return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
   }
 
   const data = await req.formData();
@@ -23,34 +19,25 @@ export async function POST(req) {
     return NextResponse.json({ message: "No file" }, { status: 400 });
   }
 
-  // ✅ รับเฉพาะ PDF
   if (file.type !== "application/pdf") {
-    return NextResponse.json(
-      { message: "Only PDF allowed" },
-      { status: 400 }
-    );
+    return NextResponse.json({ message: "Only PDF allowed" }, { status: 400 });
   }
 
-  const bytes = await file.arrayBuffer();
-  const buffer = Buffer.from(bytes);
-
-  const filename = `${Date.now()}-${file.name}`;
-  const filePath = path.join(process.cwd(), "PDF", filename);
-
-  await writeFile(filePath, buffer);
+  const filename = `PDF/${Date.now()}-${file.name}`;
+  const blob = await put(filename, file, { access: "private" });
 
   await connectMongoDB();
 
   const pdf = await PDF.create({
     userId: session.user.id,
-    filename,
-    path: `/PDF/${filename}`,
+    filename: file.name,
+    path: blob.url,
   });
 
   return NextResponse.json({
     message: "Upload success",
     pdfId: pdf._id.toString(),
-    pdfPath: `/PDF/${filename}`,
+    pdfPath: blob.url,
   });
 }
 
@@ -69,9 +56,8 @@ export async function DELETE(req) {
   await connectMongoDB();
   const record = await PDF.findByIdAndDelete(pdfId);
 
-  if (record?.path) {
-    const filePath = path.join(process.cwd(), record.path.replace(/^\//, ""));
-    try { await unlink(filePath); } catch {}
+  if (record?.path?.startsWith("http")) {
+    try { await del(record.path); } catch {}
   }
 
   return NextResponse.json({ message: "Deleted" });
