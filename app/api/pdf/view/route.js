@@ -3,8 +3,6 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { connectMongoDB } from "@/lib/mongo";
 import PDF from "@/app/models/PDF";
-import fs from "fs";
-import path from "path";
 
 export async function GET(req) {
   const session = await getServerSession(authOptions);
@@ -19,14 +17,12 @@ export async function GET(req) {
 
   await connectMongoDB();
 
-  let pdf = null;
-
   const isAdmin = session.user.role === "admin";
 
+  let pdf = null;
   if (id) {
     pdf = await PDF.findOne(isAdmin ? { _id: id } : { _id: id, userId: session.user.id });
   }
-
   if (!pdf && filenameParam) {
     pdf = await PDF.findOne(isAdmin ? { filename: filenameParam } : { filename: filenameParam, userId: session.user.id });
   }
@@ -35,15 +31,19 @@ export async function GET(req) {
     return new NextResponse("Forbidden or Not Found", { status: 403 });
   }
 
-  const filePath = path.join(process.cwd(), "PDF", pdf.filename);
-
-  if (!fs.existsSync(filePath)) {
+  if (!pdf.path) {
     return new NextResponse("File not found", { status: 404 });
   }
 
-  const fileBuffer = fs.readFileSync(filePath);
+  const blobRes = await fetch(pdf.path, {
+    headers: { Authorization: `Bearer ${process.env.BLOB_READ_WRITE_TOKEN}` },
+  });
 
-  return new NextResponse(fileBuffer, {
+  if (!blobRes.ok) {
+    return new NextResponse("File not found", { status: 404 });
+  }
+
+  return new NextResponse(blobRes.body, {
     headers: {
       "Content-Type": "application/pdf",
       "Content-Disposition": `inline; filename*=UTF-8''${encodeURIComponent(pdf.filename)}`,
