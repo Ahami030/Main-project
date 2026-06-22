@@ -33,5 +33,18 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ message: "File not found" }, { status: 404 });
   }
 
-  return NextResponse.redirect(proof.filePath);
+  const blobRes = await fetch(proof.filePath, {
+    headers: { Authorization: `Bearer ${process.env.BLOB_READ_WRITE_TOKEN}` },
+  });
+
+  if (!blobRes.ok) {
+    return NextResponse.json({ message: "File not found" }, { status: 404 });
+  }
+
+  return new Response(blobRes.body, {
+    headers: {
+      "Content-Type": proof.fileMimeType || blobRes.headers.get("Content-Type") || "application/octet-stream",
+      "Content-Disposition": `inline; filename="${proof.fileOrigName ?? "file"}"`,
+    },
+  });
 }

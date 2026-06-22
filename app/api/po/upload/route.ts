@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
   const ext = file.name.split(".").pop()?.toLowerCase() ?? "bin";
   const filename = `PO/${crypto.randomUUID()}.${ext}`;
 
-  const blob = await put(filename, file, { access: "public" });
+  const blob = await put(filename, file, { access: "private" });
 
   return NextResponse.json({
     filePath: blob.url,
