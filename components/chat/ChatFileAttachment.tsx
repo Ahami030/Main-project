@@ -5,7 +5,7 @@ interface Props {
   fileUrl: string;
   fileType: string;
   fileName: string;
-  onPdfClick?: () => void;
+  onPdfClick?: (url: string) => void;
   isAdmin?: boolean;
 }
 
@@ -58,7 +58,7 @@ export default function ChatFileAttachment({ fileUrl, fileType, fileName, onPdfC
   }
 
   // PDF
-  const handleClick = onPdfClick ?? (() => window.open(proxyUrl, '_blank'));
+  const handleClick = onPdfClick ? () => onPdfClick(proxyUrl) : () => window.open(proxyUrl, '_blank');
   return (
     <button onClick={handleClick} className={cardCls}>
       <svg className="w-4 h-4 shrink-0 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24">

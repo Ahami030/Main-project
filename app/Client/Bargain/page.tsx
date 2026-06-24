@@ -37,6 +37,7 @@ export default function DocumentChatPage() {
   const [downloadReady, setDownloadReady] = useState(false);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [showHighlights, setShowHighlights] = useState(true);
+  const [pdfModal, setPdfModal] = useState<string | null>(null);
 
   const chatContainerRef = useRef<HTMLDivElement>(null);
 
@@ -400,7 +401,7 @@ export default function DocumentChatPage() {
                         }`}
                       >
                         {chat.fileUrl
-                          ? <ChatFileAttachment fileUrl={chat.fileUrl} fileType={chat.fileType!} fileName={chat.fileName ?? "ไฟล์"} isAdmin={!isUser} />
+                          ? <ChatFileAttachment fileUrl={chat.fileUrl} fileType={chat.fileType!} fileName={chat.fileName ?? "ไฟล์"} isAdmin={!isUser} onPdfClick={(url) => setPdfModal(url)} />
                           : chat.message}
                       </div>
                     </div>
@@ -652,6 +653,25 @@ export default function DocumentChatPage() {
                 ยืนยัน
               </button>
             </div>
+          </div>
+        </div>
+      )}
+      {/* ── PDF Modal ── */}
+      {pdfModal && (
+        <div
+          className="fixed inset-0 z-99999 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => setPdfModal(null)}
+        >
+          <div className="relative w-full max-w-3xl h-[88vh]" onClick={(e) => e.stopPropagation()}>
+            <button
+              onClick={() => setPdfModal(null)}
+              className="absolute -top-4 -right-4 w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors z-10"
+            >
+              <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+            <iframe src={pdfModal} className="w-full h-full rounded-2xl" />
           </div>
         </div>
       )}
