@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import ChatFileAttachment from '@/components/chat/ChatFileAttachment';
 
 type UserWithChat = {
   userId: string;
@@ -366,28 +367,9 @@ export default function InlineChatPanel({ onRfqCount }: Props) {
                               ? 'bg-primary text-primary-content rounded-tr-sm'
                               : 'bg-base-100 text-base-content/80 rounded-tl-sm shadow-sm border border-base-200'
                           }`}>
-                            {msg.fileUrl ? (
-                              msg.fileType === 'image' ? (
-                                <img
-                                  src={`/api/chat/file?url=${encodeURIComponent(msg.fileUrl)}`}
-                                  alt={msg.fileName}
-                                  className="max-w-48 rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
-                                  onClick={() => window.open(`/api/chat/file?url=${encodeURIComponent(msg.fileUrl!)}`, '_blank')}
-                                />
-                              ) : (
-                                <a
-                                  href={`/api/chat/file?url=${encodeURIComponent(msg.fileUrl)}`}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="flex items-center gap-1.5 underline underline-offset-2"
-                                >
-                                  <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                  </svg>
-                                  {msg.fileName}
-                                </a>
-                              )
-                            ) : msg.message}
+                            {msg.fileUrl
+                              ? <ChatFileAttachment fileUrl={msg.fileUrl} fileType={msg.fileType!} fileName={msg.fileName ?? 'ไฟล์'} isAdmin={isAdmin} />
+                              : msg.message}
                           </div>
                           <span className="text-[10px] text-base-content/30 px-1">{fmtTime(msg.createdAt)}</span>
                         </div>

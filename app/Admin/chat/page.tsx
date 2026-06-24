@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
+import ChatFileAttachment from "@/components/chat/ChatFileAttachment";
 
 type ChatType = {
   _id: string;
@@ -259,28 +260,9 @@ export default function AdminPage() {
                         : "bg-white border border-gray-200 text-gray-900 rounded-bl-none"
                     }`}
                   >
-                    {chat.fileUrl ? (
-                      chat.fileType === "image" ? (
-                        <img
-                          src={`/api/chat/file?url=${encodeURIComponent(chat.fileUrl)}`}
-                          alt={chat.fileName}
-                          className="max-w-50 rounded cursor-pointer"
-                          onClick={() => window.open(`/api/chat/file?url=${encodeURIComponent(chat.fileUrl!)}`, "_blank")}
-                        />
-                      ) : (
-                        <a
-                          href={`/api/chat/file?url=${encodeURIComponent(chat.fileUrl)}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="flex items-center gap-1.5 underline underline-offset-2 text-sm"
-                        >
-                          <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                          </svg>
-                          {chat.fileName}
-                        </a>
-                      )
-                    ) : <div>{chat.message}</div>}
+                    {chat.fileUrl
+                      ? <ChatFileAttachment fileUrl={chat.fileUrl} fileType={chat.fileType!} fileName={chat.fileName ?? "ไฟล์"} isAdmin={chat.senderRole === "admin"} />
+                      : <div>{chat.message}</div>}
                     <div
                       className={`text-xs mt-1 ${
                         chat.senderRole === "admin"

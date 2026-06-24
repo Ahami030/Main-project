@@ -2,6 +2,7 @@
 
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import ChatFileAttachment from "@/components/chat/ChatFileAttachment";
 
 // ── Chat types ──────────────────────────────────────────────
 type ChatMsg = {
@@ -135,26 +136,15 @@ function ChatPanel({
                           ? "bg-primary text-primary-content rounded-tr-sm"
                           : "bg-base-200 text-base-content/80 rounded-tl-sm"
                       }`}>
-                        {chat.fileUrl ? (
-                          chat.fileType === "image" ? (
-                            <img
-                              src={`/api/chat/file?url=${encodeURIComponent(chat.fileUrl)}`}
-                              alt={chat.fileName}
-                              className="max-w-48 rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
-                              onClick={() => onFileClick?.(chat.fileUrl!, chat.fileType!, chat.fileName ?? "ไฟล์")}
+                        {chat.fileUrl
+                          ? <ChatFileAttachment
+                              fileUrl={chat.fileUrl}
+                              fileType={chat.fileType!}
+                              fileName={chat.fileName ?? "ไฟล์"}
+                              isAdmin={isAdmin}
+                              onPdfClick={chat.fileType === "pdf" ? () => onFileClick?.(chat.fileUrl!, chat.fileType!, chat.fileName ?? "ไฟล์") : undefined}
                             />
-                          ) : (
-                            <button
-                              className="flex items-center gap-1.5 underline underline-offset-2 text-left"
-                              onClick={() => onFileClick?.(chat.fileUrl!, chat.fileType!, chat.fileName ?? "ไฟล์")}
-                            >
-                              <svg className="w-3 h-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                              </svg>
-                              {chat.fileName}
-                            </button>
-                          )
-                        ) : chat.message}
+                          : chat.message}
                       </div>
                       <span className="text-[10px] text-base-content/30 px-1">{fmtTime(chat.createdAt)}</span>
                     </div>

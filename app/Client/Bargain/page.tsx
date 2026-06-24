@@ -4,6 +4,7 @@ import { useSession } from "next-auth/react";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import QuotationDocument, { RFQData } from "@/components/QuotationDocument";
+import ChatFileAttachment from "@/components/chat/ChatFileAttachment";
 
 type ChatType = {
   _id: string;
@@ -398,28 +399,9 @@ export default function DocumentChatPage() {
                             : "bg-base-100 border border-base-content/10 text-base-content rounded-bl-sm"
                         }`}
                       >
-                        {chat.fileUrl ? (
-                          chat.fileType === "image" ? (
-                            <img
-                              src={`/api/chat/file?url=${encodeURIComponent(chat.fileUrl)}`}
-                              alt={chat.fileName}
-                              className="max-w-50 rounded-lg cursor-pointer"
-                              onClick={() => window.open(`/api/chat/file?url=${encodeURIComponent(chat.fileUrl!)}`, "_blank")}
-                            />
-                          ) : (
-                            <a
-                              href={`/api/chat/file?url=${encodeURIComponent(chat.fileUrl)}`}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="flex items-center gap-1.5 underline underline-offset-2"
-                            >
-                              <svg className="w-3 h-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                              </svg>
-                              {chat.fileName}
-                            </a>
-                          )
-                        ) : chat.message}
+                        {chat.fileUrl
+                          ? <ChatFileAttachment fileUrl={chat.fileUrl} fileType={chat.fileType!} fileName={chat.fileName ?? "ไฟล์"} isAdmin={!isUser} />
+                          : chat.message}
                       </div>
                     </div>
                   </div>
