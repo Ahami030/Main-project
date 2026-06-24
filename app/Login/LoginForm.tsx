@@ -14,6 +14,7 @@ export default function LoginForm() {
   const [remember, setRemember] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [exiting, setExiting] = useState(false);
 
   const emailIsValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   const passwordIsValid = password.length >= 6;
@@ -44,7 +45,8 @@ export default function LoginForm() {
       } else {
         const session = await getSession();
         const role = (session?.user as any)?.role;
-        router.replace(role === 'admin' ? '/Admin' : '/Client');
+        setExiting(true);
+        setTimeout(() => router.replace(role === 'admin' ? '/Admin' : '/Client'), 50);
       }
     } catch (error) {
       console.error(error);
@@ -54,8 +56,15 @@ export default function LoginForm() {
   };
 
   return (
+    <>
+    {/* Exit overlay — covers navbar + page during navigation */}
+    <div
+      className={`fixed inset-0 z-9999 bg-base-200 transition-opacity duration-300 pointer-events-none ${
+        exiting ? 'opacity-100' : 'opacity-0'
+      }`}
+    />
     <main className="min-h-screen bg-base-200 flex items-center justify-center p-6">
-      <div className="w-full max-w-md bg-base-100 rounded-box shadow border border-base-300 p-6 min-h-[500px]">
+      <div className="w-full max-w-md bg-base-100 rounded-box shadow border border-base-300 p-6 min-h-125">
 
         <header className="mb-6 text-center">
           <div className="mx-auto h-10 w-10 rounded-full bg-primary flex items-center justify-center text-primary-content font-bold">
@@ -149,5 +158,6 @@ export default function LoginForm() {
 
       </div>
     </main>
+    </>
   );
 }
