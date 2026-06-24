@@ -397,11 +397,11 @@ export default function DocumentChatPage() {
                         className={`max-w-[78%] px-2.5 py-1.5 rounded-xl text-xs leading-relaxed ${
                           isUser
                             ? "bg-primary text-primary-content rounded-br-sm"
-                            : "bg-base-100 border border-base-content/10 text-base-content rounded-bl-sm"
+                            : "bg-base-100 border border-base-content/20 shadow-mc-sm text-base-content rounded-bl-sm"
                         }`}
                       >
                         {chat.fileUrl
-                          ? <ChatFileAttachment fileUrl={chat.fileUrl} fileType={chat.fileType!} fileName={chat.fileName ?? "ไฟล์"} isAdmin={!isUser} onPdfClick={(url) => setPdfModal(url)} />
+                          ? <ChatFileAttachment fileUrl={chat.fileUrl} fileType={chat.fileType!} fileName={chat.fileName ?? "ไฟล์"} isAdmin={isUser} onPdfClick={(url) => setPdfModal(url)} />
                           : chat.message}
                       </div>
                     </div>
