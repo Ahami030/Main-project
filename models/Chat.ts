@@ -13,8 +13,11 @@ const ChatSchema = new mongoose.Schema({
   },
   message: {
     type: String,
-    required: true
-  }
+    default: ""
+  },
+  fileUrl:  { type: String, default: "" },
+  fileType: { type: String, default: "" },
+  fileName: { type: String, default: "" },
 }, { timestamps: true });
 
 export default mongoose.models.Chat || mongoose.model("Chat", ChatSchema);

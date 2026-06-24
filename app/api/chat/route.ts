@@ -5,12 +5,15 @@ import { connectMongoDB } from "@/lib/mongo";
 
 export async function POST(req: Request) {
   await connectMongoDB();
-  const body = await req.json();
+  const { userId, senderRole, message, fileUrl, fileType, fileName } = await req.json();
 
   const chat = await Chat.create({
-    userId: body.userId,
-    senderRole: body.senderRole,
-    message: body.message
+    userId,
+    senderRole,
+    message: message ?? "",
+    fileUrl:  fileUrl  ?? "",
+    fileType: fileType ?? "",
+    fileName: fileName ?? "",
   });
 
   return NextResponse.json(chat);
