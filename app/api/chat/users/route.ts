@@ -29,7 +29,7 @@ export async function GET() {
         return {
           userId: userId.toString(),
           user: user ? { name: user.name, email: user.email } : null,
-          latestMessage: latestChat?.message || "",
+          latestMessage: latestChat?.message || (latestChat?.fileUrl ? `📎 ${latestChat.fileName || "ไฟล์"}` : ""),
           latestMessageTime: latestChat?.createdAt || new Date(),
           latestUserMessageTime: latestUserChat?.createdAt || null,
         };
