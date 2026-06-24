@@ -760,9 +760,9 @@ export default function Page(): JSX.Element {
         <div className="absolute -bottom-[26rem] -left-[12rem] w-[42rem] h-[42rem] rounded-full border border-secondary/[0.08]" />
       </div>
 
-      {/* Loading screen — shown until both fetches complete */}
+      {/* Loading screen — fixed covers navbar (z-40) too */}
       {!pageVisible && (
-        <div className="absolute inset-0 flex items-center justify-center z-10">
+        <div className="fixed inset-0 flex items-center justify-center z-50 bg-base-200">
           <div className="flex flex-col items-center gap-4">
             <div className="w-14 h-14 rounded-full bg-primary/8 border border-primary/15 flex items-center justify-center">
               <span className="loading loading-spinner loading-md text-primary" />
