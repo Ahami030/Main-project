@@ -99,7 +99,7 @@ function SectionHeader({ label }: { label: string }) {
 
 export default function AdminPage() {
   const router = useRouter();
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
   const role = (session?.user as any)?.role as string | undefined;
   const permissions = ((session?.user as any)?.permissions ?? []) as string[];
 
@@ -158,9 +158,13 @@ export default function AdminPage() {
     }
   }, []);
 
-  useEffect(() => { fetchQuotations(); }, [fetchQuotations]);
+  useEffect(() => {
+    if (status !== 'authenticated') return;
+    fetchQuotations();
+  }, [status, fetchQuotations]);
 
   useEffect(() => {
+    if (status !== 'authenticated') return;
     const fetchPoCount = async () => {
       try {
         const res = await fetch('/api/po');
@@ -173,10 +177,10 @@ export default function AdminPage() {
     fetchPoCount();
     const id = setInterval(fetchPoCount, 10000);
     return () => clearInterval(id);
-  }, []);
+  }, [status]);
 
-  // ── Pending payment-proofs awaiting review ──────────────────────────────────
   useEffect(() => {
+    if (status !== 'authenticated') return;
     const fetchPaymentCount = async () => {
       try {
         const res = await fetch('/api/payment-proof');
@@ -189,7 +193,7 @@ export default function AdminPage() {
     fetchPaymentCount();
     const id = setInterval(fetchPaymentCount, 10000);
     return () => clearInterval(id);
-  }, []);
+  }, [status]);
 
   const updateStatus = async (id: string, status: QuotationStatus) => {
     setUpdating(id);

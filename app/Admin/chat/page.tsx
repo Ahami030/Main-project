@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useSession } from "next-auth/react";
 
 type ChatType = {
   _id: string;
@@ -17,6 +18,7 @@ type UserWithChat = {
 };
 
 export default function AdminPage() {
+  const { status } = useSession();
   const [message, setMessage] = useState("");
   const [chats, setChats] = useState<ChatType[]>([]);
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
@@ -32,6 +34,8 @@ export default function AdminPage() {
 
   // แยก initial load กับ polling
   useEffect(() => {
+    if (status !== 'authenticated') return;
+
     const initLoad = async () => {
       try {
         const res = await fetch("/api/chat/users", { cache: "no-store" });
@@ -61,7 +65,7 @@ export default function AdminPage() {
     }, 3000);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [status]);
 
   // Reset state + mark justSwitchedUser เมื่อเปลี่ยน user
   useEffect(() => {
@@ -152,11 +156,11 @@ export default function AdminPage() {
   }, [chats, shouldAutoScroll]);
 
   useEffect(() => {
-    if (!selectedUserId) return;
+    if (!selectedUserId || status !== 'authenticated') return;
     loadChats();
-    const interval = setInterval(loadChats, 1000);
+    const interval = setInterval(loadChats, 3000);
     return () => clearInterval(interval);
-  }, [selectedUserId]);
+  }, [selectedUserId, status]);
 
   const scrollToBottom = () => {
     const container = chatContainerRef.current;
