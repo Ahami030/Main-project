@@ -194,6 +194,7 @@ export default function Page(): JSX.Element {
   // ── Page state ───────────────────────────────────────────────────────────
   const [loading, setLoading] = useState(true);
   const [quotations, setQuotations] = useState<Quotation[]>([]);
+  const [pageVisible, setPageVisible] = useState(false);
   const [learnMore, setLearnMore]   = useState(false);
   const [modalQuotation, setModalQuotation] = useState<Quotation | null>(null);
   const [rfqForModal, setRfqForModal]             = useState<RFQData | null>(null);
@@ -246,6 +247,14 @@ export default function Page(): JSX.Element {
     const id = setInterval(() => fetchPOOrders(true), 8000);
     return () => clearInterval(id);
   }, [fetchPOOrders]);
+
+  // ── Reveal page once both initial fetches complete ───────────────────────
+  useEffect(() => {
+    if (!loading && !poLoading) {
+      const t = setTimeout(() => setPageVisible(true), 60);
+      return () => clearTimeout(t);
+    }
+  }, [loading, poLoading]);
 
   // ── Fetch payment proofs ─────────────────────────────────────────────────
   type PaymentInfo = {
@@ -751,7 +760,24 @@ export default function Page(): JSX.Element {
         <div className="absolute -bottom-[26rem] -left-[12rem] w-[42rem] h-[42rem] rounded-full border border-secondary/[0.08]" />
       </div>
 
-      <div id="client-dashboard-content" className="relative max-w-6xl mx-auto px-4 md:px-8 py-8 md:py-14 space-y-5 md:space-y-7">
+      {/* Loading screen — shown until both fetches complete */}
+      {!pageVisible && (
+        <div className="absolute inset-0 flex items-center justify-center z-10">
+          <div className="flex flex-col items-center gap-4">
+            <div className="w-14 h-14 rounded-full bg-primary/8 border border-primary/15 flex items-center justify-center">
+              <span className="loading loading-spinner loading-md text-primary" />
+            </div>
+            <p className="text-xs text-base-content/35 tracking-widest uppercase">กำลังโหลด</p>
+          </div>
+        </div>
+      )}
+
+      <div
+        id="client-dashboard-content"
+        className={`relative max-w-6xl mx-auto px-4 md:px-8 py-8 md:py-14 space-y-5 md:space-y-7 transition-all duration-700 ease-out ${
+          pageVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6 pointer-events-none'
+        }`}
+      >
 
         {/* ── User Card ─────────────────────────────────────────── */}
         <div className="card bg-base-100 border border-base-300/70 rounded-[2.5rem] shadow-mc transition-shadow duration-300 hover:shadow-mc-lg">
