@@ -36,6 +36,7 @@ type ChatPanelProps = {
   chatMessage: string;
   setChatMessage: (v: string) => void;
   sendChatMessage: () => void;
+  onFileClick?: (url: string, type: string, name: string) => void;
 };
 
 function ChatPanel({
@@ -51,6 +52,7 @@ function ChatPanel({
   chatMessage,
   setChatMessage,
   sendChatMessage,
+  onFileClick,
 }: ChatPanelProps) {
   return (
     <div className={`bg-base-100 rounded-2xl border border-base-300 flex flex-col overflow-hidden ${className}`}>
@@ -138,21 +140,19 @@ function ChatPanel({
                             <img
                               src={`/api/chat/file?url=${encodeURIComponent(chat.fileUrl)}`}
                               alt={chat.fileName}
-                              className="max-w-48 rounded-lg cursor-pointer"
-                              onClick={() => window.open(`/api/chat/file?url=${encodeURIComponent(chat.fileUrl!)}`, "_blank")}
+                              className="max-w-48 rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
+                              onClick={() => onFileClick?.(chat.fileUrl!, chat.fileType!, chat.fileName ?? "ไฟล์")}
                             />
                           ) : (
-                            <a
-                              href={`/api/chat/file?url=${encodeURIComponent(chat.fileUrl)}`}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="flex items-center gap-1.5 underline underline-offset-2"
+                            <button
+                              className="flex items-center gap-1.5 underline underline-offset-2 text-left"
+                              onClick={() => onFileClick?.(chat.fileUrl!, chat.fileType!, chat.fileName ?? "ไฟล์")}
                             >
                               <svg className="w-3 h-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                               </svg>
                               {chat.fileName}
-                            </a>
+                            </button>
                           )
                         ) : chat.message}
                       </div>
@@ -226,6 +226,9 @@ export default function EditPage() {
   const [focusedLineField, setFocusedLineField] = useState<string>("");
   const [mobileTab, setMobileTab] = useState<"pdf" | "edit" | "chat">("pdf");
   const [summaryOpen, setSummaryOpen] = useState(false);
+
+  // ── Viewer state ───────────────────────────────────────────
+  const [viewerFile, setViewerFile] = useState<{ url: string; type: string; name: string } | null>(null);
 
   // ── Chat state ─────────────────────────────────────────────
   const [chatMessage, setChatMessage] = useState("");
@@ -670,21 +673,52 @@ export default function EditPage() {
       {/* ─── DESKTOP (≥ lg) ─── */}
       <div className="hidden lg:grid h-screen bg-base-200 p-4 gap-4 grid-cols-[42%_1fr] grid-rows-[1fr_380px] overflow-hidden">
 
-        {/* LEFT: PDF (full height) */}
+        {/* LEFT: PDF / Chat file viewer (full height) */}
         <div ref={pdfRef} className="bg-base-100 rounded-2xl border border-base-300 flex flex-col gap-3 p-4 row-span-2 overflow-hidden">
           <div className="flex items-center justify-between">
-            <span className="text-[10px] font-semibold tracking-[0.15em] uppercase text-base-content/40">Original Document</span>
-            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-error/10 rounded-lg">
-              <div className="w-1.5 h-1.5 rounded-full bg-error" />
-              <span className="text-[10px] font-semibold text-error">PDF</span>
+            <span className="text-[10px] font-semibold tracking-[0.15em] uppercase text-base-content/40">
+              {viewerFile ? viewerFile.name : "Original Document"}
+            </span>
+            <div className="flex items-center gap-2">
+              {viewerFile && (
+                <button
+                  onClick={() => setViewerFile(null)}
+                  className="flex items-center gap-1 text-[10px] font-semibold text-base-content/60 hover:text-base-content transition-colors px-2 py-1 rounded-lg hover:bg-base-200"
+                >
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                  กลับ PDF
+                </button>
+              )}
+              <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg ${viewerFile ? "bg-accent/10" : "bg-error/10"}`}>
+                <div className={`w-1.5 h-1.5 rounded-full ${viewerFile ? "bg-accent" : "bg-error"}`} />
+                <span className={`text-[10px] font-semibold ${viewerFile ? "text-accent" : "text-error"}`}>
+                  {viewerFile ? (viewerFile.type === "image" ? "IMG" : "PDF") : "PDF"}
+                </span>
+              </div>
             </div>
           </div>
-          <div className="flex items-center gap-2 px-3 py-2 bg-base-200 rounded-xl border border-base-300">
-            <svg className="w-3.5 h-3.5 text-base-content/40 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-            <span className="text-xs text-base-content/60 truncate">{form.filename || "ไม่มีไฟล์ PDF"}</span>
-          </div>
+          {!viewerFile && (
+            <div className="flex items-center gap-2 px-3 py-2 bg-base-200 rounded-xl border border-base-300">
+              <svg className="w-3.5 h-3.5 text-base-content/40 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+              <span className="text-xs text-base-content/60 truncate">{form.filename || "ไม่มีไฟล์ PDF"}</span>
+            </div>
+          )}
           <div className="flex-1 rounded-xl overflow-hidden border border-base-300 bg-base-200 min-h-0">
-            {form.filename ? (
+            {viewerFile ? (
+              viewerFile.type === "image" ? (
+                <div className="w-full h-full flex items-center justify-center p-4 overflow-auto">
+                  <img
+                    src={`/api/chat/file?url=${encodeURIComponent(viewerFile.url)}`}
+                    alt={viewerFile.name}
+                    className="max-w-full max-h-full object-contain rounded-xl"
+                  />
+                </div>
+              ) : (
+                <iframe src={`/api/chat/file?url=${encodeURIComponent(viewerFile.url)}`} className="w-full h-full" />
+              )
+            ) : form.filename ? (
               <iframe src={`/api/pdf/view?filename=${encodeURIComponent(form.filename)}`} className="w-full h-full" />
             ) : (
               <div className="flex flex-col items-center justify-center h-full gap-2 text-base-content/30">
@@ -848,6 +882,7 @@ export default function EditPage() {
             chatMessage={chatMessage}
             setChatMessage={setChatMessage}
             sendChatMessage={sendChatMessage}
+            onFileClick={(url, type, name) => setViewerFile({ url, type, name })}
           />
         </div>
       </div>
