@@ -97,6 +97,8 @@ export default function ChecklistPage() {
   const [modal, setModal]       = useState(false);
   const [confirmText, setConfirmText] = useState("");
   const [deleting, setDeleting] = useState(false);
+  const [horizontal, setHorizontal] = useState(false);
+  const [summaryOpen, setSummaryOpen] = useState(false);
   const debounceRefs = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const printRef     = useRef<HTMLDivElement>(null);
 
@@ -189,6 +191,33 @@ export default function ChecklistPage() {
             <p className="text-sm text-base-content/50 mt-0.5">ใช้ชั่วคราวสำหรับส่งครู — หน้านี้จะถูกลบออกภายหลัง</p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
+            {/* Layout toggle */}
+            <button
+              onClick={() => setHorizontal(h => !h)}
+              className="flex items-center gap-2 px-3 py-2 border border-base-300 bg-base-100 text-base-content text-sm rounded-lg hover:bg-base-200 transition-colors"
+              title={horizontal ? "แนวตั้ง" : "แนวนอน"}
+            >
+              {horizontal ? (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+              ) : (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 5a1 1 0 011-1h4a1 1 0 011 1v5a1 1 0 01-1 1H5a1 1 0 01-1-1V5zm10 0a1 1 0 011-1h4a1 1 0 011 1v5a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 14a1 1 0 011-1h4a1 1 0 011 1v5a1 1 0 01-1 1H5a1 1 0 01-1-1v-5zm10 0a1 1 0 011-1h4a1 1 0 011 1v5a1 1 0 01-1 1h-4a1 1 0 01-1-1v-5z" />
+                </svg>
+              )}
+              {horizontal ? "แนวตั้ง" : "แนวนอน"}
+            </button>
+            {/* Summary */}
+            <button
+              onClick={() => setSummaryOpen(true)}
+              className="flex items-center gap-2 px-3 py-2 border border-base-300 bg-base-100 text-base-content text-sm rounded-lg hover:bg-base-200 transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              สรุปงาน
+            </button>
             <button
               onClick={handleDownload}
               className="flex items-center gap-2 px-4 py-2 bg-base-content text-base-100 text-sm font-semibold rounded-lg hover:opacity-80 transition-opacity"
@@ -250,7 +279,9 @@ export default function ChecklistPage() {
             <div className="flex justify-center py-16">
               <span className="loading loading-spinner loading-lg text-primary" />
             </div>
-          ) : SECTIONS.map(section => {
+          ) : (
+          <div className={horizontal ? "grid grid-cols-1 md:grid-cols-2 gap-5" : "space-y-5"}>
+          {SECTIONS.map(section => {
             const sDone  = sectionChecked(section);
             const sTotal = sectionItems(section).length;
             const sFull  = sDone === sTotal;
@@ -350,8 +381,66 @@ export default function ChecklistPage() {
               </div>
             );
           })}
+          </div>
+          )}
         </div>
       </div>
+
+      {/* ── Summary modal ── */}
+      {summaryOpen && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setSummaryOpen(false)}>
+          <div className="bg-base-100 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-base-300 shrink-0">
+              <div>
+                <h3 className="font-bold text-base-content">สรุปงานที่ทำเสร็จแล้ว</h3>
+                <p className="text-xs text-base-content/50 mt-0.5">{Object.values(state).filter(v => v.checked).length} / {TOTAL} รายการ</p>
+              </div>
+              <button onClick={() => setSummaryOpen(false)} className="w-8 h-8 rounded-full hover:bg-base-200 flex items-center justify-center transition-colors">
+                <svg className="w-4 h-4 text-base-content/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            {/* Body */}
+            <div className="overflow-y-auto flex-1 px-6 py-4 space-y-4">
+              {SECTIONS.map(section => {
+                const doneItems = section.sub.flatMap(sub =>
+                  sub.items.filter(it => state[it.id]?.checked).map(it => ({
+                    ...it, subTitle: sub.title, note: state[it.id]?.note ?? ""
+                  }))
+                );
+                if (doneItems.length === 0) return null;
+                const total = sectionItems(section).length;
+                return (
+                  <div key={section.id}>
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="text-sm font-bold text-base-content">{section.id} {section.title}</h4>
+                      <span className="text-xs font-mono text-success bg-success/10 px-2 py-0.5 rounded-full">{doneItems.length}/{total}</span>
+                    </div>
+                    <ul className="space-y-1.5">
+                      {doneItems.map(item => (
+                        <li key={item.id} className="flex items-start gap-2 bg-success/8 border border-success/20 rounded-xl px-3 py-2">
+                          <svg className="w-4 h-4 text-success shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                          </svg>
+                          <div className="min-w-0">
+                            <p className="text-sm text-base-content">{item.label}</p>
+                            {item.note && <p className="text-xs text-base-content/50 mt-0.5">{item.note}</p>}
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                );
+              })}
+              {Object.values(state).filter(v => v.checked).length === 0 && (
+                <p className="text-center text-base-content/40 py-8 text-sm">ยังไม่มีรายการที่ทำเสร็จ</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Self-destruct modal ── */}
       {modal && (
