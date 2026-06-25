@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { signIn, getSession } from "next-auth/react";
+import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
@@ -43,10 +43,9 @@ export default function LoginForm() {
         setErrorMessage("Email หรือ Password ไม่ถูกต้อง");
         setLoading(false);
       } else {
-        const session = await getSession();
-        const role = (session?.user as any)?.role;
+        // ไม่เรียก getSession() — ให้ server-side Login page redirect ตาม role แทน (ไม่มี cold start เพิ่ม)
         setExiting(true);
-        requestAnimationFrame(() => router.replace(role === 'admin' ? '/Admin' : '/Client'));
+        requestAnimationFrame(() => router.replace("/Login"));
       }
     } catch (error) {
       console.error(error);
