@@ -760,8 +760,73 @@ export default function Page(): JSX.Element {
       </div>
 
       {!pageVisible && (
-        <div className="fixed inset-0 z-50 bg-base-200 flex items-center justify-center">
-          <span className="loading loading-spinner loading-lg text-primary" />
+        <div className="fixed inset-0 z-50 bg-base-200 overflow-y-auto">
+          <div className="max-w-6xl mx-auto px-4 md:px-8 py-8 md:py-14 space-y-5">
+
+            {/* User card skeleton */}
+            <div className="bg-base-100 rounded-[2.5rem] border border-base-300/70 shadow-mc p-7 md:px-9">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-5">
+                  <div className="w-16 h-16 rounded-full bg-base-300 animate-pulse shrink-0" />
+                  <div className="space-y-2.5">
+                    <div className="h-2.5 w-16 bg-base-300 animate-pulse rounded-full" />
+                    <div className="h-5 w-36 bg-base-300 animate-pulse rounded-full" />
+                    <div className="h-3 w-44 bg-base-300 animate-pulse rounded-full" />
+                  </div>
+                </div>
+                <div className="h-8 w-20 bg-base-300 animate-pulse rounded-full hidden md:block" />
+              </div>
+            </div>
+
+            {/* Quotation card skeleton */}
+            <div className="bg-base-100 rounded-[2.5rem] border border-base-300/70 shadow-mc p-7 md:px-9 space-y-5">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex items-start gap-3">
+                  <div className="w-12 h-12 rounded-full bg-base-300 animate-pulse shrink-0" />
+                  <div className="space-y-2">
+                    <div className="h-2.5 w-24 bg-base-300 animate-pulse rounded-full" />
+                    <div className="h-5 w-52 bg-base-300 animate-pulse rounded-full" />
+                    <div className="h-3 w-32 bg-base-300 animate-pulse rounded-full" />
+                  </div>
+                </div>
+                <div className="h-7 w-20 bg-base-300 animate-pulse rounded-full shrink-0 hidden md:block" />
+              </div>
+              {/* Steps */}
+              <div className="space-y-3 pt-2">
+                {[...Array(4)].map((_, i) => (
+                  <div key={i} className="flex gap-3 items-start">
+                    <div className="w-7 h-7 rounded-full bg-base-300 animate-pulse shrink-0" />
+                    <div className="flex-1 space-y-1.5 pt-1">
+                      <div className="h-3 bg-base-300 animate-pulse rounded-full" style={{ width: `${60 - i * 8}%` }} />
+                      <div className="h-2.5 w-32 bg-base-300 animate-pulse rounded-full" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* PO card skeleton */}
+            <div className="bg-base-100 rounded-[2.5rem] border border-base-300/70 shadow-mc p-7 md:px-9 space-y-4">
+              <div className="flex items-start gap-3">
+                <div className="w-12 h-12 rounded-full bg-base-300 animate-pulse shrink-0" />
+                <div className="space-y-2">
+                  <div className="h-2.5 w-20 bg-base-300 animate-pulse rounded-full" />
+                  <div className="h-5 w-40 bg-base-300 animate-pulse rounded-full" />
+                </div>
+              </div>
+              <div className="space-y-3">
+                {[...Array(3)].map((_, i) => (
+                  <div key={i} className="flex gap-3 items-start">
+                    <div className="w-7 h-7 rounded-full bg-base-300 animate-pulse shrink-0" />
+                    <div className="flex-1 space-y-1.5 pt-1">
+                      <div className="h-3 bg-base-300 animate-pulse rounded-full" style={{ width: `${55 - i * 10}%` }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+          </div>
         </div>
       )}
 
