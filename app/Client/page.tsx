@@ -760,7 +760,7 @@ export default function Page(): JSX.Element {
       </div>
 
       {!pageVisible && (
-        <div className="fixed inset-0 z-50 bg-base-200 overflow-y-auto">
+        <div className="fixed inset-0 z-30 bg-base-200 overflow-y-auto pt-16">
           <div className="max-w-6xl mx-auto px-4 md:px-8 py-8 md:py-14 space-y-5">
 
             {/* User card skeleton */}
