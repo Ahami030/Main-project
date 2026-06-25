@@ -181,7 +181,7 @@ export default function ChecklistPage() {
           * { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
         }
       `}</style>
-      <div className="max-w-3xl mx-auto space-y-5">
+      <div className={`${horizontal ? "max-w-350" : "max-w-3xl"} mx-auto space-y-5 transition-all duration-300`}>
 
         {/* ── Header ── */}
         <div className="no-print flex items-start justify-between gap-4 flex-wrap">
@@ -280,7 +280,7 @@ export default function ChecklistPage() {
               <span className="loading loading-spinner loading-lg text-primary" />
             </div>
           ) : (
-          <div className={horizontal ? "grid grid-cols-1 md:grid-cols-2 gap-5" : "space-y-5"}>
+          <div className={horizontal ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5" : "space-y-5"}>
           {SECTIONS.map(section => {
             const sDone  = sectionChecked(section);
             const sTotal = sectionItems(section).length;
