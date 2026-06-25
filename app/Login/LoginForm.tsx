@@ -52,7 +52,8 @@ export default function LoginForm() {
         setErrorMessage("Email หรือ Password ไม่ถูกต้อง");
         setLoading(false);
       } else {
-        setWaitingForSession(true); // รอ useSession() update เอง — ไม่ต้อง fetch เพิ่ม
+        setExiting(true);          // ปิดทับ navbar ทันที ก่อน session broadcast
+        setWaitingForSession(true);
       }
     } catch (error) {
       console.error(error);
