@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* Fix: Tailwind resets img to display:block which breaks html2canvas rendering */
+@layer base { img { display: initial; } }
+
 @plugin "daisyui" {
   themes: light --default, dark --prefersdark, cupcake, corporate, emerald, synthwave, retro, halloween;
 }
