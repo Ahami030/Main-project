@@ -362,7 +362,7 @@ export default function AdminPage() {
                   category="System"
                   title="จัดการ User"
                   desc="เพิ่ม แก้ไข และกำหนดสิทธิ์ผู้ใช้"
-                  iconWrap="bg-neutral/10 text-neutral-content"
+                  iconWrap="bg-neutral/10 text-neutral"
                   onClick={() => router.push('/Admin/users')}
                   icon={
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
