@@ -97,7 +97,6 @@ export default function ChecklistPage() {
   const [modal, setModal]       = useState(false);
   const [confirmText, setConfirmText] = useState("");
   const [deleting, setDeleting] = useState(false);
-  const [pdfLoading, setPdfLoading] = useState(false);
   const debounceRefs = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const printRef     = useRef<HTMLDivElement>(null);
 
@@ -139,49 +138,7 @@ export default function ChecklistPage() {
     debounceRefs.current[itemId] = setTimeout(() => patch(itemId, { note }), 500);
   };
 
-  const handleDownload = async () => {
-    if (!printRef.current) return;
-    setPdfLoading(true);
-    try {
-      await document.fonts.ready;
-      const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
-        import("html2canvas"),
-        import("jspdf"),
-      ]);
-      // html2canvas ไม่รองรับ oklch()/lab() ของ DaisyUI v4 — override เป็น hex ก่อน capture
-      const HEX: Record<string, string> = {
-        "--color-base-100": "#fcfbfa", "--color-base-200": "#f3f0ee",
-        "--color-base-300": "#e7e1d9", "--color-base-content": "#141413",
-        "--color-primary": "#141413",  "--color-primary-content": "#f3f0ee",
-        "--color-neutral": "#141413",  "--color-neutral-content": "#f3f0ee",
-        "--color-success": "#2e7d57",  "--color-success-content": "#ffffff",
-        "--color-error":   "#b3261e",  "--color-error-content": "#ffffff",
-        "--color-warning": "#b06f12",  "--color-warning-content": "#ffffff",
-        "--color-info":    "#3860be",  "--color-info-content": "#ffffff",
-      };
-      const canvas = await html2canvas(printRef.current, {
-        scale: 2, useCORS: true, backgroundColor: "#f3f0ee",
-        windowWidth: printRef.current.scrollWidth,
-        windowHeight: printRef.current.scrollHeight,
-        onclone: (doc) => {
-          const root = doc.documentElement;
-          Object.entries(HEX).forEach(([k, v]) => root.style.setProperty(k, v));
-        },
-      });
-      const imgData = canvas.toDataURL("image/jpeg", 0.95);
-      const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-      const pageW = pdf.internal.pageSize.getWidth();
-      const pageH = pdf.internal.pageSize.getHeight();
-      const imgH  = (canvas.height * pageW) / canvas.width;
-      let y = 0;
-      while (y < imgH) {
-        if (y > 0) pdf.addPage();
-        pdf.addImage(imgData, "JPEG", 0, -y, pageW, imgH);
-        y += pageH;
-      }
-      pdf.save("checklist.pdf");
-    } finally { setPdfLoading(false); }
-  };
+  const handleDownload = () => window.print();
 
   const CONFIRM_PHRASE = "ทำลายตัวเอง";
   const openModal = () => { setConfirmText(""); setModal(true); };
@@ -214,10 +171,18 @@ export default function ChecklistPage() {
 
   return (
     <div data-theme={theme} className="min-h-screen bg-base-200 py-10 px-4">
+      <style>{`
+        @media print {
+          nav, .no-print { display: none !important; }
+          body { background: white !important; }
+          [data-theme] { background: white !important; }
+          * { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+        }
+      `}</style>
       <div className="max-w-3xl mx-auto space-y-5">
 
         {/* ── Header ── */}
-        <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div className="no-print flex items-start justify-between gap-4 flex-wrap">
           <div>
             <p className="text-xs text-warning font-mono mb-1">// TODO: DELETE THIS PAGE AFTER SUBMISSION</p>
             <h1 className="text-2xl font-bold text-base-content">Checklist งานระบบ</h1>
@@ -226,15 +191,11 @@ export default function ChecklistPage() {
           <div className="flex items-center gap-2 flex-wrap">
             <button
               onClick={handleDownload}
-              disabled={pdfLoading || loading}
-              className="flex items-center gap-2 px-4 py-2 bg-base-content text-base-100 text-sm font-semibold rounded-lg hover:opacity-80 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
+              className="flex items-center gap-2 px-4 py-2 bg-base-content text-base-100 text-sm font-semibold rounded-lg hover:opacity-80 transition-opacity"
             >
-              {pdfLoading
-                ? <span className="w-4 h-4 border-2 border-base-100/30 border-t-base-100 rounded-full animate-spin" />
-                : <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                  </svg>
-              }
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
               Export PDF
             </button>
             <button
