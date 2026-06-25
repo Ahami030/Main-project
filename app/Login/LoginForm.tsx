@@ -46,7 +46,7 @@ export default function LoginForm() {
         const session = await getSession();
         const role = (session?.user as any)?.role;
         setExiting(true);
-        setTimeout(() => router.replace(role === 'admin' ? '/Admin' : '/Client'), 50);
+        requestAnimationFrame(() => router.replace(role === 'admin' ? '/Admin' : '/Client'));
       }
     } catch (error) {
       console.error(error);
@@ -57,12 +57,7 @@ export default function LoginForm() {
 
   return (
     <>
-    {/* Exit overlay — covers navbar + page during navigation */}
-    <div
-      className={`fixed inset-0 z-9999 bg-base-200 transition-opacity duration-300 pointer-events-none ${
-        exiting ? 'opacity-100' : 'opacity-0'
-      }`}
-    />
+    {exiting && <div className="fixed inset-0 z-9999 bg-base-200" />}
     <main className="min-h-screen bg-base-200 flex items-center justify-center p-6">
       <div className="w-full max-w-md bg-base-100 rounded-box shadow border border-base-300 p-6 min-h-125">
 
