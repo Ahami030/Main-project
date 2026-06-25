@@ -180,7 +180,6 @@ export default function BillingNoteDocument({ po, domId = "billing-note-print-ar
             padding: "16px 18px",
             display: "flex",
             flexDirection: "column",
-            justifyContent: "space-between",
           }}>
             <div>
               <p style={{ color: MAROON, fontSize: "9.5px", textTransform: "uppercase", letterSpacing: "0.14em", margin: 0, fontWeight: 700 }}>ยอดที่ต้องชำระ</p>
