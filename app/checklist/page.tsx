@@ -108,13 +108,25 @@ type ItemState = { checked: boolean; note: string };
 
 // ── Component ──────────────────────────────────────────────────────────────
 export default function ChecklistPage() {
+  const [theme, setTheme] = useState("mastercard");
   const [state, setState] = useState<Record<string, ItemState>>({});
   const [loading, setLoading] = useState(true);
   const [destroyed, setDestroyed] = useState(false);
   const [modal, setModal] = useState(false);
   const [confirmText, setConfirmText] = useState("");
   const [deleting, setDeleting] = useState(false);
+  const [pdfLoading, setPdfLoading] = useState(false);
   const debounceRefs = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const printRef = useRef<HTMLDivElement>(null);
+
+  // follow global theme picker
+  useEffect(() => {
+    const pick = () => setTheme(localStorage.getItem("theme") || "mastercard");
+    pick();
+    const obs = new MutationObserver(pick);
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+    return () => obs.disconnect();
+  }, []);
 
   useEffect(() => {
     fetch("/api/checklist")
@@ -147,8 +159,40 @@ export default function ChecklistPage() {
     debounceRefs.current[itemId] = setTimeout(() => patch(itemId, { note }), 500);
   };
 
-  const CONFIRM_PHRASE = "ทำลายตัวเอง";
+  const handleDownload = async () => {
+    if (!printRef.current) return;
+    setPdfLoading(true);
+    try {
+      await document.fonts.ready;
+      const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
+        import("html2canvas"),
+        import("jspdf"),
+      ]);
+      const canvas = await html2canvas(printRef.current, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: "#ffffff",
+        windowWidth: printRef.current.scrollWidth,
+        windowHeight: printRef.current.scrollHeight,
+      });
+      const imgData = canvas.toDataURL("image/jpeg", 0.95);
+      const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+      const pageW = pdf.internal.pageSize.getWidth();
+      const pageH = pdf.internal.pageSize.getHeight();
+      const imgH = (canvas.height * pageW) / canvas.width;
+      let y = 0;
+      while (y < imgH) {
+        if (y > 0) pdf.addPage();
+        pdf.addImage(imgData, "JPEG", 0, -y, pageW, imgH);
+        y += pageH;
+      }
+      pdf.save("checklist.pdf");
+    } finally {
+      setPdfLoading(false);
+    }
+  };
 
+  const CONFIRM_PHRASE = "ทำลายตัวเอง";
   const openModal = () => { setConfirmText(""); setModal(true); };
 
   const selfDestruct = async () => {
@@ -160,148 +204,164 @@ export default function ChecklistPage() {
     setDestroyed(true);
   };
 
-  const checked = Object.values(state).filter(v => v.checked).length;
-  const pct = TOTAL > 0 ? Math.round((checked / TOTAL) * 100) : 0;
+  const checkedCount = Object.values(state).filter(v => v.checked).length;
+  const pct = TOTAL > 0 ? Math.round((checkedCount / TOTAL) * 100) : 0;
 
   if (destroyed) return (
-    <div className="fixed inset-0 z-50 bg-red-950 flex flex-col items-center justify-center gap-4 text-white">
-      <svg className="w-16 h-16 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <div className="fixed inset-0 z-50 bg-error flex flex-col items-center justify-center gap-4 text-error-content">
+      <svg className="w-16 h-16 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
       </svg>
       <p className="text-2xl font-bold">ข้อมูลถูกลบแล้ว</p>
-      <p className="text-red-300 text-sm">หน้านี้จะถูกลบออกจาก codebase ในภายหลัง</p>
+      <p className="opacity-60 text-sm">หน้านี้จะถูกลบออกจาก codebase ในภายหลัง</p>
     </div>
   );
 
   return (
-    <div className="min-h-screen bg-gray-50 py-10 px-4">
-      <div className="max-w-3xl mx-auto space-y-6">
+    <div data-theme={theme} className="min-h-screen bg-base-200 py-10 px-4">
+
+      <div className="max-w-3xl mx-auto space-y-5">
 
         {/* Header */}
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
-            <p className="text-xs text-orange-500 font-mono mb-1">// TODO: DELETE THIS PAGE AFTER SUBMISSION</p>
-            <h1 className="text-2xl font-bold text-gray-900">Checklist งานระบบ</h1>
-            <p className="text-sm text-gray-500 mt-0.5">ใช้ชั่วคราวสำหรับส่งครู — หน้านี้จะถูกลบออกภายหลัง</p>
+            <p className="text-xs text-warning font-mono mb-1">// TODO: DELETE THIS PAGE AFTER SUBMISSION</p>
+            <h1 className="text-2xl font-bold text-base-content">Checklist งานระบบ</h1>
+            <p className="text-sm text-base-content/50 mt-0.5">ใช้ชั่วคราวสำหรับส่งครู — หน้านี้จะถูกลบออกภายหลัง</p>
           </div>
-          <button
-            onClick={openModal}
-            className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-semibold rounded-lg transition-colors"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-            </svg>
-            ทำลายตัวเอง
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleDownload}
+              disabled={pdfLoading || loading}
+              className="flex items-center gap-2 px-4 py-2 bg-base-content text-base-100 text-sm font-semibold rounded-lg hover:opacity-80 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {pdfLoading
+                ? <span className="w-4 h-4 border-2 border-base-100/30 border-t-base-100 rounded-full animate-spin" />
+                : <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+              }
+              Export PDF
+            </button>
+            <button
+              onClick={openModal}
+              className="flex items-center gap-2 px-4 py-2 bg-error text-error-content text-sm font-semibold rounded-lg hover:opacity-80 transition-opacity"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+              ทำลายตัวเอง
+            </button>
+          </div>
         </div>
 
-        {/* Progress */}
-        <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
-          <div className="flex justify-between text-sm mb-2">
-            <span className="font-medium text-gray-700">ความคืบหน้า</span>
-            <span className="font-mono text-gray-500">{checked} / {TOTAL} ({pct}%)</span>
-          </div>
-          <div className="w-full h-2.5 bg-gray-100 rounded-full overflow-hidden">
-            <div
-              className="h-full bg-green-500 rounded-full transition-all duration-500"
-              style={{ width: `${pct}%` }}
-            />
-          </div>
-        </div>
+        {/* Printable area */}
+        <div ref={printRef} className="space-y-5 bg-base-200 pb-2">
 
-        {/* Sections */}
-        {loading ? (
-          <div className="flex justify-center py-16">
-            <span className="loading loading-spinner loading-lg" />
-          </div>
-        ) : SECTIONS.map(section => (
-          <div key={section.id} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-            <div className="px-5 py-3 bg-gray-900 text-white">
-              <h2 className="font-semibold text-sm">{section.id} {section.title}</h2>
+          {/* Progress */}
+          <div className="bg-base-100 rounded-xl border border-base-300 p-4 shadow-sm">
+            <div className="flex justify-between text-sm mb-2">
+              <span className="font-medium text-base-content">ความคืบหน้า</span>
+              <span className="font-mono text-base-content/50">{checkedCount} / {TOTAL} ({pct}%)</span>
             </div>
-            {section.sub.map(sub => (
-              <div key={sub.id}>
-                <div className="px-5 py-2 bg-gray-50 border-b border-gray-100">
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{sub.id} {sub.title}</p>
-                </div>
-                <ul className="divide-y divide-gray-50">
-                  {sub.items.map((item, idx) => {
-                    const s = state[item.id];
-                    return (
-                      <li key={item.id} className="px-5 py-3 hover:bg-gray-50 transition-colors">
-                        <div className="flex items-start gap-3">
-                          <input
-                            type="checkbox"
-                            className="mt-0.5 w-4 h-4 rounded text-green-600 border-gray-300 cursor-pointer shrink-0"
-                            checked={!!s?.checked}
-                            onChange={() => toggleCheck(item.id)}
-                          />
-                          <div className="flex-1 min-w-0">
-                            <label
-                              className={`text-sm cursor-pointer ${s?.checked ? "line-through text-gray-400" : "text-gray-800"}`}
-                              onClick={() => toggleCheck(item.id)}
-                            >
-                              {idx + 1}) {item.label}
-                            </label>
-                            <textarea
-                              className="mt-1.5 w-full text-xs text-gray-600 bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1.5 resize-none focus:outline-none focus:border-gray-400 transition-colors placeholder:text-gray-300"
-                              rows={1}
-                              placeholder="เพิ่มหมายเหตุ..."
-                              value={s?.note ?? ""}
-                              onChange={e => changeNote(item.id, e.target.value)}
-                              onFocus={e => { e.target.rows = 3; }}
-                              onBlur={e => { if (!e.target.value) e.target.rows = 1; }}
-                            />
-                          </div>
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </div>
-            ))}
+            <div className="w-full h-2.5 bg-base-300 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-success rounded-full transition-all duration-500"
+                style={{ width: `${pct}%` }}
+              />
+            </div>
           </div>
-        ))}
 
+          {/* Sections */}
+          {loading ? (
+            <div className="flex justify-center py-16">
+              <span className="loading loading-spinner loading-lg text-primary" />
+            </div>
+          ) : SECTIONS.map(section => (
+            <div key={section.id} className="bg-base-100 rounded-xl border border-base-300 shadow-sm overflow-hidden">
+              <div className="px-5 py-3 bg-neutral text-neutral-content">
+                <h2 className="font-semibold text-sm">{section.id} {section.title}</h2>
+              </div>
+              {section.sub.map(sub => (
+                <div key={sub.id}>
+                  <div className="px-5 py-2 bg-base-200 border-b border-base-300">
+                    <p className="text-xs font-semibold text-base-content/50 uppercase tracking-wide">{sub.id} {sub.title}</p>
+                  </div>
+                  <ul className="divide-y divide-base-200">
+                    {sub.items.map((item, idx) => {
+                      const s = state[item.id];
+                      return (
+                        <li key={item.id} className="px-5 py-3 hover:bg-base-200/50 transition-colors">
+                          <div className="flex items-start gap-3">
+                            <input
+                              type="checkbox"
+                              className="mt-0.5 w-4 h-4 rounded cursor-pointer shrink-0 accent-success"
+                              checked={!!s?.checked}
+                              onChange={() => toggleCheck(item.id)}
+                            />
+                            <div className="flex-1 min-w-0">
+                              <label
+                                className={`text-sm cursor-pointer ${s?.checked ? "line-through text-base-content/30" : "text-base-content"}`}
+                                onClick={() => toggleCheck(item.id)}
+                              >
+                                {idx + 1}) {item.label}
+                              </label>
+                              <textarea
+                                className="mt-1.5 w-full text-xs text-base-content/70 bg-base-200 border border-base-300 rounded-lg px-2.5 py-1.5 resize-none focus:outline-none focus:border-base-content/30 transition-colors placeholder:text-base-content/25"
+                                rows={1}
+                                placeholder="เพิ่มหมายเหตุ..."
+                                value={s?.note ?? ""}
+                                onChange={e => changeNote(item.id, e.target.value)}
+                                onFocus={e => { e.target.rows = 3; }}
+                                onBlur={e => { if (!e.target.value) e.target.rows = 1; }}
+                              />
+                            </div>
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* ── Self-destruct modal ── */}
       {modal && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setModal(false)}>
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6 space-y-4" onClick={e => e.stopPropagation()}>
+          <div className="bg-base-100 rounded-xl shadow-2xl w-full max-w-md p-6 space-y-4" onClick={e => e.stopPropagation()}>
 
-            {/* Icon + title */}
             <div className="flex items-start gap-3">
-              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center shrink-0">
-                <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="w-10 h-10 rounded-full bg-error/10 flex items-center justify-center shrink-0">
+                <svg className="w-5 h-5 text-error" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
                 </svg>
               </div>
               <div>
-                <h3 className="font-bold text-gray-900">ยืนยันการทำลายข้อมูล</h3>
-                <p className="text-sm text-gray-500 mt-0.5">การกระทำนี้ไม่สามารถย้อนกลับได้</p>
+                <h3 className="font-bold text-base-content">ยืนยันการทำลายข้อมูล</h3>
+                <p className="text-sm text-base-content/50 mt-0.5">การกระทำนี้ไม่สามารถย้อนกลับได้</p>
               </div>
             </div>
 
-            {/* Warning box */}
-            <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700 space-y-1">
-              <p>สิ่งที่จะเกิดขึ้น:</p>
-              <ul className="list-disc list-inside space-y-0.5 text-red-600">
+            <div className="bg-error/8 border border-error/20 rounded-lg p-3 text-sm text-error space-y-1">
+              <p className="font-medium">สิ่งที่จะเกิดขึ้น:</p>
+              <ul className="list-disc list-inside space-y-0.5 opacity-80">
                 <li>ข้อมูล checkbox และหมายเหตุทั้งหมดจะถูกลบออกจาก database</li>
                 <li>link checklist จะหายออกจาก navbar</li>
                 <li>ไม่สามารถกู้คืนได้</li>
               </ul>
             </div>
 
-            {/* Type to confirm */}
             <div>
-              <label className="text-sm text-gray-600 block mb-1.5">
-                พิมพ์ <span className="font-mono font-bold text-gray-900">ทำลายตัวเอง</span> เพื่อยืนยัน
+              <label className="text-sm text-base-content/60 block mb-1.5">
+                พิมพ์ <span className="font-mono font-bold text-base-content">ทำลายตัวเอง</span> เพื่อยืนยัน
               </label>
               <input
                 type="text"
                 autoFocus
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:border-red-400 focus:ring-1 focus:ring-red-400 transition-colors"
+                className="w-full border border-base-300 rounded-lg px-3 py-2 text-sm font-mono bg-base-200 focus:outline-none focus:border-error/50 transition-colors"
                 placeholder="ทำลายตัวเอง"
                 value={confirmText}
                 onChange={e => setConfirmText(e.target.value)}
@@ -309,24 +369,22 @@ export default function ChecklistPage() {
               />
             </div>
 
-            {/* Actions */}
             <div className="flex gap-2 pt-1">
               <button
-                className="flex-1 py-2 rounded-lg border border-gray-200 text-sm hover:bg-gray-50 transition-colors"
+                className="flex-1 py-2 rounded-lg border border-base-300 text-sm text-base-content hover:bg-base-200 transition-colors"
                 onClick={() => setModal(false)}
               >
                 ยกเลิก
               </button>
               <button
-                className="flex-1 py-2 rounded-lg bg-red-600 text-white text-sm font-semibold transition-opacity flex items-center justify-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
-                disabled={confirmText !== "ทำลายตัวเอง" || deleting}
+                className="flex-1 py-2 rounded-lg bg-error text-error-content text-sm font-semibold transition-opacity flex items-center justify-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
+                disabled={confirmText !== CONFIRM_PHRASE || deleting}
                 onClick={selfDestruct}
               >
-                {deleting && <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+                {deleting && <span className="w-3.5 h-3.5 border-2 border-error-content/30 border-t-error-content rounded-full animate-spin" />}
                 ยืนยันการทำลาย
               </button>
             </div>
-
           </div>
         </div>
       )}
