@@ -148,10 +148,25 @@ export default function ChecklistPage() {
         import("html2canvas"),
         import("jspdf"),
       ]);
+      // html2canvas ไม่รองรับ oklch()/lab() ของ DaisyUI v4 — override เป็น hex ก่อน capture
+      const HEX: Record<string, string> = {
+        "--color-base-100": "#fcfbfa", "--color-base-200": "#f3f0ee",
+        "--color-base-300": "#e7e1d9", "--color-base-content": "#141413",
+        "--color-primary": "#141413",  "--color-primary-content": "#f3f0ee",
+        "--color-neutral": "#141413",  "--color-neutral-content": "#f3f0ee",
+        "--color-success": "#2e7d57",  "--color-success-content": "#ffffff",
+        "--color-error":   "#b3261e",  "--color-error-content": "#ffffff",
+        "--color-warning": "#b06f12",  "--color-warning-content": "#ffffff",
+        "--color-info":    "#3860be",  "--color-info-content": "#ffffff",
+      };
       const canvas = await html2canvas(printRef.current, {
-        scale: 2, useCORS: true, backgroundColor: "#ffffff",
+        scale: 2, useCORS: true, backgroundColor: "#f3f0ee",
         windowWidth: printRef.current.scrollWidth,
         windowHeight: printRef.current.scrollHeight,
+        onclone: (doc) => {
+          const root = doc.documentElement;
+          Object.entries(HEX).forEach(([k, v]) => root.style.setProperty(k, v));
+        },
       });
       const imgData = canvas.toDataURL("image/jpeg", 0.95);
       const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
