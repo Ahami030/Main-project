@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
+import Link from "next/link";
 import ThemeSwitcher from "@/components/ThemeSwitcher";
 import NavLinks from "./NavLinks";
 import UserMenu from "./UserMenu";
@@ -11,8 +12,13 @@ export default function Navbar() {
   const { data: session, status } = useSession();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [latestStatus, setLatestStatus] = useState<string | null>(null);
+  const [showChecklist, setShowChecklist] = useState(false);
 
   const role = (session?.user as any)?.role as string | undefined;
+
+  useEffect(() => {
+    setShowChecklist(localStorage.getItem("checklist_destroyed") !== "1");
+  }, []);
 
   useEffect(() => {
     if (role !== "user") return;
@@ -42,6 +48,11 @@ export default function Navbar() {
         {/* RIGHT */}
         <div className="flex items-center gap-4">
           <NavLinks session={session ?? null} latestStatus={latestStatus} />
+          {showChecklist && (
+            <Link href="/checklist" className="text-xs px-2.5 py-1 rounded-md bg-orange-100 text-orange-600 hover:bg-orange-200 transition-colors font-mono">
+              📋 checklist
+            </Link>
+          )}
           <ThemeSwitcher />
           <UserMenu session={session ?? null} status={status} />
           <button
