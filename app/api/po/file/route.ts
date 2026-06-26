@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
   return new Response(blobRes.body, {
     headers: {
       "Content-Type": po.fileMimeType || blobRes.headers.get("Content-Type") || "application/octet-stream",
-      "Content-Disposition": `inline; filename="${po.fileOrigName ?? "file"}"`,
+      "Content-Disposition": `inline; filename*=UTF-8''${encodeURIComponent(po.fileOrigName ?? "file")}`,
     },
   });
 }

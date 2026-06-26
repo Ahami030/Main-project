@@ -33,18 +33,25 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ message: "File not found" }, { status: 404 });
   }
 
+  if (!process.env.BLOB_READ_WRITE_TOKEN) {
+    console.error("[payment-proof/file] BLOB_READ_WRITE_TOKEN is not set");
+    return NextResponse.json({ message: "Storage token missing" }, { status: 500 });
+  }
+
   const blobRes = await fetch(proof.filePath, {
     headers: { Authorization: `Bearer ${process.env.BLOB_READ_WRITE_TOKEN}` },
   });
 
   if (!blobRes.ok) {
+    console.error(`[payment-proof/file] blob fetch failed: ${blobRes.status} ${proof.filePath}`);
     return NextResponse.json({ message: "File not found" }, { status: 404 });
   }
 
+  const safeName = encodeURIComponent(proof.fileOrigName ?? "file");
   return new Response(blobRes.body, {
     headers: {
       "Content-Type": proof.fileMimeType || blobRes.headers.get("Content-Type") || "application/octet-stream",
-      "Content-Disposition": `inline; filename="${proof.fileOrigName ?? "file"}"`,
+      "Content-Disposition": `inline; filename*=UTF-8''${safeName}`,
     },
   });
 }
