@@ -1,8 +1,13 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import ChatFileAttachment from "@/components/chat/ChatFileAttachment";
+
+// memo wrapper — ป้องกัน iframe reload ตอน chat polling trigger parent re-render
+const StableIframe = memo(({ src }: { src: string }) => (
+  <iframe src={src} className="w-full h-full" />
+));
 
 // ── Chat types ──────────────────────────────────────────────
 type ChatMsg = {
@@ -451,7 +456,7 @@ export default function EditPage() {
       </div>
       <div className="flex-1 rounded-xl overflow-hidden border border-base-300 bg-base-200 min-h-0">
         {form.filename ? (
-          <iframe src={`/api/pdf/view?filename=${encodeURIComponent(form.filename)}`} className="w-full h-full" />
+          <StableIframe src={`/api/pdf/view?filename=${encodeURIComponent(form.filename)}`} />
         ) : (
           <div className="flex flex-col items-center justify-center h-full gap-2 text-base-content/30">
             <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -706,10 +711,10 @@ export default function EditPage() {
                   />
                 </div>
               ) : (
-                <iframe src={`/api/chat/file?url=${encodeURIComponent(viewerFile.url)}`} className="w-full h-full" />
+                <StableIframe src={`/api/chat/file?url=${encodeURIComponent(viewerFile.url)}`} />
               )
             ) : form.filename ? (
-              <iframe src={`/api/pdf/view?filename=${encodeURIComponent(form.filename)}`} className="w-full h-full" />
+              <StableIframe src={`/api/pdf/view?filename=${encodeURIComponent(form.filename)}`} />
             ) : (
               <div className="flex flex-col items-center justify-center h-full gap-2 text-base-content/30">
                 <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
