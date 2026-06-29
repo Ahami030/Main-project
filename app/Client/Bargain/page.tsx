@@ -124,10 +124,8 @@ export default function DocumentChatPage() {
     loadChats();
   };
 
-  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !USER_ID) return;
-    e.target.value = "";
+  const uploadAndSend = async (file: File) => {
+    if (!USER_ID) return;
     setUploading(true);
     try {
       const fd = new FormData();
@@ -144,6 +142,24 @@ export default function DocumentChatPage() {
       loadChats();
     } finally {
       setUploading(false);
+    }
+  };
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+    await uploadAndSend(file);
+  };
+
+  const handlePaste = async (e: React.ClipboardEvent) => {
+    for (const item of e.clipboardData.items) {
+      if (item.type.startsWith("image/")) {
+        e.preventDefault();
+        const file = item.getAsFile();
+        if (file) await uploadAndSend(new File([file], `screenshot-${Date.now()}.png`, { type: file.type }));
+        break;
+      }
     }
   };
 
@@ -507,6 +523,7 @@ export default function DocumentChatPage() {
                   placeholder="พิมพ์ข้อความ... (Enter ส่ง)"
                   value={message}
                   rows={1}
+                  onPaste={handlePaste}
                   onChange={(e) => {
                     setMessage(e.target.value);
                     e.target.style.height = "auto";

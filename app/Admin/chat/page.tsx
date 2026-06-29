@@ -126,6 +126,30 @@ export default function AdminPage() {
     loadChats();
   };
 
+  const handlePaste = async (e: React.ClipboardEvent) => {
+    if (!selectedUserId) return;
+    for (const item of e.clipboardData.items) {
+      if (item.type.startsWith("image/")) {
+        e.preventDefault();
+        const file = item.getAsFile();
+        if (!file) break;
+        const named = new File([file], `screenshot-${Date.now()}.png`, { type: file.type });
+        const fd = new FormData();
+        fd.append("file", named);
+        const res = await fetch("/api/chat/upload", { method: "POST", body: fd });
+        if (!res.ok) break;
+        const { fileUrl, fileType, fileName } = await res.json();
+        await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId: selectedUserId, senderRole: "admin", message: "", fileUrl, fileType, fileName }),
+        });
+        loadChats();
+        break;
+      }
+    }
+  };
+
   const sendMessage = async () => {
     if (!message.trim() || !selectedUserId) return;
 
@@ -380,6 +404,7 @@ export default function AdminPage() {
                 className="flex-1 border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 placeholder="Type a message..."
                 value={message}
+                onPaste={handlePaste}
                 onChange={(e) => setMessage(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !e.shiftKey) {
