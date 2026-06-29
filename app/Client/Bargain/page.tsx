@@ -452,21 +452,6 @@ export default function DocumentChatPage() {
                       }`}>
                         {chat.isDeleted ? (
                           <span className="italic opacity-40">ข้อความถูกลบแล้ว</span>
-                        ) : editingId === chat._id ? (
-                          <div className="flex flex-col gap-1.5 min-w-40">
-                            <textarea
-                              autoFocus
-                              className="text-xs bg-primary-content/10 text-primary-content rounded-lg px-2 py-1 resize-none focus:outline-none w-full"
-                              rows={2}
-                              value={editText}
-                              onChange={e => setEditText(e.target.value)}
-                              onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSaveEdit(chat._id); } if (e.key === "Escape") setEditingId(null); }}
-                            />
-                            <div className="flex gap-1 justify-end">
-                              <button onClick={() => setEditingId(null)} className="text-[9px] px-2 py-0.5 rounded-full bg-primary-content/15 hover:bg-primary-content/25 transition-colors">ยกเลิก</button>
-                              <button onClick={() => handleSaveEdit(chat._id)} className="text-[9px] px-2 py-0.5 rounded-full bg-primary-content/30 hover:bg-primary-content/40 transition-colors">บันทึก</button>
-                            </div>
-                          </div>
                         ) : chat.fileUrl ? (
                           <ChatFileAttachment fileUrl={chat.fileUrl} fileType={chat.fileType!} fileName={chat.fileName ?? "ไฟล์"} isAdmin={isUser} onPdfClick={(url) => setPdfModal(url)} />
                         ) : (
@@ -544,6 +529,41 @@ export default function DocumentChatPage() {
                   </svg>
                 </button>
               </div>
+
+              {/* ── Facebook-style edit modal ── */}
+              {editingId && (
+                <div className="border-t border-base-content/10 bg-base-100 px-3 py-2.5 animate-in slide-in-from-bottom-2 duration-150">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[10px] font-semibold text-base-content/50 uppercase tracking-wider">แก้ไขข้อความ</span>
+                    <button onClick={() => setEditingId(null)} className="w-4 h-4 flex items-center justify-center text-base-content/40 hover:text-base-content transition-colors">
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      autoFocus
+                      className="flex-1 bg-base-200 rounded-full px-3 py-1.5 text-xs text-base-content outline-none focus:ring-1 focus:ring-primary/30 transition-all"
+                      value={editText}
+                      onChange={e => setEditText(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === "Enter") handleSaveEdit(editingId);
+                        if (e.key === "Escape") setEditingId(null);
+                      }}
+                    />
+                    <button
+                      onClick={() => handleSaveEdit(editingId)}
+                      disabled={!editText.trim()}
+                      className="w-7 h-7 rounded-full bg-primary hover:bg-primary/80 disabled:opacity-30 flex items-center justify-center shrink-0 transition-all"
+                    >
+                      <svg className="w-3 h-3 text-primary-content" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 

@@ -311,21 +311,6 @@ export default function AdminPage() {
                   }`}>
                     {chat.isDeleted ? (
                       <span className="italic opacity-50 text-sm">ข้อความถูกลบแล้ว</span>
-                    ) : editingId === chat._id ? (
-                      <div className="flex flex-col gap-1.5 min-w-40">
-                        <textarea
-                          autoFocus
-                          className="text-xs bg-white/20 text-white rounded px-2 py-1 resize-none focus:outline-none w-full"
-                          rows={2}
-                          value={editText}
-                          onChange={e => setEditText(e.target.value)}
-                          onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSaveEdit(chat._id); } if (e.key === "Escape") setEditingId(null); }}
-                        />
-                        <div className="flex gap-1 justify-end">
-                          <button onClick={() => setEditingId(null)} className="text-[10px] px-2 py-0.5 rounded bg-white/20 hover:bg-white/30 transition-colors">ยกเลิก</button>
-                          <button onClick={() => handleSaveEdit(chat._id)} className="text-[10px] px-2 py-0.5 rounded bg-white/40 hover:bg-white/50 transition-colors">บันทึก</button>
-                        </div>
-                      </div>
                     ) : chat.fileUrl ? (
                       <ChatFileAttachment fileUrl={chat.fileUrl} fileType={chat.fileType!} fileName={chat.fileName ?? "ไฟล์"} isAdmin={isAdmin} />
                     ) : (
@@ -353,6 +338,41 @@ export default function AdminPage() {
                 </button>
               )}
             </div>
+
+            {/* Edit modal (Facebook-style) */}
+            {editingId && (
+              <div className="px-4 py-2.5 bg-gray-50 border-t border-gray-200">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">แก้ไขข้อความ</span>
+                  <button onClick={() => setEditingId(null)} className="text-gray-400 hover:text-gray-600 transition-colors">
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    autoFocus
+                    className="flex-1 border border-gray-300 rounded-full px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
+                    value={editText}
+                    onChange={e => setEditText(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === "Enter") handleSaveEdit(editingId);
+                      if (e.key === "Escape") setEditingId(null);
+                    }}
+                  />
+                  <button
+                    onClick={() => handleSaveEdit(editingId)}
+                    disabled={!editText.trim()}
+                    className="w-8 h-8 rounded-full bg-linear-to-r from-blue-500 to-green-500 text-white flex items-center justify-center disabled:opacity-40 hover:opacity-90 transition-opacity shrink-0"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Input Area */}
             <div className="p-4 bg-white border-t border-gray-200 flex gap-2">
