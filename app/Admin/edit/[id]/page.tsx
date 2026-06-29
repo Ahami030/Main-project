@@ -9,6 +9,37 @@ const StableIframe = memo(({ src }: { src: string }) => (
   <iframe src={src} className="w-full h-full" />
 ));
 
+// top-level component (ไม่อยู่ใน EditPage) — ป้องกัน unmount/remount ทุก re-render
+const PdfPanel = memo(({ filename, className = "" }: { filename: string; className?: string }) => (
+  <div className={`bg-base-100 rounded-2xl border border-base-300 flex flex-col gap-3 p-4 ${className}`}>
+    <div className="flex items-center justify-between">
+      <span className="text-[10px] font-semibold tracking-[0.15em] uppercase text-base-content/40">Original Document</span>
+      <div className="flex items-center gap-1.5 px-2.5 py-1 bg-error/10 rounded-lg">
+        <div className="w-1.5 h-1.5 rounded-full bg-error" />
+        <span className="text-[10px] font-semibold text-error">PDF</span>
+      </div>
+    </div>
+    <div className="flex items-center gap-2 px-3 py-2 bg-base-200 rounded-xl border border-base-300">
+      <svg className="w-3.5 h-3.5 text-base-content/40 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+      </svg>
+      <span className="text-xs text-base-content/60 truncate">{filename || "ไม่มีไฟล์ PDF"}</span>
+    </div>
+    <div className="flex-1 rounded-xl overflow-hidden border border-base-300 bg-base-200 min-h-0">
+      {filename ? (
+        <StableIframe src={`/api/pdf/view?filename=${encodeURIComponent(filename)}`} />
+      ) : (
+        <div className="flex flex-col items-center justify-center h-full gap-2 text-base-content/30">
+          <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+          <span className="text-xs">ไม่มีไฟล์ PDF</span>
+        </div>
+      )}
+    </div>
+  </div>
+));
+
 // ── Chat types ──────────────────────────────────────────────
 type ChatMsg = {
   _id: string;
@@ -439,35 +470,6 @@ export default function EditPage() {
   const grandTotal = calcGrandTotal(form.line_items || []);
   // ── Panels ─────────────────────────────────────────────────
 
-  const PdfPanel = ({ className = "" }: { className?: string }) => (
-    <div className={`bg-base-100 rounded-2xl border border-base-300 flex flex-col gap-3 p-4 ${className}`}>
-      <div className="flex items-center justify-between">
-        <span className="text-[10px] font-semibold tracking-[0.15em] uppercase text-base-content/40">Original Document</span>
-        <div className="flex items-center gap-1.5 px-2.5 py-1 bg-error/10 rounded-lg">
-          <div className="w-1.5 h-1.5 rounded-full bg-error" />
-          <span className="text-[10px] font-semibold text-error">PDF</span>
-        </div>
-      </div>
-      <div className="flex items-center gap-2 px-3 py-2 bg-base-200 rounded-xl border border-base-300">
-        <svg className="w-3.5 h-3.5 text-base-content/40 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-        </svg>
-        <span className="text-xs text-base-content/60 truncate">{form.filename || "ไม่มีไฟล์ PDF"}</span>
-      </div>
-      <div className="flex-1 rounded-xl overflow-hidden border border-base-300 bg-base-200 min-h-0">
-        {form.filename ? (
-          <StableIframe src={`/api/pdf/view?filename=${encodeURIComponent(form.filename)}`} />
-        ) : (
-          <div className="flex flex-col items-center justify-center h-full gap-2 text-base-content/30">
-            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-            <span className="text-xs">ไม่มีไฟล์ PDF</span>
-          </div>
-        )}
-      </div>
-    </div>
-  );
 
   const EditPanel = ({ className = "" }: { className?: string }) => (
     <div className={`bg-base-100 rounded-2xl border border-base-300 flex flex-col gap-4 p-4 overflow-hidden min-h-0 ${className}`}>
@@ -644,7 +646,7 @@ export default function EditPage() {
         </div>
 
         <div className="flex-1 overflow-hidden p-3">
-          {mobileTab === "pdf" && <PdfPanel className="h-full" />}
+          {mobileTab === "pdf" && <PdfPanel filename={form.filename} className="h-full" />}
           {mobileTab === "edit" && <div className="h-full overflow-auto"><EditPanel className="min-h-full" /></div>}
           {mobileTab === "chat" && (
             <ChatPanel
