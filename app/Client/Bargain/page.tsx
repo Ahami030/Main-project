@@ -109,7 +109,7 @@ export default function DocumentChatPage() {
 
   const handleSaveEdit = async (id: string) => {
     if (!editText.trim()) return;
-    await fetch(`/api/chat/${id}`, {
+    await fetch(`/api/chat/message/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ message: editText }),
@@ -120,7 +120,7 @@ export default function DocumentChatPage() {
 
   const handleDelete = async (id: string) => {
     if (!confirm("ลบข้อความนี้?")) return;
-    await fetch(`/api/chat/${id}`, { method: "DELETE" });
+    await fetch(`/api/chat/message/${id}`, { method: "DELETE" });
     loadChats();
   };
 
