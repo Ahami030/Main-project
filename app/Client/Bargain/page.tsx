@@ -13,8 +13,14 @@ type ChatType = {
   fileUrl?: string;
   fileType?: string;
   fileName?: string;
+  isEdited?: boolean;
+  isDeleted?: boolean;
   createdAt: string;
 };
+
+const canEdit = (chat: ChatType) =>
+  !chat.fileUrl && !chat.isDeleted &&
+  Date.now() - new Date(chat.createdAt).getTime() < 2 * 60 * 1000;
 
 export default function DocumentChatPage() {
   const { data: session, status } = useSession();
@@ -37,7 +43,9 @@ export default function DocumentChatPage() {
   const [downloadReady, setDownloadReady] = useState(false);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [showHighlights, setShowHighlights] = useState(true);
-  const [pdfModal, setPdfModal] = useState<string | null>(null);
+  const [pdfModal, setPdfModal]   = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editText, setEditText]   = useState("");
 
   const chatContainerRef = useRef<HTMLDivElement>(null);
 
@@ -96,6 +104,23 @@ export default function DocumentChatPage() {
     setMessage("");
     setShouldAutoScroll(true);
     setShowNewButton(false);
+    loadChats();
+  };
+
+  const handleSaveEdit = async (id: string) => {
+    if (!editText.trim()) return;
+    await fetch(`/api/chat/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: editText }),
+    });
+    setEditingId(null);
+    loadChats();
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm("ลบข้อความนี้?")) return;
+    await fetch(`/api/chat/${id}`, { method: "DELETE" });
     loadChats();
   };
 
@@ -385,7 +410,7 @@ export default function DocumentChatPage() {
                         <div className="flex-1 h-px bg-base-content/10" />
                       </div>
                     )}
-                    <div className={`flex items-end gap-1.5 ${isUser ? "justify-end" : "justify-start"}`}>
+                    <div className={`flex items-end gap-1.5 group ${isUser ? "justify-end" : "justify-start"}`}>
                       {!isUser && (
                         <div className="w-5 h-5 rounded-full bg-primary/20 border border-primary/30 flex items-center justify-center shrink-0 mb-0.5">
                           <svg className="w-2.5 h-2.5 text-primary" fill="currentColor" viewBox="0 0 20 20">
@@ -393,16 +418,63 @@ export default function DocumentChatPage() {
                           </svg>
                         </div>
                       )}
-                      <div
-                        className={`max-w-[78%] px-2.5 py-1.5 rounded-xl text-xs leading-relaxed ${
-                          isUser
-                            ? "bg-primary text-primary-content rounded-br-sm"
-                            : "bg-base-100 border border-base-content/20 shadow-mc-sm text-base-content rounded-bl-sm"
-                        }`}
-                      >
-                        {chat.fileUrl
-                          ? <ChatFileAttachment fileUrl={chat.fileUrl} fileType={chat.fileType!} fileName={chat.fileName ?? "ไฟล์"} isAdmin={isUser} onPdfClick={(url) => setPdfModal(url)} />
-                          : chat.message}
+
+                      {/* ⋮ menu — เฉพาะ own message */}
+                      {isUser && !chat.isDeleted && editingId !== chat._id && (
+                        <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 order-first">
+                          {canEdit(chat) && (
+                            <button
+                              onClick={() => { setEditingId(chat._id); setEditText(chat.message); }}
+                              className="w-5 h-5 rounded-full bg-base-content/10 hover:bg-base-content/20 flex items-center justify-center transition-colors"
+                              title="แก้ไข"
+                            >
+                              <svg className="w-2.5 h-2.5 text-base-content/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                              </svg>
+                            </button>
+                          )}
+                          <button
+                            onClick={() => handleDelete(chat._id)}
+                            className="w-5 h-5 rounded-full bg-base-content/10 hover:bg-error/20 flex items-center justify-center transition-colors"
+                            title="ลบ"
+                          >
+                            <svg className="w-2.5 h-2.5 text-base-content/60 hover:text-error" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
+                        </div>
+                      )}
+
+                      <div className={`max-w-[78%] px-2.5 py-1.5 rounded-xl text-xs leading-relaxed ${
+                        isUser
+                          ? "bg-primary text-primary-content rounded-br-sm"
+                          : "bg-base-100 border border-base-content/20 shadow-mc-sm text-base-content rounded-bl-sm"
+                      }`}>
+                        {chat.isDeleted ? (
+                          <span className="italic opacity-40">ข้อความถูกลบแล้ว</span>
+                        ) : editingId === chat._id ? (
+                          <div className="flex flex-col gap-1.5 min-w-40">
+                            <textarea
+                              autoFocus
+                              className="text-xs bg-primary-content/10 text-primary-content rounded-lg px-2 py-1 resize-none focus:outline-none w-full"
+                              rows={2}
+                              value={editText}
+                              onChange={e => setEditText(e.target.value)}
+                              onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSaveEdit(chat._id); } if (e.key === "Escape") setEditingId(null); }}
+                            />
+                            <div className="flex gap-1 justify-end">
+                              <button onClick={() => setEditingId(null)} className="text-[9px] px-2 py-0.5 rounded-full bg-primary-content/15 hover:bg-primary-content/25 transition-colors">ยกเลิก</button>
+                              <button onClick={() => handleSaveEdit(chat._id)} className="text-[9px] px-2 py-0.5 rounded-full bg-primary-content/30 hover:bg-primary-content/40 transition-colors">บันทึก</button>
+                            </div>
+                          </div>
+                        ) : chat.fileUrl ? (
+                          <ChatFileAttachment fileUrl={chat.fileUrl} fileType={chat.fileType!} fileName={chat.fileName ?? "ไฟล์"} isAdmin={isUser} onPdfClick={(url) => setPdfModal(url)} />
+                        ) : (
+                          <div>
+                            {chat.message}
+                            {chat.isEdited && <span className="ml-1 opacity-40 text-[9px]">(แก้ไขแล้ว)</span>}
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>

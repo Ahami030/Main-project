@@ -15,9 +15,12 @@ const ChatSchema = new mongoose.Schema({
     type: String,
     default: ""
   },
-  fileUrl:  { type: String, default: "" },
-  fileType: { type: String, default: "" },
-  fileName: { type: String, default: "" },
+  fileUrl:   { type: String, default: "" },
+  fileType:  { type: String, default: "" },
+  fileName:  { type: String, default: "" },
+  isEdited:  { type: Boolean, default: false },
+  editedAt:  { type: Date,    default: null },
+  isDeleted: { type: Boolean, default: false },
 }, { timestamps: true });
 
 export default mongoose.models.Chat || mongoose.model("Chat", ChatSchema);
