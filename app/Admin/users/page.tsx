@@ -14,6 +14,7 @@ interface UserDoc {
   createdAt: string;
 }
 // Permission labels for display
+//
 const PERMISSION_LABELS: Record<string, string> = {
   quotation: 'Manage RFQ',
   po:        'Manage PO',
