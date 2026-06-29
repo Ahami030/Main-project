@@ -37,8 +37,9 @@ export default function AdminPage() {
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [users, setUsers] = useState<UserWithChat[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(true);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editText, setEditText]   = useState("");
+  const [editingId, setEditingId]     = useState<string | null>(null);
+  const [editText, setEditText]       = useState("");
+  const [pastedImage, setPastedImage] = useState<File | null>(null);
 
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -126,32 +127,38 @@ export default function AdminPage() {
     loadChats();
   };
 
-  const handlePaste = async (e: React.ClipboardEvent) => {
-    if (!selectedUserId) return;
+  const handlePaste = (e: React.ClipboardEvent) => {
     for (const item of e.clipboardData.items) {
       if (item.type.startsWith("image/")) {
         e.preventDefault();
         const file = item.getAsFile();
-        if (!file) break;
-        const named = new File([file], `screenshot-${Date.now()}.png`, { type: file.type });
-        const fd = new FormData();
-        fd.append("file", named);
-        const res = await fetch("/api/chat/upload", { method: "POST", body: fd });
-        if (!res.ok) break;
-        const { fileUrl, fileType, fileName } = await res.json();
-        await fetch("/api/chat", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ userId: selectedUserId, senderRole: "admin", message: "", fileUrl, fileType, fileName }),
-        });
-        loadChats();
+        if (file) setPastedImage(new File([file], `screenshot-${Date.now()}.png`, { type: file.type }));
         break;
       }
     }
   };
 
   const sendMessage = async () => {
-    if (!message.trim() || !selectedUserId) return;
+    if ((!message.trim() && !pastedImage) || !selectedUserId) return;
+
+    if (pastedImage) {
+      try {
+        const fd = new FormData();
+        fd.append("file", pastedImage);
+        const res = await fetch("/api/chat/upload", { method: "POST", body: fd });
+        if (res.ok) {
+          const { fileUrl, fileType, fileName } = await res.json();
+          await fetch("/api/chat", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ userId: selectedUserId, senderRole: "admin", message: "", fileUrl, fileType, fileName }),
+          });
+          setShouldAutoScroll(true);
+          loadChats();
+        }
+      } finally { setPastedImage(null); }
+      return;
+    }
 
     try {
       await fetch("/api/chat", {
@@ -394,6 +401,28 @@ export default function AdminPage() {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
                     </svg>
                   </button>
+                </div>
+              </div>
+            )}
+
+            {/* Paste image preview */}
+            {pastedImage && (
+              <div className="px-4 pt-3 bg-white border-t border-gray-100 flex items-center gap-3">
+                <div className="relative shrink-0">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={URL.createObjectURL(pastedImage)} alt="preview" className="w-14 h-14 object-cover rounded-lg border border-gray-200" />
+                  <button
+                    onClick={() => setPastedImage(null)}
+                    className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-gray-700 text-white flex items-center justify-center"
+                  >
+                    <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-600 truncate">{pastedImage.name}</p>
+                  <p className="text-[10px] text-gray-400">{(pastedImage.size / 1024).toFixed(0)} KB · กด Enter เพื่อส่ง</p>
                 </div>
               </div>
             )}

@@ -43,9 +43,10 @@ export default function DocumentChatPage() {
   const [downloadReady, setDownloadReady] = useState(false);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [showHighlights, setShowHighlights] = useState(true);
-  const [pdfModal, setPdfModal]   = useState<string | null>(null);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editText, setEditText]   = useState("");
+  const [pdfModal, setPdfModal]       = useState<string | null>(null);
+  const [editingId, setEditingId]     = useState<string | null>(null);
+  const [editText, setEditText]       = useState("");
+  const [pastedImage, setPastedImage] = useState<File | null>(null);
 
   const chatContainerRef = useRef<HTMLDivElement>(null);
 
@@ -95,7 +96,8 @@ export default function DocumentChatPage() {
   };
 
   const sendMessage = async () => {
-    if (!message.trim() || !USER_ID) return;
+    if (!message.trim() && !pastedImage || !USER_ID) return;
+    if (pastedImage) { await uploadAndSend(pastedImage); setPastedImage(null); return; }
     await fetch("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -152,12 +154,12 @@ export default function DocumentChatPage() {
     await uploadAndSend(file);
   };
 
-  const handlePaste = async (e: React.ClipboardEvent) => {
+  const handlePaste = (e: React.ClipboardEvent) => {
     for (const item of e.clipboardData.items) {
       if (item.type.startsWith("image/")) {
         e.preventDefault();
         const file = item.getAsFile();
-        if (file) await uploadAndSend(new File([file], `screenshot-${Date.now()}.png`, { type: file.type }));
+        if (file) setPastedImage(new File([file], `screenshot-${Date.now()}.png`, { type: file.type }));
         break;
       }
     }
@@ -496,6 +498,31 @@ export default function DocumentChatPage() {
             </div>
 
             <div className="px-3 pb-2.5 pt-2 shrink-0 border-t border-base-content/10 bg-base-200">
+              {/* Paste image preview */}
+              {pastedImage && (
+                <div className="mb-2 flex items-center gap-2 bg-base-100 border border-base-content/10 rounded-lg p-2">
+                  <div className="relative shrink-0">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={URL.createObjectURL(pastedImage)}
+                      alt="preview"
+                      className="w-14 h-14 object-cover rounded-lg"
+                    />
+                    <button
+                      onClick={() => setPastedImage(null)}
+                      className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-base-content text-base-100 flex items-center justify-center"
+                    >
+                      <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[10px] text-base-content/60 truncate">{pastedImage.name}</p>
+                    <p className="text-[9px] text-base-content/40">{(pastedImage.size / 1024).toFixed(0)} KB · กด Enter เพื่อส่ง</p>
+                  </div>
+                </div>
+              )}
               <input
                 type="file"
                 accept="image/*,application/pdf"
@@ -538,7 +565,7 @@ export default function DocumentChatPage() {
                 />
                 <button
                   onClick={sendMessage}
-                  disabled={!message.trim()}
+                  disabled={!message.trim() && !pastedImage}
                   className="w-7 h-7 rounded-md bg-primary hover:bg-primary/80 disabled:opacity-30 disabled:cursor-not-allowed transition-all flex items-center justify-center shrink-0"
                 >
                   <svg className="w-3 h-3 text-primary-content translate-x-px" fill="none" stroke="currentColor" viewBox="0 0 24 24">
