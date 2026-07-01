@@ -24,6 +24,10 @@ export async function GET(req: NextRequest) {
 
   const contentType = blobRes.headers.get("Content-Type") || "application/octet-stream";
   return new Response(blobRes.body, {
-    headers: { "Content-Type": contentType },
+    headers: {
+      "Content-Type": contentType,
+      // Blob content is immutable (uuid filename) → cache hard so images don't re-download on remount
+      "Cache-Control": "private, max-age=31536000, immutable",
+    },
   });
 }

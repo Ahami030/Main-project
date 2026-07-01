@@ -21,10 +21,11 @@ interface Props {
   fileType: string;
   fileName: string;
   onPdfClick?: (url: string) => void;
+  onImageLoad?: () => void;
   isAdmin?: boolean;
 }
 
-export default function ChatFileAttachment({ fileUrl, fileType, fileName, onPdfClick, isAdmin }: Props) {
+export default function ChatFileAttachment({ fileUrl, fileType, fileName, onPdfClick, onImageLoad, isAdmin }: Props) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const proxyUrl = `/api/chat/file?url=${encodeURIComponent(fileUrl)}`;
   const cardCls = `flex items-center gap-2 px-2.5 py-2 rounded-xl transition-colors max-w-[200px] ${isAdmin ? 'hover:bg-white/10 text-primary-content' : 'hover:bg-base-content/8 text-base-content/80'}`;
@@ -34,7 +35,7 @@ export default function ChatFileAttachment({ fileUrl, fileType, fileName, onPdfC
     return (
       <>
         <button onClick={() => dialogRef.current?.showModal()} className="rounded-xl overflow-hidden hover:opacity-90 transition-opacity">
-          <img src={proxyUrl} alt={fileName} className="max-w-40 max-h-30 object-cover rounded-xl block" />
+          <img src={proxyUrl} alt={fileName} onLoad={onImageLoad} className="max-w-40 max-h-30 object-cover rounded-xl block" />
         </button>
 
         <dialog

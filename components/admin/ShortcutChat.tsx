@@ -166,17 +166,21 @@ export default function ShortcutChat() {
     }
   }, [activeRfq, view]);
 
-  // Effect H — scroll to bottom when chat view opens + re-scroll as images load
+  // Effect H — scroll to bottom when chat view opens
   useEffect(() => {
     if (view !== 'chat') return;
     const el = msgContainerRef.current;
-    if (!el) return;
-    const toBottom = () => { if (shouldAutoScrollRef.current) el.scrollTo({ top: el.scrollHeight }); };
-    requestAnimationFrame(toBottom);
-    // img load doesn't bubble → capture phase
-    el.addEventListener('load', toBottom, true);
-    return () => el.removeEventListener('load', toBottom, true);
+    if (el) requestAnimationFrame(() => el.scrollTo({ top: el.scrollHeight }));
   }, [view, activeUserId]);
+
+  // Re-pin to bottom after an image finishes loading (rAF so scrollHeight reflects the new layout)
+  const pinBottomAfterImage = () => {
+    if (!shouldAutoScrollRef.current) return;
+    requestAnimationFrame(() => {
+      const el = msgContainerRef.current;
+      if (el) el.scrollTo({ top: el.scrollHeight });
+    });
+  };
 
   // Effect G — revoke object URL for paste preview
   useEffect(() => {
@@ -514,6 +518,7 @@ export default function ShortcutChat() {
                               fileType={msg.fileType!}
                               fileName={msg.fileName!}
                               isAdmin={isAdmin}
+                              onImageLoad={pinBottomAfterImage}
                             />
                           ) : (
                             <div className={`px-3.5 py-2 rounded-2xl text-sm leading-relaxed wrap-break-word ${

@@ -84,15 +84,14 @@ export default function ChatNotificationBubble() {
     msgContainerRef.current?.scrollTo({ top: msgContainerRef.current.scrollHeight, behavior: 'smooth' });
   }, [messages, open]);
 
-  // Re-scroll as images load (img has no height until loaded → initial scroll lands short)
-  useEffect(() => {
-    if (!open) return;
-    const el = msgContainerRef.current;
-    if (!el) return;
-    const toBottom = () => { if (shouldAutoScrollRef.current) el.scrollTo({ top: el.scrollHeight }); };
-    el.addEventListener('load', toBottom, true); // img load doesn't bubble → capture
-    return () => el.removeEventListener('load', toBottom, true);
-  }, [open]);
+  // Re-pin to bottom after an image finishes loading (img has no height until loaded → initial scroll lands short)
+  const pinBottomAfterImage = () => {
+    if (!shouldAutoScrollRef.current) return;
+    requestAnimationFrame(() => {
+      const el = msgContainerRef.current;
+      if (el) el.scrollTo({ top: el.scrollHeight });
+    });
+  };
 
   // Revoke object URL for paste preview
   useEffect(() => {
@@ -236,6 +235,7 @@ export default function ChatNotificationBubble() {
                           fileType={msg.fileType!}
                           fileName={msg.fileName!}
                           isAdmin={isUser}
+                          onImageLoad={pinBottomAfterImage}
                         />
                       ) : (
                         <div className={`px-3 py-2 rounded-2xl text-sm leading-relaxed wrap-break-word ${
