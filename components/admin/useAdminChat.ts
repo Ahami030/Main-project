@@ -1,7 +1,11 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { RfqDoc } from '@/components/admin/ChatRfqSidebar';
+
+// useLayoutEffect on the client (scroll before paint = no visible jump), useEffect on the
+// server to avoid React's SSR warning.
+const useIsoLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect;
 
 export type UserWithChat = {
   userId: string;
@@ -44,8 +48,9 @@ export function useAdminChat(opts: { enabled?: boolean; onRfqCount?: (n: number)
   const msgContainerRef = useRef<HTMLDivElement>(null);
   const pinnedRef = useRef(true);                 // stick to bottom
   const loadedUserRef = useRef<string | null>(null); // user whose first load we've already jumped for
+  const cacheRef = useRef<Record<string, ChatMsg[]>>({}); // last-seen thread per user → instant reopen
   const onRfqCountRef = useRef(opts.onRfqCount);
-  onRfqCountRef.current = opts.onRfqCount;
+  useEffect(() => { onRfqCountRef.current = opts.onRfqCount; });
 
   const activeUserId = activeUser?.userId ?? null;
 
@@ -83,6 +88,7 @@ export function useAdminChat(opts: { enabled?: boolean; onRfqCount?: (n: number)
         if (!res.ok || cancelled) return;
         const data: ChatMsg[] = await res.json();
         if (cancelled) return;
+        cacheRef.current[activeUserId] = data; // activeUserId from closure — data provably this user's
         setMessages((prev) => {
           const lastIdSame = data[data.length - 1]?._id === prev[prev.length - 1]?._id;
           if (data.length === prev.length && lastIdSame) return prev;
@@ -114,30 +120,31 @@ export function useAdminChat(opts: { enabled?: boolean; onRfqCount?: (n: number)
     return () => { cancelled = true; };
   }, [activeUserId]);
 
-  // reset scroll state on user switch
+  // reset scroll state on user switch — seed from cache so a reopened chat shows instantly
+  // (no empty/loading flash), like opening a Messenger thread you've already read
   useEffect(() => {
     pinnedRef.current = true;
     loadedUserRef.current = null;
     setShowNewMsgButton(false);
-    setMessages([]);
+    setMessages(activeUserId ? (cacheRef.current[activeUserId] ?? []) : []);
   }, [activeUserId]);
 
-  // Auto-scroll. Instant only — no smooth. A smooth animation fires scroll events at
-  // intermediate positions, which handleScroll then reads as "user scrolled up" and un-pins
-  // mid-flight. That fight was the flash / stuck-at-top bug. First render for a user jumps to
-  // the bottom; after that we only stick if the reader is pinned there.
-  useEffect(() => {
+  // Auto-scroll — runs BEFORE paint (useLayoutEffect), so the first frame is already at the
+  // bottom: messages just appear pinned, no visible jump. Direct scrollTop assignment, never
+  // smooth — a smooth animation fires scroll events at intermediate positions, which handleScroll
+  // reads as "user scrolled up" and un-pins mid-flight (that fight was the flash / stuck-at-top
+  // bug). First render for a user jumps to bottom; after that we only stick if the reader is pinned.
+  useIsoLayoutEffect(() => {
     const el = msgContainerRef.current;
     if (!el || messages.length === 0) return;
     if (loadedUserRef.current !== activeUserId) {
       loadedUserRef.current = activeUserId;
       pinnedRef.current = true;
-      el.scrollTo({ top: el.scrollHeight });
+      el.scrollTop = el.scrollHeight;
       return;
     }
-    if (pinnedRef.current) el.scrollTo({ top: el.scrollHeight });
+    if (pinnedRef.current) el.scrollTop = el.scrollHeight;
   // activeUserId is read but not subscribed — we only react to message changes
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages]);
 
   // ── helpers ──
