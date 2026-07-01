@@ -1,52 +1,13 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import ChatFileAttachment from '@/components/chat/ChatFileAttachment';
-import ChatRfqSidebar, { type RfqDoc } from '@/components/admin/ChatRfqSidebar';
-
-type UserWithChat = {
-  userId: string;
-  user: { name: string; email: string } | null;
-  latestMessage: string;
-  latestMessageTime: string;
-  latestUserMessageTime?: string | null;
-};
-
-type ChatMsg = {
-  _id: string;
-  senderRole: 'user' | 'admin';
-  message: string;
-  fileUrl?: string;
-  fileType?: string;
-  fileName?: string;
-  isDeleted?: boolean;
-  createdAt: string;
-};
+import ChatRfqSidebar from '@/components/admin/ChatRfqSidebar';
+import { useAdminChat, type UserWithChat } from '@/components/admin/useAdminChat';
 
 export default function ShortcutChat() {
   const pathname = usePathname();
-
-  const [view, setView] = useState<'list' | 'chat'>('list');
-  const [activeTab, setActiveTab] = useState<'all' | 'unread'>('all');
-  const [activeUserId, setActiveUserId] = useState<string | null>(null);
-  const [users, setUsers] = useState<UserWithChat[]>([]);
-  const [messages, setMessages] = useState<ChatMsg[]>([]);
-  const [activeRfq, setActiveRfq] = useState<RfqDoc | null | undefined>(undefined);
-  const [draft, setDraft] = useState('');
-  const [pastedImage, setPastedImage] = useState<File | null>(null);
-  const [pastedPreview, setPastedPreview] = useState('');
-  const [uploading, setUploading] = useState(false);
-  const [seenAt, setSeenAt] = useState<Record<string, number>>({});
-  const [showNewMsgButton, setShowNewMsgButton] = useState(false);
-
-  const dialogRef = useRef<HTMLDialogElement>(null);
-  const shouldAutoScrollRef = useRef(true);
-  const msgContainerRef = useRef<HTMLDivElement>(null);
-  const prevMsgCountRef = useRef(0);
-  const justSwitchedRef = useRef(false);
-  const switchTimeRef = useRef(0);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Suppress on pages that have inline chat
   const hidden =
@@ -54,221 +15,48 @@ export default function ShortcutChat() {
     pathname?.startsWith('/Admin/edit/') ||
     pathname === '/Admin/rfq/edit';
 
-  // Effect A — load seenAt from localStorage
-  useEffect(() => {
-    try {
-      const stored = JSON.parse(localStorage.getItem('admin_seen_chats') || '{}');
-      setSeenAt(stored);
-    } catch {}
-  }, []);
+  const {
+    activeTab, setActiveTab,
+    users, displayedUsers, unreadCount, isUnread,
+    activeUserId, openUser, closeUser,
+    messages, activeRfq,
+    draft, setDraft, sendMessage, uploadAndSend, uploading,
+    msgContainerRef, handleScroll, scrollToBottom, showNewMsgButton, pinBottomAfterImage,
+    fmtTime, userInitial, userName,
+  } = useAdminChat({ enabled: !hidden });
 
-  // Effect B — poll users every 3s (always-on for badge count)
-  useEffect(() => {
-    if (hidden) return;
-    const fetchUsers = async () => {
-      try {
-        const res = await fetch('/api/chat/users', { cache: 'no-store' });
-        if (!res.ok) return;
-        const data = await res.json();
-        setUsers(data.users ?? []);
-      } catch {}
-    };
-    fetchUsers();
-    const iv = setInterval(fetchUsers, 3000);
-    return () => clearInterval(iv);
-  }, [hidden]);
+  const [view, setView] = useState<'list' | 'chat'>('list');
+  // Pasted image kept with its object URL so cleanup is local — no effect needed.
+  const [pasted, setPasted] = useState<{ file: File; url: string } | null>(null);
 
-  // Effect C — poll messages every 1s when a chat is active
-  useEffect(() => {
-    if (!activeUserId) return;
-    const fetchMessages = async () => {
-      try {
-        const res = await fetch(`/api/chat/${activeUserId}`, { cache: 'no-store' });
-        if (!res.ok) return;
-        const data: ChatMsg[] = await res.json();
-        setMessages((prev) => {
-          const lastIdSame = data[data.length - 1]?._id === prev[prev.length - 1]?._id;
-          if (data.length === prev.length && lastIdSame) return prev;
-          if (data.length > prev.length && !shouldAutoScrollRef.current) {
-            setShowNewMsgButton(true);
-          }
-          return data;
-        });
-      } catch {}
-    };
-    fetchMessages();
-    const iv = setInterval(fetchMessages, 1000);
-    return () => clearInterval(iv);
-  }, [activeUserId]);
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Effect D — fetch RFQ when activeUserId changes
-  useEffect(() => {
-    if (!activeUserId) return;
-    setActiveRfq(undefined);
-    const fetchRfq = async () => {
-      try {
-        const res = await fetch(`/api/rfq?userId=${activeUserId}`, { cache: 'no-store' });
-        if (!res.ok) { setActiveRfq(null); return; }
-        const data = await res.json();
-        setActiveRfq(Array.isArray(data) && data.length > 0 ? data[0] : null);
-      } catch {
-        setActiveRfq(null);
-      }
-    };
-    fetchRfq();
-  }, [activeUserId]);
-
-  // Effect E — reset scroll state when switching users
-  useEffect(() => {
-    shouldAutoScrollRef.current = true;
-    prevMsgCountRef.current = 0;
-    setShowNewMsgButton(false);
-    setMessages([]);
-    justSwitchedRef.current = true;
-    switchTimeRef.current = Date.now();
-  }, [activeUserId]);
-
-  // Effect F — auto-scroll when messages arrive (same as InlineChatPanel: instant on open, smooth after)
-  useEffect(() => {
-    const newCount = messages.length;
-    const isNew = newCount > prevMsgCountRef.current;
-    prevMsgCountRef.current = newCount;
-    if (!isNew && !justSwitchedRef.current) return;
-    if (!shouldAutoScrollRef.current) return;
-    const el = msgContainerRef.current;
-    if (!el) return;
-    const timeSince = Date.now() - switchTimeRef.current;
-    el.scrollTo({ top: el.scrollHeight, behavior: (justSwitchedRef.current || timeSince < 500) ? 'instant' : 'smooth' });
-    justSwitchedRef.current = false;
-  }, [messages]);
-
-  // Re-pin to bottom after an image finishes loading (rAF so scrollHeight reflects the new layout)
-  const pinBottomAfterImage = () => {
-    if (!shouldAutoScrollRef.current) return;
-    requestAnimationFrame(() => {
-      const el = msgContainerRef.current;
-      if (el) el.scrollTo({ top: el.scrollHeight });
-    });
-  };
-
-  // Effect G — revoke object URL for paste preview
-  useEffect(() => {
-    if (!pastedImage) { setPastedPreview(''); return; }
-    const url = URL.createObjectURL(pastedImage);
-    setPastedPreview(url);
-    return () => URL.revokeObjectURL(url);
-  }, [pastedImage]);
+  const clearPasted = () => setPasted((p) => { if (p) URL.revokeObjectURL(p.url); return null; });
 
   if (hidden) return null;
 
-  // ── Helpers ──
+  const openModal = () => { setView('list'); dialogRef.current?.showModal(); };
+  const closeModal = () => dialogRef.current?.close();
 
-  const isUnread = (u: UserWithChat) => {
-    if (!u.latestUserMessageTime) return false;
-    return new Date(u.latestUserMessageTime).getTime() > (seenAt[u.userId] ?? 0);
-  };
+  const openChat = (u: UserWithChat) => { openUser(u); setView('chat'); };
+  const goToList = () => { closeUser(); setView('list'); };
 
-  const unreadCount = users.filter(isUnread).length;
-
-  const displayedUsers = activeTab === 'unread' ? users.filter(isUnread) : users;
-
-  const markSeen = (userId: string) => {
-    const updated = { ...seenAt, [userId]: Date.now() };
-    setSeenAt(updated);
-    try { localStorage.setItem('admin_seen_chats', JSON.stringify(updated)); } catch {}
-  };
-
-  const openModal = () => {
-    setView('list');
-    dialogRef.current?.showModal();
-  };
-
-  const closeModal = () => {
-    dialogRef.current?.close();
-  };
-
-  const openChat = (userId: string) => {
-    setActiveUserId(userId);
-    setView('chat');
-    markSeen(userId);
-  };
-
-  const goToList = () => {
-    setView('list');
-    setActiveUserId(null);
-  };
-
-  const uploadAndSend = async (file: File) => {
-    if (!activeUserId) return;
-    setUploading(true);
-    try {
-      const fd = new FormData();
-      fd.append('file', file);
-      const up = await fetch('/api/chat/upload', { method: 'POST', body: fd });
-      if (!up.ok) return;
-      const { url, type, name } = await up.json();
-      await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: activeUserId, senderRole: 'admin', message: '', fileUrl: url, fileType: type, fileName: name }),
-      });
-      shouldAutoScrollRef.current = true;
-      setShowNewMsgButton(false);
-    } catch {}
-    setUploading(false);
-  };
-
-  const sendMessage = async () => {
-    if (pastedImage) {
-      const file = pastedImage;
-      setPastedImage(null);
+  const handleSend = async () => {
+    if (pasted) {
+      const file = pasted.file;
+      clearPasted();
       await uploadAndSend(file);
       return;
     }
-    if (!draft.trim() || !activeUserId) return;
-    const text = draft;
-    setDraft('');
-    try {
-      await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: activeUserId, senderRole: 'admin', message: text }),
-      });
-      shouldAutoScrollRef.current = true;
-      setShowNewMsgButton(false);
-      const res = await fetch(`/api/chat/${activeUserId}`, { cache: 'no-store' });
-      if (res.ok) setMessages(await res.json());
-    } catch {}
+    await sendMessage();
   };
-
-  const handleScroll = () => {
-    const el = msgContainerRef.current;
-    if (!el) return;
-    const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 50;
-    shouldAutoScrollRef.current = atBottom;
-    if (atBottom) setShowNewMsgButton(false);
-  };
-
-  const scrollToBottom = () => {
-    msgContainerRef.current?.scrollTo({ top: msgContainerRef.current.scrollHeight, behavior: 'smooth' });
-    setShowNewMsgButton(false);
-    shouldAutoScrollRef.current = true;
-  };
-
-  const fmtTime = (iso: string) =>
-    new Date(iso).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
-
-  const userInitial = (u: UserWithChat) =>
-    (u.user?.name || u.user?.email || '?')[0].toUpperCase();
-
-  const userName = (u: UserWithChat) =>
-    u.user?.name || u.user?.email || 'Unknown';
 
   return (
     <>
       {/* ── Floating trigger button ── */}
       <button
-        onClick={() => dialogRef.current?.open ? closeModal() : openModal()}
+        onClick={() => (dialogRef.current?.open ? closeModal() : openModal())}
         className="fixed bottom-6 right-6 z-50 btn btn-primary btn-circle shadow-xl w-14 h-14"
         aria-label="Open messages"
       >
@@ -370,7 +158,7 @@ export default function ShortcutChat() {
                     return (
                       <button
                         key={u.userId}
-                        onClick={() => openChat(u.userId)}
+                        onClick={() => openChat(u)}
                         className="w-full flex items-center gap-3 px-5 py-3.5 border-b border-base-200 last:border-0 hover:bg-base-200/40 active:bg-base-200/70 transition-colors text-left"
                       >
                         {/* Avatar */}
@@ -506,11 +294,11 @@ export default function ShortcutChat() {
               </div>
 
               {/* Paste preview bar */}
-              {pastedImage && pastedPreview && (
+              {pasted && (
                 <div className="px-5 py-2 border-t border-base-200 bg-base-200/40 shrink-0 flex items-center gap-2">
-                  <img src={pastedPreview} alt="paste preview" className="w-12 h-12 object-cover rounded-lg shrink-0" />
-                  <span className="text-xs text-base-content/60 flex-1 truncate">{pastedImage.name}</span>
-                  <button onClick={() => setPastedImage(null)} className="btn btn-ghost btn-xs btn-square rounded-lg">
+                  <img src={pasted.url} alt="paste preview" className="w-12 h-12 object-cover rounded-lg shrink-0" />
+                  <span className="text-xs text-base-content/60 flex-1 truncate">{pasted.file.name}</span>
+                  <button onClick={clearPasted} className="btn btn-ghost btn-xs btn-square rounded-lg">
                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                     </svg>
@@ -545,25 +333,28 @@ export default function ShortcutChat() {
                 </button>
                 <input
                   type="text"
-                  placeholder={pastedImage ? 'Enter เพื่อส่งรูป' : 'พิมพ์ข้อความ... (Enter)'}
+                  placeholder={pasted ? 'Enter เพื่อส่งรูป' : 'พิมพ์ข้อความ... (Enter)'}
                   className="input input-bordered input-sm h-9 flex-1 rounded-xl text-sm bg-base-200/60 border-transparent focus:border-primary focus:bg-base-100 transition-colors"
                   value={draft}
                   onChange={(e) => setDraft(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && !e.shiftKey) {
                       e.preventDefault();
-                      sendMessage();
+                      handleSend();
                     }
                   }}
                   onPaste={(e) => {
                     const file = e.clipboardData?.files?.[0];
-                    if (file?.type.startsWith('image/')) { e.preventDefault(); setPastedImage(file); }
+                    if (file?.type.startsWith('image/')) {
+                      e.preventDefault();
+                      setPasted((p) => { if (p) URL.revokeObjectURL(p.url); return { file, url: URL.createObjectURL(file) }; });
+                    }
                   }}
                 />
                 <button
                   className="btn btn-primary btn-sm h-9 min-h-0 rounded-xl px-3"
-                  onClick={sendMessage}
-                  disabled={(!draft.trim() && !pastedImage) || uploading}
+                  onClick={handleSend}
+                  disabled={(!draft.trim() && !pasted) || uploading}
                 >
                   {uploading ? (
                     <span className="loading loading-spinner loading-xs" />

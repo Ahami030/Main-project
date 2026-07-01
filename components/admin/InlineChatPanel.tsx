@@ -1,210 +1,32 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useRef } from 'react';
 import ChatFileAttachment, { FileIcon } from '@/components/chat/ChatFileAttachment';
-import ChatRfqSidebar, { type RfqDoc } from '@/components/admin/ChatRfqSidebar';
-
-type UserWithChat = {
-  userId: string;
-  user: { name: string; email: string } | null;
-  latestMessage: string;
-  latestFileType?: string | null;
-  latestMessageTime: string;
-  latestUserMessageTime?: string | null;
-};
-
-type ChatMsg = {
-  _id: string;
-  senderRole: 'user' | 'admin';
-  message: string;
-  fileUrl?: string;
-  fileType?: string;
-  fileName?: string;
-  isDeleted?: boolean;
-  createdAt: string;
-};
+import ChatRfqSidebar from '@/components/admin/ChatRfqSidebar';
+import { useAdminChat, type UserWithChat } from '@/components/admin/useAdminChat';
 
 interface Props {
   onRfqCount?: (count: number) => void;
 }
 
 export default function InlineChatPanel({ onRfqCount }: Props) {
-  const [activeTab, setActiveTab] = useState<'all' | 'unread'>('all');
-  const [activeUser, setActiveUser] = useState<UserWithChat | null>(null);
-  const [users, setUsers] = useState<UserWithChat[]>([]);
-  const [messages, setMessages] = useState<ChatMsg[]>([]);
-  const [activeRfq, setActiveRfq] = useState<RfqDoc | null | undefined>(undefined);
-  const [draft, setDraft] = useState('');
-  const [seenAt, setSeenAt] = useState<Record<string, number>>({});
-  const [showNewMsgButton, setShowNewMsgButton] = useState(false);
+  const {
+    activeTab, setActiveTab,
+    users, displayedUsers, unreadCount, isUnread,
+    activeUser, openUser,
+    messages, activeRfq,
+    draft, setDraft, sendMessage,
+    msgContainerRef, handleScroll, scrollToBottom, showNewMsgButton, pinBottomAfterImage,
+    fmtTime, userInitial, userName,
+  } = useAdminChat({ onRfqCount });
 
   const chatDialogRef = useRef<HTMLDialogElement>(null);
-  const shouldAutoScrollRef = useRef(true);
-  const msgContainerRef = useRef<HTMLDivElement>(null);
-  const prevMsgCountRef = useRef(0);
-  const justSwitchedRef = useRef(false);
-  const switchTimeRef = useRef(0);
-
-  // Load seenAt from localStorage
-  useEffect(() => {
-    try {
-      const stored = JSON.parse(localStorage.getItem('admin_seen_chats') || '{}');
-      setSeenAt(stored);
-    } catch {}
-  }, []);
-
-  // Poll users every 3s — also piggybacks newRfqCount at zero extra cost
-  useEffect(() => {
-    const fetchUsers = async () => {
-      try {
-        const res = await fetch('/api/chat/users', { cache: 'no-store' });
-        if (!res.ok) return;
-        const data = await res.json();
-        setUsers(data.users ?? []);
-        if (onRfqCount) onRfqCount(data.newRfqCount ?? 0);
-      } catch {}
-    };
-    fetchUsers();
-    const iv = setInterval(fetchUsers, 3000);
-    return () => clearInterval(iv);
-  // onRfqCount is intentionally omitted — it's a stable callback ref from parent
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Poll messages every 1s when modal is open
-  useEffect(() => {
-    if (!activeUser) return;
-    const fetchMessages = async () => {
-      try {
-        const res = await fetch(`/api/chat/${activeUser.userId}`, { cache: 'no-store' });
-        if (!res.ok) return;
-        const data: ChatMsg[] = await res.json();
-        setMessages((prev) => {
-          const lastIdSame = data[data.length - 1]?._id === prev[prev.length - 1]?._id;
-          if (data.length === prev.length && lastIdSame) return prev;
-          if (data.length > prev.length && !shouldAutoScrollRef.current) setShowNewMsgButton(true);
-          return data;
-        });
-      } catch {}
-    };
-    fetchMessages();
-    const iv = setInterval(fetchMessages, 1000);
-    return () => clearInterval(iv);
-  }, [activeUser]);
-
-  // Fetch RFQ when active user changes
-  useEffect(() => {
-    if (!activeUser) return;
-    setActiveRfq(undefined);
-    const fetchRfq = async () => {
-      try {
-        const res = await fetch(`/api/rfq?userId=${activeUser.userId}`, { cache: 'no-store' });
-        if (!res.ok) { setActiveRfq(null); return; }
-        const data = await res.json();
-        setActiveRfq(Array.isArray(data) && data.length > 0 ? data[0] : null);
-      } catch { setActiveRfq(null); }
-    };
-    fetchRfq();
-  }, [activeUser]);
-
-  // Reset scroll state when switching users
-  useEffect(() => {
-    shouldAutoScrollRef.current = true;
-    prevMsgCountRef.current = 0;
-    setShowNewMsgButton(false);
-    setMessages([]);
-    justSwitchedRef.current = true;
-    switchTimeRef.current = Date.now();
-  }, [activeUser]);
-
-  // Auto-scroll on new messages
-  useEffect(() => {
-    const newCount = messages.length;
-    const isNew = newCount > prevMsgCountRef.current;
-    prevMsgCountRef.current = newCount;
-    if (!isNew && !justSwitchedRef.current) return;
-    if (!shouldAutoScrollRef.current) return;
-    const el = msgContainerRef.current;
-    if (!el) return;
-    const timeSince = Date.now() - switchTimeRef.current;
-    el.scrollTo({ top: el.scrollHeight, behavior: (justSwitchedRef.current || timeSince < 500) ? 'instant' : 'smooth' });
-    justSwitchedRef.current = false;
-  }, [messages]);
-
-  // ── Helpers ──
-
-  const isUnread = (u: UserWithChat) => {
-    if (!u.latestUserMessageTime) return false;
-    return new Date(u.latestUserMessageTime).getTime() > (seenAt[u.userId] ?? 0);
-  };
-
-  const unreadCount = users.filter(isUnread).length;
-  const displayedUsers = activeTab === 'unread' ? users.filter(isUnread) : users;
-
-  const markSeen = (userId: string) => {
-    const updated = { ...seenAt, [userId]: Date.now() };
-    setSeenAt(updated);
-    try { localStorage.setItem('admin_seen_chats', JSON.stringify(updated)); } catch {}
-  };
 
   const openChatModal = (u: UserWithChat) => {
-    setActiveUser(u);
-    markSeen(u.userId);
+    openUser(u);
     chatDialogRef.current?.showModal();
   };
-
-  const closeChatModal = () => {
-    chatDialogRef.current?.close();
-  };
-
-  const sendMessage = async () => {
-    if (!draft.trim() || !activeUser) return;
-    const text = draft;
-    setDraft('');
-    try {
-      await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: activeUser.userId, senderRole: 'admin', message: text }),
-      });
-      shouldAutoScrollRef.current = true;
-      setShowNewMsgButton(false);
-      const res = await fetch(`/api/chat/${activeUser.userId}`, { cache: 'no-store' });
-      if (res.ok) setMessages(await res.json());
-    } catch {}
-  };
-
-  const handleScroll = () => {
-    const el = msgContainerRef.current;
-    if (!el) return;
-    const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 50;
-    shouldAutoScrollRef.current = atBottom;
-    if (atBottom) setShowNewMsgButton(false);
-  };
-
-  const scrollToBottom = () => {
-    msgContainerRef.current?.scrollTo({ top: msgContainerRef.current.scrollHeight, behavior: 'smooth' });
-    setShowNewMsgButton(false);
-    shouldAutoScrollRef.current = true;
-  };
-
-  // Re-pin to bottom after an image finishes loading (rAF so scrollHeight reflects the new layout)
-  const pinBottomAfterImage = () => {
-    if (!shouldAutoScrollRef.current) return;
-    requestAnimationFrame(() => {
-      const el = msgContainerRef.current;
-      if (el) el.scrollTo({ top: el.scrollHeight });
-    });
-  };
-
-  const fmtTime = (iso: string) =>
-    new Date(iso).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
-
-  const userInitial = (u: UserWithChat) =>
-    (u.user?.name || u.user?.email || '?')[0].toUpperCase();
-
-  const userName = (u: UserWithChat) =>
-    u.user?.name || u.user?.email || 'Unknown';
+  const closeChatModal = () => chatDialogRef.current?.close();
 
   return (
     <>
