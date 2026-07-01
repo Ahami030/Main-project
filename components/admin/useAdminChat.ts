@@ -49,6 +49,7 @@ export function useAdminChat(opts: { enabled?: boolean; onRfqCount?: (n: number)
   const pinnedRef = useRef(true);                 // stick to bottom
   const loadedUserRef = useRef<string | null>(null); // user whose first load we've already jumped for
   const cacheRef = useRef<Record<string, ChatMsg[]>>({}); // last-seen thread per user → instant reopen
+  const autoScrollUntilRef = useRef(0); // ignore handleScroll until this time — our own smooth animation
   const onRfqCountRef = useRef(opts.onRfqCount);
   useEffect(() => { onRfqCountRef.current = opts.onRfqCount; });
 
@@ -125,15 +126,16 @@ export function useAdminChat(opts: { enabled?: boolean; onRfqCount?: (n: number)
   useEffect(() => {
     pinnedRef.current = true;
     loadedUserRef.current = null;
+    autoScrollUntilRef.current = 0;
     setShowNewMsgButton(false);
     setMessages(activeUserId ? (cacheRef.current[activeUserId] ?? []) : []);
   }, [activeUserId]);
 
-  // Auto-scroll — runs BEFORE paint (useLayoutEffect), so the first frame is already at the
-  // bottom: messages just appear pinned, no visible jump. Direct scrollTop assignment, never
-  // smooth — a smooth animation fires scroll events at intermediate positions, which handleScroll
-  // reads as "user scrolled up" and un-pins mid-flight (that fight was the flash / stuck-at-top
-  // bug). First render for a user jumps to bottom; after that we only stick if the reader is pinned.
+  // Auto-scroll — runs BEFORE paint (useLayoutEffect). First render for a user jumps to the bottom
+  // INSTANTLY (direct scrollTop) so the chat opens already pinned with no visible jump. After that,
+  // a new message while the reader is at the bottom glides down SMOOTHLY. The smooth animation fires
+  // scroll events at intermediate positions; autoScrollUntilRef makes handleScroll ignore them so it
+  // can't misread our own animation as "user scrolled up" and un-pin mid-flight.
   useIsoLayoutEffect(() => {
     const el = msgContainerRef.current;
     if (!el || messages.length === 0) return;
@@ -143,7 +145,10 @@ export function useAdminChat(opts: { enabled?: boolean; onRfqCount?: (n: number)
       el.scrollTop = el.scrollHeight;
       return;
     }
-    if (pinnedRef.current) el.scrollTop = el.scrollHeight;
+    if (pinnedRef.current) {
+      autoScrollUntilRef.current = Date.now() + 700; // ponytail: fixed window; enough for one message's glide
+      el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+    }
   // activeUserId is read but not subscribed — we only react to message changes
   }, [messages]);
 
@@ -203,6 +208,7 @@ export function useAdminChat(opts: { enabled?: boolean; onRfqCount?: (n: number)
   const handleScroll = () => {
     const el = msgContainerRef.current;
     if (!el) return;
+    if (Date.now() < autoScrollUntilRef.current) return; // our own smooth animation — not a user scroll
     const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 50;
     pinnedRef.current = atBottom;
     if (atBottom) setShowNewMsgButton(false);
@@ -210,7 +216,10 @@ export function useAdminChat(opts: { enabled?: boolean; onRfqCount?: (n: number)
 
   const scrollToBottom = () => {
     const el = msgContainerRef.current;
-    if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+    if (el) {
+      autoScrollUntilRef.current = Date.now() + 700;
+      el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+    }
     setShowNewMsgButton(false);
     pinnedRef.current = true;
   };
