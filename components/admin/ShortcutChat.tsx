@@ -152,6 +152,15 @@ export default function ShortcutChat() {
     justSwitchedRef.current = false;
   }, [messages]);
 
+  // Effect H — scroll to bottom immediately when chat view is rendered
+  useEffect(() => {
+    if (view !== 'chat') return;
+    requestAnimationFrame(() => {
+      const el = msgContainerRef.current;
+      if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'instant' });
+    });
+  }, [view, activeUserId]);
+
   // Effect G — revoke object URL for paste preview
   useEffect(() => {
     if (!pastedImage) { setPastedPreview(''); return; }
@@ -278,7 +287,7 @@ export default function ShortcutChat() {
     <>
       {/* ── Floating trigger button ── */}
       <button
-        onClick={openModal}
+        onClick={() => dialogRef.current?.open ? closeModal() : openModal()}
         className="fixed bottom-6 right-6 z-50 btn btn-primary btn-circle shadow-xl w-14 h-14"
         aria-label="Open messages"
       >
@@ -296,8 +305,8 @@ export default function ShortcutChat() {
       {/* ── Modal ── */}
       <dialog ref={dialogRef} className="modal modal-bottom sm:modal-middle">
         <div
-          className="modal-box p-0 flex flex-col overflow-hidden w-full sm:max-w-md"
-          style={{ height: '620px', maxHeight: '88vh' }}
+          className="modal-box p-0 flex flex-col overflow-hidden w-full sm:max-w-2xl"
+          style={{ height: '700px', maxHeight: '90vh' }}
         >
           {/* ── Modal Header ── */}
           <div className="flex items-center justify-between px-5 py-3.5 border-b border-base-200 shrink-0">
