@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import ChatFileAttachment from '@/components/chat/ChatFileAttachment';
+import ChatRfqSidebar, { type RfqDoc } from '@/components/admin/ChatRfqSidebar';
 
 type UserWithChat = {
   userId: string;
@@ -21,16 +22,6 @@ type ChatMsg = {
   fileName?: string;
   isDeleted?: boolean;
   createdAt: string;
-};
-
-type RfqDoc = {
-  _id: string;
-  USER_ID: string;
-  rfq_number: string;
-  buyer_company_name: string;
-  vendor_company_name: string;
-  line_items: Array<{ quantity: number; unit_price: number }>;
-  due_date: string;
 };
 
 export default function ShortcutChat() {
@@ -286,15 +277,6 @@ export default function ShortcutChat() {
     shouldAutoScrollRef.current = true;
   };
 
-  const calcRfqTotal = (rfq: RfqDoc) =>
-    (rfq.line_items || []).reduce(
-      (sum, li) => sum + (Number(li.quantity) || 0) * (Number(li.unit_price) || 0),
-      0
-    );
-
-  const fmtPrice = (n: number) =>
-    new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n || 0);
-
   const fmtTime = (iso: string) =>
     new Date(iso).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
 
@@ -326,8 +308,8 @@ export default function ShortcutChat() {
       {/* ── Modal ── */}
       <dialog ref={dialogRef} className="modal modal-bottom sm:modal-middle">
         <div
-          className="modal-box p-0 flex flex-col overflow-hidden w-full sm:max-w-2xl"
-          style={{ height: '700px', maxHeight: '90vh' }}
+          className="modal-box p-0 flex flex-col overflow-hidden w-full sm:max-w-3xl"
+          style={{ height: '640px', maxHeight: '90vh' }}
         >
           {/* ── Modal Header ── */}
           <div className="flex items-center justify-between px-5 py-3.5 border-b border-base-200 shrink-0">
@@ -447,33 +429,24 @@ export default function ShortcutChat() {
 
           {/* ── CHAT VIEW ── */}
           {view === 'chat' && activeUserId && (
-            <div className="flex-1 flex flex-col min-h-0">
+            <div className="flex-1 flex min-h-0">
 
-              {/* RFQ card */}
-              <div className="px-5 py-3 border-b border-base-200 shrink-0">
+            {/* LEFT: chat column */}
+            <div className="flex-1 flex flex-col min-w-0 md:border-r border-base-200">
+
+              {/* Compact RFQ chip — mobile only (desktop shows the full sidebar on the right) */}
+              <div className="md:hidden px-5 py-3 border-b border-base-200 shrink-0">
                 {activeRfq === undefined ? (
-                  <div className="skeleton h-14 w-full rounded-xl" />
+                  <div className="skeleton h-12 w-full rounded-xl" />
                 ) : activeRfq === null ? (
                   <div className="px-3 py-2.5 bg-base-200 rounded-xl text-xs text-base-content/40 text-center">
                     ไม่พบ RFQ ที่เชื่อมกับผู้ใช้นี้
                   </div>
                 ) : (
                   <div className="flex items-center justify-between gap-3 px-3.5 py-2.5 bg-primary/8 border border-primary/15 rounded-xl">
-                    <div className="flex flex-col gap-0.5 min-w-0">
-                      <span className="text-xs font-bold text-primary truncate">
-                        {activeRfq.rfq_number || 'RFQ'}
-                      </span>
-                      <span className="text-[11px] text-base-content/60 truncate">
-                        {activeRfq.buyer_company_name || '—'}
-                      </span>
-                      <span className="text-[11px] text-base-content/40">
-                        {activeRfq.line_items?.length || 0} รายการ
-                        {' · '}
-                        <span className="text-success font-semibold">
-                          {fmtPrice(calcRfqTotal(activeRfq))}
-                        </span>
-                      </span>
-                    </div>
+                    <span className="text-xs font-bold text-primary truncate">
+                      {activeRfq.rfq_number || 'RFQ'}
+                    </span>
                     <a
                       href={`/Admin/edit/${activeRfq._id}`}
                       className="btn btn-primary btn-xs h-8 min-h-0 rounded-lg shrink-0 gap-1.5 text-[11px] font-semibold"
@@ -493,7 +466,7 @@ export default function ShortcutChat() {
               <div
                 ref={msgContainerRef}
                 onScroll={handleScroll}
-                className="flex-1 overflow-y-auto px-5 py-4 flex flex-col gap-2.5 min-h-0"
+                className="flex-1 overflow-y-auto px-5 py-4 flex flex-col gap-2.5 min-h-0 bg-base-200/20"
               >
                 {messages.length === 0 ? (
                   <div className="flex-1 flex items-center justify-center text-base-content/30 text-xs">
@@ -624,6 +597,10 @@ export default function ShortcutChat() {
                   )}
                 </button>
               </div>
+            </div>
+
+            {/* RIGHT: full RFQ sidebar — desktop only (mobile uses the compact chip above) */}
+            <ChatRfqSidebar rfq={activeRfq} onNavigate={closeModal} className="hidden md:flex" />
             </div>
           )}
         </div>
