@@ -45,6 +45,7 @@ export default function ShortcutChat() {
   const msgContainerRef = useRef<HTMLDivElement>(null);
   const prevMsgCountRef = useRef(0);
   const justSwitchedRef = useRef(false);
+  const switchTimeRef = useRef(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Suppress on pages that have inline chat
@@ -124,45 +125,22 @@ export default function ShortcutChat() {
     setShowNewMsgButton(false);
     setMessages([]);
     justSwitchedRef.current = true;
+    switchTimeRef.current = Date.now();
   }, [activeUserId]);
 
-  // Effect F — auto-scroll when messages arrive
+  // Effect F — auto-scroll when messages arrive (same as InlineChatPanel: instant on open, smooth after)
   useEffect(() => {
     const newCount = messages.length;
     const isNew = newCount > prevMsgCountRef.current;
     prevMsgCountRef.current = newCount;
+    if (!isNew && !justSwitchedRef.current) return;
+    if (!shouldAutoScrollRef.current) return;
     const el = msgContainerRef.current;
     if (!el) return;
-
-    // Just opened this conversation: wait until messages actually load, then snap to bottom
-    // instantly. (Consuming justSwitched on the empty render made the real scroll smooth →
-    // it raced layout shifts + handleScroll and landed mid-list.)
-    if (justSwitchedRef.current) {
-      if (newCount === 0) return;
-      requestAnimationFrame(() => el.scrollTo({ top: el.scrollHeight, behavior: 'instant' }));
-      justSwitchedRef.current = false;
-      return;
-    }
-
-    if (!isNew || !shouldAutoScrollRef.current) return;
-    el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+    const timeSince = Date.now() - switchTimeRef.current;
+    el.scrollTo({ top: el.scrollHeight, behavior: (justSwitchedRef.current || timeSince < 500) ? 'instant' : 'smooth' });
+    justSwitchedRef.current = false;
   }, [messages]);
-
-  // Re-snap to bottom once the RFQ card resolves (skeleton→card height change shifts layout)
-  useEffect(() => {
-    if (view !== 'chat' || activeRfq === undefined) return;
-    const el = msgContainerRef.current;
-    if (el && shouldAutoScrollRef.current) {
-      requestAnimationFrame(() => el.scrollTo({ top: el.scrollHeight }));
-    }
-  }, [activeRfq, view]);
-
-  // Effect H — scroll to bottom when chat view opens
-  useEffect(() => {
-    if (view !== 'chat') return;
-    const el = msgContainerRef.current;
-    if (el) requestAnimationFrame(() => el.scrollTo({ top: el.scrollHeight }));
-  }, [view, activeUserId]);
 
   // Re-pin to bottom after an image finishes loading (rAF so scrollHeight reflects the new layout)
   const pinBottomAfterImage = () => {

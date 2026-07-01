@@ -20,6 +20,7 @@ type ChatMsg = {
   fileUrl?: string;
   fileType?: string;
   fileName?: string;
+  isDeleted?: boolean;
   createdAt: string;
 };
 
@@ -187,6 +188,15 @@ export default function InlineChatPanel({ onRfqCount }: Props) {
     shouldAutoScrollRef.current = true;
   };
 
+  // Re-pin to bottom after an image finishes loading (rAF so scrollHeight reflects the new layout)
+  const pinBottomAfterImage = () => {
+    if (!shouldAutoScrollRef.current) return;
+    requestAnimationFrame(() => {
+      const el = msgContainerRef.current;
+      if (el) el.scrollTo({ top: el.scrollHeight });
+    });
+  };
+
   const fmtTime = (iso: string) =>
     new Date(iso).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
 
@@ -339,6 +349,13 @@ export default function InlineChatPanel({ onRfqCount }: Props) {
                 ) : (
                   messages.map((msg) => {
                     const isAdmin = msg.senderRole === 'admin';
+                    if (msg.isDeleted) {
+                      return (
+                        <div key={msg._id} className={`flex ${isAdmin ? 'justify-end' : 'justify-start'}`}>
+                          <span className="text-xs italic text-base-content/30 px-2 py-1">ข้อความถูกลบแล้ว</span>
+                        </div>
+                      );
+                    }
                     return (
                       <div key={msg._id} className={`flex ${isAdmin ? 'justify-end' : 'justify-start'}`}>
                         <div className={`max-w-[78%] flex flex-col gap-0.5 ${isAdmin ? 'items-end' : 'items-start'}`}>
@@ -348,7 +365,7 @@ export default function InlineChatPanel({ onRfqCount }: Props) {
                               : 'bg-base-100 text-base-content/80 rounded-tl-sm shadow-sm border border-base-200'
                           }`}>
                             {msg.fileUrl
-                              ? <ChatFileAttachment fileUrl={msg.fileUrl} fileType={msg.fileType!} fileName={msg.fileName ?? 'ไฟล์'} isAdmin={isAdmin} />
+                              ? <ChatFileAttachment fileUrl={msg.fileUrl} fileType={msg.fileType!} fileName={msg.fileName ?? 'ไฟล์'} isAdmin={isAdmin} onImageLoad={pinBottomAfterImage} />
                               : msg.message}
                           </div>
                           <span className="text-[10px] text-base-content/30 px-1">{fmtTime(msg.createdAt)}</span>
