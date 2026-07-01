@@ -32,9 +32,8 @@ export default function ChatFileAttachment({ fileUrl, fileType, fileName, onPdfC
   if (fileType === 'image') {
     return (
       <>
-        <button onClick={() => setOpen(true)} className={cardCls}>
-          <FileIcon type="image" />
-          <span className="text-xs truncate leading-none">{fileName}</span>
+        <button onClick={() => setOpen(true)} className="rounded-xl overflow-hidden hover:opacity-90 transition-opacity">
+          <img src={proxyUrl} alt={fileName} className="max-w-40 max-h-30 object-cover rounded-xl block" />
         </button>
 
         {open && (

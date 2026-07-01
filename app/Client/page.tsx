@@ -3,7 +3,6 @@
 import { JSX, useCallback, useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import ChatNotificationBubble from "@/components/client/ChatNotificationBubble";
 import QuotationDocument, { RFQData } from "@/components/QuotationDocument";
 import BillingNoteDocument from "@/components/BillingNoteDocument";
 import PaymentStatusBadge from "@/components/payment/PaymentStatusBadge";
@@ -1312,8 +1311,6 @@ export default function Page(): JSX.Element {
         )}
 
       </div>
-
-      <ChatNotificationBubble />
 
       {/* ── Billing Modal ─────────────────────────────────────── */}
       {(modalBilling || billingModalLoading) && (
