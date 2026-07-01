@@ -1,6 +1,5 @@
 'use client';
-import { useState } from 'react';
-import { createPortal } from 'react-dom';
+import { useRef } from 'react';
 
 function FileIcon({ type }: { type: string }) {
   if (type === 'image') return (
@@ -26,44 +25,39 @@ interface Props {
 }
 
 export default function ChatFileAttachment({ fileUrl, fileType, fileName, onPdfClick, isAdmin }: Props) {
-  const [open, setOpen] = useState(false);
+  const dialogRef = useRef<HTMLDialogElement>(null);
   const proxyUrl = `/api/chat/file?url=${encodeURIComponent(fileUrl)}`;
   const cardCls = `flex items-center gap-2 px-2.5 py-2 rounded-xl transition-colors max-w-[200px] ${isAdmin ? 'hover:bg-white/10 text-primary-content' : 'hover:bg-base-content/8 text-base-content/80'}`;
 
   if (fileType === 'image') {
-    // ponytail: portal to document.body so the lightbox escapes <dialog> stacking context
-    const lightbox = open && typeof document !== 'undefined' ? createPortal(
-      <div
-        className="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center p-6"
-        style={{ zIndex: 999999 }}
-        onClick={() => setOpen(false)}
-      >
-        <div className="relative" onClick={(e) => e.stopPropagation()}>
-          <button
-            onClick={() => setOpen(false)}
-            className="absolute -top-4 -right-4 w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
-          >
-            <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-          <img
-            src={proxyUrl}
-            alt={fileName}
-            className="max-w-[88vw] max-h-[88vh] object-contain rounded-2xl shadow-2xl"
-          />
-          <p className="text-center text-white/40 text-xs mt-3">{fileName}</p>
-        </div>
-      </div>,
-      document.body
-    ) : null;
-
+    // ponytail: lightbox is its own <dialog> so it stacks above the chat <dialog> in the browser top layer
     return (
       <>
-        <button onClick={() => setOpen(true)} className="rounded-xl overflow-hidden hover:opacity-90 transition-opacity">
+        <button onClick={() => dialogRef.current?.showModal()} className="rounded-xl overflow-hidden hover:opacity-90 transition-opacity">
           <img src={proxyUrl} alt={fileName} className="max-w-40 max-h-30 object-cover rounded-xl block" />
         </button>
-        {lightbox}
+
+        <dialog ref={dialogRef} className="modal">
+          <div className="modal-box max-w-fit bg-transparent shadow-none p-0 overflow-visible relative">
+            <button
+              onClick={() => dialogRef.current?.close()}
+              className="absolute -top-4 -right-4 w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors z-10"
+            >
+              <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+            <img
+              src={proxyUrl}
+              alt={fileName}
+              className="max-w-[88vw] max-h-[85vh] object-contain rounded-2xl shadow-2xl"
+            />
+            <p className="text-center text-white/40 text-xs mt-3">{fileName}</p>
+          </div>
+          <form method="dialog" className="modal-backdrop bg-black/85 backdrop-blur-sm">
+            <button>close</button>
+          </form>
+        </dialog>
       </>
     );
   }
