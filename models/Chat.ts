@@ -23,4 +23,7 @@ const ChatSchema = new mongoose.Schema({
   isDeleted: { type: Boolean, default: false },
 }, { timestamps: true });
 
+// Speeds up find({ userId }).sort({ createdAt: 1 }) — avoids collection scan on M0
+ChatSchema.index({ userId: 1, createdAt: 1 });
+
 export default mongoose.models.Chat || mongoose.model("Chat", ChatSchema);

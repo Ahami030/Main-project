@@ -40,6 +40,15 @@ export default function ChatNotificationBubble() {
     pathname?.startsWith('/Client/pdf') ||
     pathname?.startsWith('/Client/sendpdf');
 
+  // Hydrate from localStorage cache → instant display before the (slow) first DB fetch
+  useEffect(() => {
+    if (!userId) return;
+    try {
+      const cached = localStorage.getItem(`chat_cache_${userId}`);
+      if (cached) setMessages(JSON.parse(cached));
+    } catch {}
+  }, [userId]);
+
   useEffect(() => {
     if (!userId || hidden) return;
     const fetchMsgs = async () => {
@@ -47,7 +56,12 @@ export default function ChatNotificationBubble() {
         const res = await fetch(`/api/chat/${userId}`, { cache: 'no-store' });
         if (!res.ok) return;
         const data: ChatMsg[] = await res.json();
-        setMessages(data);
+        setMessages((prev) => {
+          const lastSame = data[data.length - 1]?._id === prev[prev.length - 1]?._id;
+          if (data.length === prev.length && lastSame) return prev; // no change → skip re-render
+          return data;
+        });
+        try { localStorage.setItem(`chat_cache_${userId}`, JSON.stringify(data)); } catch {}
         const lastSeen = parseInt(localStorage.getItem('client_chat_last_seen') || '0');
         const unread = data.filter(
           (c) => c.senderRole === 'admin' && new Date(c.createdAt).getTime() > lastSeen
@@ -69,6 +83,16 @@ export default function ChatNotificationBubble() {
     if (!isNew || !shouldAutoScrollRef.current) return;
     msgContainerRef.current?.scrollTo({ top: msgContainerRef.current.scrollHeight, behavior: 'smooth' });
   }, [messages, open]);
+
+  // Re-scroll as images load (img has no height until loaded → initial scroll lands short)
+  useEffect(() => {
+    if (!open) return;
+    const el = msgContainerRef.current;
+    if (!el) return;
+    const toBottom = () => { if (shouldAutoScrollRef.current) el.scrollTo({ top: el.scrollHeight }); };
+    el.addEventListener('load', toBottom, true); // img load doesn't bubble → capture
+    return () => el.removeEventListener('load', toBottom, true);
+  }, [open]);
 
   // Revoke object URL for paste preview
   useEffect(() => {

@@ -37,26 +37,29 @@ export default function ChatFileAttachment({ fileUrl, fileType, fileName, onPdfC
           <img src={proxyUrl} alt={fileName} className="max-w-40 max-h-30 object-cover rounded-xl block" />
         </button>
 
-        <dialog ref={dialogRef} className="modal">
-          <div className="modal-box max-w-fit bg-transparent shadow-none p-0 overflow-visible relative">
-            <button
-              onClick={() => dialogRef.current?.close()}
-              className="absolute -top-4 -right-4 w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors z-10"
-            >
-              <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-            <img
-              src={proxyUrl}
-              alt={fileName}
-              className="max-w-[88vw] max-h-[85vh] object-contain rounded-2xl shadow-2xl"
-            />
-            <p className="text-center text-white/40 text-xs mt-3">{fileName}</p>
+        <dialog
+          ref={dialogRef}
+          onClick={() => dialogRef.current?.close()}
+          className="fixed inset-0 m-0 h-full max-h-full w-full max-w-full bg-black/85 backdrop-blur-sm p-0 backdrop:bg-transparent"
+        >
+          <div className="flex h-full w-full items-center justify-center p-6">
+            <div className="relative" onClick={(e) => e.stopPropagation()}>
+              <button
+                onClick={() => dialogRef.current?.close()}
+                className="absolute -top-4 -right-4 w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors z-10"
+              >
+                <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+              <img
+                src={proxyUrl}
+                alt={fileName}
+                className="max-w-[88vw] max-h-[85vh] object-contain rounded-2xl shadow-2xl"
+              />
+              <p className="text-center text-white/40 text-xs mt-3">{fileName}</p>
+            </div>
           </div>
-          <form method="dialog" className="modal-backdrop bg-black/85 backdrop-blur-sm">
-            <button>close</button>
-          </form>
         </dialog>
       </>
     );

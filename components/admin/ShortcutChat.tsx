@@ -152,13 +152,16 @@ export default function ShortcutChat() {
     justSwitchedRef.current = false;
   }, [messages]);
 
-  // Effect H — scroll to bottom immediately when chat view is rendered
+  // Effect H — scroll to bottom when chat view opens + re-scroll as images load
   useEffect(() => {
     if (view !== 'chat') return;
-    requestAnimationFrame(() => {
-      const el = msgContainerRef.current;
-      if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'instant' });
-    });
+    const el = msgContainerRef.current;
+    if (!el) return;
+    const toBottom = () => { if (shouldAutoScrollRef.current) el.scrollTo({ top: el.scrollHeight }); };
+    requestAnimationFrame(toBottom);
+    // img load doesn't bubble → capture phase
+    el.addEventListener('load', toBottom, true);
+    return () => el.removeEventListener('load', toBottom, true);
   }, [view, activeUserId]);
 
   // Effect G — revoke object URL for paste preview
