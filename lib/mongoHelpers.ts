@@ -6,21 +6,17 @@ export function clearDevModel(name: string): void {
   }
 }
 
-export async function generateDocumentNumber(
-  modelName: string,
-  fieldName: string,
-  prefix: string
-): Promise<string> {
-  const model = mongoose.models[modelName];
-  if (!model) throw new Error(`Model ${modelName} not registered`);
-  const year = new Date().getFullYear();
-  const fullPrefix = `${prefix}-${year}-`;
-  const last = await model
-    .findOne({ [fieldName]: { $regex: `^${fullPrefix}` } }, { [fieldName]: 1 })
-    .sort({ [fieldName]: -1 })
-    .lean() as Record<string, string> | null;
-  const lastNum = last?.[fieldName]
-    ? parseInt(last[fieldName].replace(fullPrefix, ""), 10)
-    : 0;
-  return `${fullPrefix}${String(lastNum + 1).padStart(3, "0")}`;
+// Document number: PREFIX-<last 6 hex of the doc's own ObjectId>-<YYMMDD>, e.g. PAY-9F3A2C-260702.
+// The slug is the tail of the record's real _id (pass the returned _id to create), so the number
+// identifies the exact document. Generated locally — no DB round-trip, no duplicate-number race
+// (the old find-last+1 could hand two concurrent requests the same number). The number fields'
+// unique indexes remain the final guard.
+export function generateDocumentNumber(prefix: string): { _id: mongoose.Types.ObjectId; number: string } {
+  const _id = new mongoose.Types.ObjectId();
+  const now = new Date();
+  const date =
+    String(now.getFullYear()).slice(-2) +
+    String(now.getMonth() + 1).padStart(2, "0") +
+    String(now.getDate()).padStart(2, "0");
+  return { _id, number: `${prefix}-${_id.toHexString().slice(-6).toUpperCase()}-${date}` };
 }

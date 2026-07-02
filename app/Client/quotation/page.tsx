@@ -339,6 +339,12 @@ export default function Page(): JSX.Element {
       setUploadMessage("กำลังส่งข้อมูลไปยัง n8n…");
       const storedFilename = (pdfData.pdfPath ?? pdfFile.name).replace(/^\/PDF\//, "");
       formData.append("filename", storedFilename);
+      // rfq_number is generated here (RFQ-XXXXXX-YYMMDD, same style as PO/BILL/PAY numbers),
+      // not extracted from the PDF — re-uploading the same test file still gets a fresh number.
+      // The n8n prompt template copies body.rfq_number into the stored RFQ verbatim.
+      const d = new Date();
+      const rfqNumber = `RFQ-${crypto.randomUUID().replace(/-/g, "").slice(0, 6).toUpperCase()}-${String(d.getFullYear()).slice(-2)}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
+      formData.append("rfq_number", rfqNumber);
       const res = await fetch(N8N_WEBHOOK_URL, { method: "POST", body: formData });
       if (!res.ok) throw new Error(`ส่ง n8n ไม่สำเร็จ (HTTP ${res.status})`);
 

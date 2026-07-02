@@ -87,9 +87,10 @@ export async function POST(req: NextRequest) {
   }
 
   const first = pos[0];
-  const billingNumber = await generateBillingNumber();
+  const { _id, number: billingNumber } = generateBillingNumber();
 
   const billing = await Billing.create({
+    _id,
     billingNumber,
     customerId:    first.userId,
     customerName:  first.userName,

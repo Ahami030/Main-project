@@ -26,7 +26,7 @@ const BillingSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-export const generateBillingNumber = () => generateDocumentNumber("Billing", "billingNumber", "BILL");
+export const generateBillingNumber = () => generateDocumentNumber("BILL");
 
 type BillingDoc = {
   _id: { toString(): string };

@@ -93,8 +93,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ message: "มีการส่งหลักฐานที่รอตรวจสอบอยู่แล้ว" }, { status: 400 });
     }
 
-    const proofNumber = await generateProofNumber();
+    const { _id, number: proofNumber } = generateProofNumber();
     const proof = await PaymentProof.create({
+      _id,
       proofNumber,
       billingId:         billing._id,
       billingNumber:     billing.billingNumber,
@@ -144,8 +145,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ message: "มีการส่งหลักฐานที่รอตรวจสอบอยู่แล้ว" }, { status: 400 });
   }
 
-  const proofNumber = await generateProofNumber();
+  const { _id, number: proofNumber } = generateProofNumber();
   const proof = await PaymentProof.create({
+    _id,
     proofNumber,
     billingId:         null,
     billingNumber:     po.poNumber,
