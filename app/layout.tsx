@@ -27,7 +27,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" data-theme="mastercard" suppressHydrationWarning>
       <head>
         {/* Sofia Sans — Mastercard editorial type for the Client dashboard */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -42,10 +42,8 @@ export default function RootLayout({
             __html: `
 (function () {
   try {
-    const theme = localStorage.getItem("theme");
-    if (theme) {
-      document.documentElement.setAttribute("data-theme", theme);
-    }
+    const theme = localStorage.getItem("theme") || "mastercard";
+    document.documentElement.setAttribute("data-theme", theme);
   } catch (e) {}
 })();
         `,

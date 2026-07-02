@@ -15,14 +15,12 @@ const themes = [
 ];
 
 export default function ThemeSwitcher() {
-  const [theme, setTheme] = useState("light");
+  const [theme, setTheme] = useState("mastercard");
 
   useEffect(() => {
-    const savedTheme = localStorage.getItem("theme");
-    if (savedTheme) {
-      setTheme(savedTheme);
-      document.documentElement.setAttribute("data-theme", savedTheme);
-    }
+    const savedTheme = localStorage.getItem("theme") || "mastercard";
+    setTheme(savedTheme);
+    document.documentElement.setAttribute("data-theme", savedTheme);
   }, []);
 
   function changeTheme(value: string) {
