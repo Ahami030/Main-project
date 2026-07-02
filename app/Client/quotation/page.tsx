@@ -18,10 +18,6 @@ interface Quotation {
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-const N8N_WEBHOOK_URL =
-  process.env.NEXT_PUBLIC_N8N_WEBHOOK_URL ??
-  "http://localhost:5678/webhook-test/pdf-test";
-
 const STEPS: { key: QuotationStatus; label: string; sublabel: string }[] = [
   { key: "processing", label: "กำลังประมวลผลเอกสาร", sublabel: "ระบบกำลังอ่านและสกัดข้อมูลจากไฟล์" },
   { key: "sent",       label: "ส่งไฟล์แล้ว",        sublabel: "ระบบได้รับเอกสารของคุณแล้ว" },
@@ -352,7 +348,8 @@ export default function Page(): JSX.Element {
       const d = new Date();
       const rfqNumber = `RFQ-${crypto.randomUUID().replace(/-/g, "").slice(0, 6).toUpperCase()}-${String(d.getFullYear()).slice(-2)}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
       formData.append("rfq_number", rfqNumber);
-      const res = await fetch(N8N_WEBHOOK_URL, { method: "POST", body: formData });
+      // via our own API — browsers can't call n8n/ngrok directly (CORS)
+      const res = await fetch("/api/rfq/upload", { method: "POST", body: formData });
       if (!res.ok) throw new Error(`ส่ง n8n ไม่สำเร็จ (HTTP ${res.status})`);
 
       const saveRes  = await fetch("/api/quotation", {
