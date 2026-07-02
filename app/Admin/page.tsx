@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import InlineChatPanel from '@/components/admin/InlineChatPanel';
 
-type QuotationStatus = 'sent' | 'reviewing' | 'completed' | 'bargaining' | 'confirmed';
+type QuotationStatus = 'processing' | 'sent' | 'reviewing' | 'completed' | 'bargaining' | 'confirmed';
 
 interface Quotation {
   _id: string;
@@ -21,6 +21,7 @@ interface ToastNotification {
 }
 
 const STATUS_LABELS: Record<QuotationStatus, string> = {
+  processing: 'กำลังประมวลผล',
   sent:       'ส่งแล้ว',
   reviewing:  'กำลังดำเนินการ',
   completed:  'เสร็จสิ้น',
@@ -29,6 +30,7 @@ const STATUS_LABELS: Record<QuotationStatus, string> = {
 };
 
 const STATUS_BADGE: Record<QuotationStatus, string> = {
+  processing: 'badge-info',
   sent:       'badge-success',
   reviewing:  'badge-warning',
   completed:  'badge-primary',
@@ -37,6 +39,9 @@ const STATUS_BADGE: Record<QuotationStatus, string> = {
 };
 
 const NEXT_STATUS: Record<QuotationStatus, QuotationStatus | null> = {
+  // processing → sent happens via the n8n callback, not manually — but leave the manual
+  // path as an escape hatch for a dead workflow
+  processing: 'sent',
   sent:       'reviewing',
   reviewing:  'completed',
   completed:  'bargaining',

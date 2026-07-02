@@ -9,7 +9,7 @@ import PaymentStatusBadge from "@/components/payment/PaymentStatusBadge";
 import PaymentHistoryModal from "@/components/payment/PaymentHistoryModal";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-type QuotationStatus = "sent" | "reviewing" | "completed" | "bargaining" | "confirmed";
+type QuotationStatus = "processing" | "sent" | "reviewing" | "completed" | "bargaining" | "confirmed";
 
 interface Quotation {
   _id: string;
@@ -60,6 +60,7 @@ interface ModalBillingData {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const STEPS: { key: QuotationStatus; label: string; sublabel: string }[] = [
+  { key: "processing", label: "กำลังประมวลผลเอกสาร", sublabel: "ระบบกำลังอ่านและสกัดข้อมูลจากไฟล์" },
   { key: "sent",       label: "ส่งไฟล์แล้ว",        sublabel: "ระบบได้รับเอกสารของคุณแล้ว" },
   { key: "reviewing",  label: "ตรวจสอบ / จัดทำราย", sublabel: "ทีมงานกำลังตรวจสอบเอกสาร" },
   { key: "completed",  label: "ดำเนินการเสร็จสิ้น",  sublabel: "ใบเสนอราคาพร้อมแล้ว" },
@@ -68,12 +69,13 @@ const STEPS: { key: QuotationStatus; label: string; sublabel: string }[] = [
 ];
 
 const STATUS_ORDER: Record<QuotationStatus, number> = {
-  sent: 0, reviewing: 1, completed: 2, bargaining: 3, confirmed: 4,
+  processing: 0, sent: 1, reviewing: 2, completed: 3, bargaining: 4, confirmed: 5,
 };
 
 const STATUS_META: Record<QuotationStatus, {
   spotlight: string; dot: string; bar: string; badge: string; label: string;
 }> = {
+  processing: { spotlight: "border-info/25 bg-info/5",        dot: "bg-info",    bar: "from-info to-info/30",         badge: "badge-info",    label: "กำลังประมวลผล" },
   sent:       { spotlight: "border-success/25 bg-success/5",  dot: "bg-success", bar: "from-success to-success/30",   badge: "badge-success", label: "ส่งแล้ว" },
   reviewing:  { spotlight: "border-warning/25 bg-warning/5",  dot: "bg-warning", bar: "from-warning to-warning/30",   badge: "badge-warning", label: "กำลังดำเนินการ" },
   completed:  { spotlight: "border-primary/25 bg-primary/5",  dot: "bg-primary", bar: "from-primary to-primary/30",   badge: "badge-primary", label: "เสร็จสิ้น" },
@@ -550,7 +552,7 @@ export default function Page(): JSX.Element {
   const latest      = quotations[0] ?? null;
   const meta        = latest ? STATUS_META[latest.status] : null;
   const currentStep = latest ? STEPS.find((s) => s.key === latest.status)! : null;
-  const isInProgress = latest?.status === "sent" || latest?.status === "reviewing";
+  const isInProgress = latest?.status === "processing" || latest?.status === "sent" || latest?.status === "reviewing";
 
   const poLatest       = poOrders[0] ?? null;
   const poMeta         = poLatest ? PO_STATUS_META[poLatest.status] : null;

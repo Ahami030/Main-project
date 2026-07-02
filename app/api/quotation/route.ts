@@ -16,7 +16,9 @@ export async function POST(req: Request) {
   await connectMongoDB();
 
   const userId = getUser(session).id ?? "unknown";
-  const quotation = await Quotation.create({ userId, filename, pdfId, pdfPath, status: "sent" });
+  // "processing" until n8n's callback (/api/rfq/callback) confirms the RFQ is in the DB —
+  // the admin's new-work badge counts "sent", so it only fires when the work actually exists
+  const quotation = await Quotation.create({ userId, filename, pdfId, pdfPath, status: "processing" });
 
   return NextResponse.json({ quotation }, { status: 201 });
 }
