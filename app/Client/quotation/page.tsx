@@ -350,7 +350,10 @@ export default function Page(): JSX.Element {
       formData.append("rfq_number", rfqNumber);
       // via our own API — browsers can't call n8n/ngrok directly (CORS)
       const res = await fetch("/api/rfq/upload", { method: "POST", body: formData });
-      if (!res.ok) throw new Error(`ส่ง n8n ไม่สำเร็จ (HTTP ${res.status})`);
+      if (!res.ok) {
+        const d = await res.json().catch(() => null);
+        throw new Error(d?.message ?? `ส่ง n8n ไม่สำเร็จ (HTTP ${res.status})`);
+      }
 
       const saveRes  = await fetch("/api/quotation", {
         method: "POST",

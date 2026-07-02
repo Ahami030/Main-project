@@ -22,7 +22,11 @@ export async function POST(req: NextRequest) {
       headers: { "ngrok-skip-browser-warning": "1" },
     });
     if (!res.ok) {
-      return NextResponse.json({ message: `n8n ตอบกลับ HTTP ${res.status}` }, { status: 502 });
+      const detail = (await res.text().catch(() => "")).slice(0, 200);
+      return NextResponse.json(
+        { message: `n8n ตอบกลับ HTTP ${res.status}${detail ? ` — ${detail}` : ""}` },
+        { status: 502 }
+      );
     }
     return NextResponse.json({ ok: true });
   } catch {
