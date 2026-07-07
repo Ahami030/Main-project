@@ -332,9 +332,10 @@ export default function Page(): JSX.Element {
     let pdfData: { pdfId?: string; pdfPath?: string } = {};
     try {
       // Direct browser→Blob upload — Vercel functions reject bodies > 4.5MB
-      // (FUNCTION_PAYLOAD_TOO_LARGE on image-layer PDFs), so the file never touches one
+      // (FUNCTION_PAYLOAD_TOO_LARGE on image-layer PDFs), so the file never touches one.
+      // access "private" to match the store (public uploads get rejected with HTTP 400)
       const blob = await upload(`PDF/${Date.now()}-${pdfFile.name}`, pdfFile, {
-        access: "public",
+        access: "private",
         handleUploadUrl: "/api/pdf/upload",
       });
 
