@@ -215,12 +215,13 @@ export default function AdminPage() {
     }
   };
 
-  const deleteQuotation = async (id: string) => {
-    setUpdating(id);
+  const deleteQuotation = async (q: Quotation) => {
+    if (!confirm(`ลบถาวรของ ${q.userId}?\n\n⚠️ ต่างจาก Reset: ไม่มีการสำรองข้อมูลใดๆ\nสิ่งที่จะถูกลบทิ้งถาวร:\n• ไฟล์ PDF\n• แชททั้งหมดของผู้ใช้นี้\n• RFQ ทั้งหมดของผู้ใช้นี้\n• รายการใบเสนอราคานี้`)) return;
+    setUpdating(q._id);
     try {
-      const res = await fetch(`/api/quotation/${id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/quotation/${q._id}`, { method: 'DELETE' });
       if (!res.ok) return;
-      setQuotations((prev) => prev.filter((q) => q._id !== id));
+      setQuotations((prev) => prev.filter((x) => x._id !== q._id));
     } finally {
       setUpdating(null);
     }
@@ -537,7 +538,7 @@ export default function AdminPage() {
                               <td>
                                 <div className="flex gap-1.5">
                                   <button
-                                    onClick={() => deleteQuotation(q._id)}
+                                    onClick={() => deleteQuotation(q)}
                                     disabled={updating === q._id || resetting === q._id}
                                     className="btn btn-xs btn-error btn-outline"
                                   >
