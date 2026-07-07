@@ -2,6 +2,7 @@
 import { JSX, useCallback, useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import { upload } from "@vercel/blob/client";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 type UploadStatus = "idle" | "uploading" | "success" | "error";
@@ -325,34 +326,46 @@ export default function Page(): JSX.Element {
       (session?.user as any)?.id ??
       "anonymous";
 
-    const formData = new FormData();
-    formData.append("file", pdfFile);
-    formData.append("userId", uid);
-
     setUploadStatus("uploading");
-    setUploadMessage("กำลังบันทึกไฟล์…");
+    setUploadMessage("กำลังอัปโหลดไฟล์…");
 
     let pdfData: { pdfId?: string; pdfPath?: string } = {};
     try {
-      const pdfFormData = new FormData();
-      pdfFormData.append("file", pdfFile);
-      const pdfRes = await fetch("/api/pdf", { method: "POST", body: pdfFormData });
+      // Direct browser→Blob upload — Vercel functions reject bodies > 4.5MB
+      // (FUNCTION_PAYLOAD_TOO_LARGE on image-layer PDFs), so the file never touches one
+      const blob = await upload(`PDF/${Date.now()}-${pdfFile.name}`, pdfFile, {
+        access: "public",
+        handleUploadUrl: "/api/pdf/upload",
+      });
+
+      const pdfRes = await fetch("/api/pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: blob.url, filename: pdfFile.name }),
+      });
       pdfData = pdfRes.ok ? await pdfRes.json() : {};
 
       setUploadMessage("กำลังประมวลผลเอกสาร อาจใช้เวลาสักครู่…");
-      const storedFilename = (pdfData.pdfPath ?? pdfFile.name).replace(/^\/PDF\//, "");
-      formData.append("filename", storedFilename);
       // rfq_number is generated here (RFQ-XXXXXX-YYMMDD, same style as PO/BILL/PAY numbers),
       // not extracted from the PDF — re-uploading the same test file still gets a fresh number.
       // The n8n prompt template copies body.rfq_number into the stored RFQ verbatim.
       const d = new Date();
       const rfqNumber = `RFQ-${crypto.randomUUID().replace(/-/g, "").slice(0, 6).toUpperCase()}-${String(d.getFullYear()).slice(-2)}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
-      formData.append("rfq_number", rfqNumber);
-      // via our own API — browsers can't call n8n/ngrok directly (CORS)
-      const res = await fetch("/api/rfq/upload", { method: "POST", body: formData });
+      // via our own API (small JSON — the server downloads the blob and forwards it to n8n)
+      const res = await fetch("/api/rfq/upload", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: uid,
+          filename: blob.url,
+          rfq_number: rfqNumber,
+          fileUrl: blob.url,
+          origName: pdfFile.name,
+        }),
+      });
       if (!res.ok) {
-        const d = await res.json().catch(() => null);
-        throw new Error(d?.message ?? `ส่ง n8n ไม่สำเร็จ (HTTP ${res.status})`);
+        const errBody = await res.json().catch(() => null);
+        throw new Error(errBody?.message ?? `ส่ง n8n ไม่สำเร็จ (HTTP ${res.status})`);
       }
 
       const saveRes  = await fetch("/api/quotation", {

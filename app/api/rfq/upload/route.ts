@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireSession } from "@/lib/apiAuth";
 
-// Server-side proxy to the n8n webhook. The browser must not call n8n directly:
-// cross-origin + ngrok's free-tier interstitial both break the fetch with CORS errors.
-// Server-to-server has neither problem, and the ngrok URL stays out of the client bundle.
+// Bridge between the browser and the n8n webhook. The browser sends only a small
+// JSON payload (the file is already in Vercel Blob — direct client upload, since
+// function request bodies cap at 4.5MB). This route downloads the blob server-side
+// (outbound fetches have no such cap) and forwards the same multipart form n8n
+// always received — the workflow needs no changes. Also dodges CORS/ngrok
+// interstitials that block browser→n8n calls.
 export async function POST(req: NextRequest) {
   const sessionOrRes = await requireSession();
   if (sessionOrRes instanceof NextResponse) return sessionOrRes;
@@ -13,11 +16,39 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ message: "N8N_WEBHOOK_URL not configured" }, { status: 500 });
   }
 
-  const formData = await req.formData();
+  const body = await req.json().catch(() => null) as {
+    userId?: string;
+    filename?: string;
+    rfq_number?: string;
+    fileUrl?: string;
+    origName?: string;
+  } | null;
+  if (!body?.userId || !body.fileUrl) {
+    return NextResponse.json({ message: "userId and fileUrl required" }, { status: 400 });
+  }
+
+  // Bearer token required for private blobs; harmless for public ones
+  const fileRes = await fetch(body.fileUrl, {
+    headers: { Authorization: `Bearer ${process.env.BLOB_READ_WRITE_TOKEN ?? ""}` },
+  });
+  if (!fileRes.ok) {
+    return NextResponse.json(
+      { message: `ดึงไฟล์จาก storage ไม่ได้ (HTTP ${fileRes.status})` },
+      { status: 502 }
+    );
+  }
+  const fileBlob = await fileRes.blob();
+
+  const fd = new FormData();
+  fd.append("file", fileBlob, body.origName ?? "document.pdf");
+  fd.append("userId", body.userId);
+  fd.append("filename", body.filename ?? body.fileUrl);
+  fd.append("rfq_number", body.rfq_number ?? "");
+
   try {
     const res = await fetch(url, {
       method: "POST",
-      body: formData,
+      body: fd,
       // ngrok free tier serves a browser-warning page unless this header is present
       headers: { "ngrok-skip-browser-warning": "1" },
     });

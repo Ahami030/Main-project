@@ -12,6 +12,26 @@ export async function POST(req) {
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
   }
 
+  // JSON branch: register a blob the browser already uploaded directly
+  // (client upload bypasses the 4.5MB function payload limit for big PDFs)
+  if ((req.headers.get("content-type") || "").includes("application/json")) {
+    const { url, filename } = await req.json();
+    if (!url || !filename) {
+      return NextResponse.json({ message: "url and filename required" }, { status: 400 });
+    }
+    await connectMongoDB();
+    const pdf = await PDF.create({
+      userId: session.user.id,
+      filename,
+      path: url,
+    });
+    return NextResponse.json({
+      message: "Upload success",
+      pdfId: pdf._id.toString(),
+      pdfPath: url,
+    });
+  }
+
   const data = await req.formData();
   const file = data.get("file");
 
