@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import ChatFileAttachment, { FileIcon } from '@/components/chat/ChatFileAttachment';
 import ChatRfqSidebar from '@/components/admin/ChatRfqSidebar';
 import { useAdminChat, type UserWithChat } from '@/components/admin/useAdminChat';
@@ -22,6 +22,20 @@ export default function InlineChatPanel({ onRfqCount }: Props) {
 
   const chatDialogRef = useRef<HTMLDialogElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Pasted image (Win+Shift+S) kept with its object URL so cleanup is local
+  const [pasted, setPasted] = useState<{ file: File; url: string } | null>(null);
+  const clearPasted = () => setPasted((p) => { if (p) URL.revokeObjectURL(p.url); return null; });
+
+  const handleSend = async () => {
+    if (pasted) {
+      const file = pasted.file;
+      clearPasted();
+      await uploadAndSend(file);
+      return;
+    }
+    await sendMessage();
+  };
 
   const openChatModal = (u: UserWithChat) => {
     openUser(u);
@@ -223,6 +237,20 @@ export default function InlineChatPanel({ onRfqCount }: Props) {
                 )}
               </div>
 
+              {/* Paste preview bar */}
+              {pasted && (
+                <div className="px-4 py-2 border-t border-base-200 bg-base-200/40 shrink-0 flex items-center gap-2">
+                  <img src={pasted.url} alt="paste preview" className="w-12 h-12 object-cover rounded-lg shrink-0" />
+                  <span className="text-xs text-base-content/60 flex-1 truncate">{pasted.file.name}</span>
+                  <button onClick={clearPasted} className="btn btn-ghost btn-xs btn-square rounded-lg">
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                  <span className="text-[10px] text-base-content/40">Enter เพื่อส่ง</span>
+                </div>
+              )}
+
               {/* Input */}
               <div className="flex items-center gap-2 px-4 py-3 border-t border-base-200 shrink-0 bg-base-100">
                 <input
@@ -249,18 +277,25 @@ export default function InlineChatPanel({ onRfqCount }: Props) {
                 </button>
                 <input
                   type="text"
-                  placeholder="พิมพ์ข้อความ... (Enter)"
+                  placeholder={pasted ? 'Enter เพื่อส่งรูป' : 'พิมพ์ข้อความ... (Enter)'}
                   className="input input-bordered input-sm h-9 flex-1 rounded-xl text-sm bg-base-200/60 border-transparent focus:border-primary focus:bg-base-100 transition-colors"
                   value={draft}
                   onChange={(e) => setDraft(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+                    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
+                  }}
+                  onPaste={(e) => {
+                    const file = e.clipboardData?.files?.[0];
+                    if (file?.type.startsWith('image/')) {
+                      e.preventDefault();
+                      setPasted((p) => { if (p) URL.revokeObjectURL(p.url); return { file, url: URL.createObjectURL(file) }; });
+                    }
                   }}
                 />
                 <button
                   className="btn btn-primary btn-sm h-9 min-h-0 rounded-xl px-3.5"
-                  onClick={sendMessage}
-                  disabled={!draft.trim() || uploading}
+                  onClick={handleSend}
+                  disabled={(!draft.trim() && !pasted) || uploading}
                 >
                   {uploading ? (
                     <span className="loading loading-spinner loading-xs" />

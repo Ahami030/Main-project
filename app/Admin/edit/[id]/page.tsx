@@ -74,6 +74,7 @@ type ChatPanelProps = {
   chatMessage: string;
   setChatMessage: (v: string) => void;
   sendChatMessage: () => void;
+  onPasteImage?: (file: File) => void;
   onFileClick?: (url: string, type: string, name: string) => void;
 };
 
@@ -90,6 +91,7 @@ function ChatPanel({
   chatMessage,
   setChatMessage,
   sendChatMessage,
+  onPasteImage,
   onFileClick,
 }: ChatPanelProps) {
   return (
@@ -222,6 +224,13 @@ function ChatPanel({
               value={chatMessage}
               onChange={(e) => setChatMessage(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendChatMessage(); } }}
+              onPaste={(e) => {
+                const file = e.clipboardData?.files?.[0];
+                if (file?.type.startsWith("image/") && onPasteImage) {
+                  e.preventDefault();
+                  onPasteImage(file); // ponytail: sends immediately, no preview bar — add one if misfires become a problem
+                }
+              }}
             />
             <button
               className="btn btn-primary btn-sm h-8 min-h-0 rounded-xl px-3"
@@ -416,6 +425,27 @@ export default function EditPage() {
         body: JSON.stringify({ userId: selectedUserId, senderRole: "admin", message: chatMessage }),
       });
       setChatMessage("");
+      shouldAutoScrollRef.current = true;
+      setShowNewMsgBtn(false);
+      loadChats();
+    } catch {}
+  };
+
+  // Win+Shift+S paste → upload to blob then send as a file message
+  const pasteChatImage = async (file: File) => {
+    if (!selectedUserId) return;
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const up = await fetch("/api/chat/upload", { method: "POST", body: fd });
+      if (!up.ok) return;
+      const { fileUrl, fileType, fileName } = await up.json();
+      if (!fileUrl) return;
+      await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: selectedUserId, senderRole: "admin", message: "", fileUrl, fileType, fileName }),
+      });
       shouldAutoScrollRef.current = true;
       setShowNewMsgBtn(false);
       loadChats();
@@ -679,6 +709,7 @@ export default function EditPage() {
               chatMessage={chatMessage}
               setChatMessage={setChatMessage}
               sendChatMessage={sendChatMessage}
+              onPasteImage={pasteChatImage}
             />
           )}
         </div>
@@ -896,6 +927,7 @@ export default function EditPage() {
             chatMessage={chatMessage}
             setChatMessage={setChatMessage}
             sendChatMessage={sendChatMessage}
+            onPasteImage={pasteChatImage}
             onFileClick={(url, type, name) => setViewerFile({ url, type, name })}
           />
         </div>
