@@ -129,11 +129,12 @@ export default function ChatNotificationBubble() {
       fd.append('file', file);
       const up = await fetch('/api/chat/upload', { method: 'POST', body: fd });
       if (!up.ok) return;
-      const { url, type, name } = await up.json();
+      const { fileUrl, fileType, fileName } = await up.json();
+      if (!fileUrl) return; // never save an empty bubble
       await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, senderRole: 'user', message: '', fileUrl: url, fileType: type, fileName: name }),
+        body: JSON.stringify({ userId, senderRole: 'user', message: '', fileUrl, fileType, fileName }),
       });
       shouldAutoScrollRef.current = true;
     } catch {}

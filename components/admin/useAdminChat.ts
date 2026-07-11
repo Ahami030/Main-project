@@ -193,11 +193,12 @@ export function useAdminChat(opts: { enabled?: boolean; onRfqCount?: (n: number)
       fd.append('file', file);
       const up = await fetch('/api/chat/upload', { method: 'POST', body: fd });
       if (!up.ok) return;
-      const { url, type, name } = await up.json();
+      const { fileUrl, fileType, fileName } = await up.json();
+      if (!fileUrl) return; // never save an empty bubble
       await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: activeUserId, senderRole: 'admin', message: '', fileUrl: url, fileType: type, fileName: name }),
+        body: JSON.stringify({ userId: activeUserId, senderRole: 'admin', message: '', fileUrl, fileType, fileName }),
       });
       pinnedRef.current = true;
       setShowNewMsgButton(false);
