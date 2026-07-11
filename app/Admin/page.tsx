@@ -290,6 +290,11 @@ export default function AdminPage() {
             </p>
           </div>
 
+          {/* ── Chat panel: desktop only (mobile uses floating button) ── */}
+          <div className="hidden lg:block bg-base-100 border border-base-300/70 rounded-[2rem] overflow-hidden shadow-mc-sm" style={{ height: '480px' }}>
+            <InlineChatPanel onRfqCount={handleRfqCount} />
+          </div>
+
           {/* ── Management section ──────────────────────────────────────── */}
           <section className="flex flex-col gap-4">
             <SectionHeader label="การจัดการ" />
@@ -436,11 +441,6 @@ export default function AdminPage() {
               </div>
             </section>
           )}
-
-          {/* ── Chat panel: desktop only (mobile uses floating button) ── */}
-          <div className="hidden lg:block bg-base-100 border border-base-300/70 rounded-[2rem] overflow-hidden shadow-mc-sm" style={{ height: '480px' }}>
-            <InlineChatPanel onRfqCount={handleRfqCount} />
-          </div>
 
           {/* ── จัดการใบเสนอราคา — collapse ── */}
           <div className="collapse collapse-arrow bg-base-100 border border-base-300/70 rounded-[2rem] shadow-mc-sm">
