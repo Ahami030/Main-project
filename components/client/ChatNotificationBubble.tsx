@@ -13,8 +13,11 @@ type ChatMsg = {
   fileType?: string;
   fileName?: string;
   isDeleted?: boolean;
+  isEdited?: boolean;
   createdAt: string;
 };
+
+const EDIT_WINDOW_MS = 2 * 60 * 1000; // API allows editing own text messages for 2 minutes
 
 export default function ChatNotificationBubble() {
   const { data: session } = useSession();
@@ -27,11 +30,14 @@ export default function ChatNotificationBubble() {
   const [pastedPreview, setPastedPreview] = useState('');
   const [uploading, setUploading] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editText, setEditText] = useState('');
 
   const msgContainerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const shouldAutoScrollRef = useRef(true);
   const prevMsgCountRef = useRef(0);
+  const autoScrollUntilRef = useRef(0); // ignore handleScroll during our own smooth animation
 
   const userId = (session?.user as any)?.id;
 
@@ -81,7 +87,10 @@ export default function ChatNotificationBubble() {
     const isNew = newCount > prevMsgCountRef.current;
     prevMsgCountRef.current = newCount;
     if (!isNew || !shouldAutoScrollRef.current) return;
-    msgContainerRef.current?.scrollTo({ top: msgContainerRef.current.scrollHeight, behavior: 'smooth' });
+    if (msgContainerRef.current) {
+      autoScrollUntilRef.current = Date.now() + 700;
+      msgContainerRef.current.scrollTo({ top: msgContainerRef.current.scrollHeight, behavior: 'smooth' });
+    }
   }, [messages, open]);
 
   // Re-pin to bottom after an image finishes loading (img has no height until loaded → initial scroll lands short)
@@ -154,7 +163,38 @@ export default function ChatNotificationBubble() {
   const handleScroll = () => {
     const el = msgContainerRef.current;
     if (!el) return;
+    // scroll events from our own smooth animation would otherwise read as
+    // "user scrolled up" and un-pin mid-flight (the stuck-at-top bug)
+    if (Date.now() < autoScrollUntilRef.current) return;
     shouldAutoScrollRef.current = el.scrollTop + el.clientHeight >= el.scrollHeight - 50;
+  };
+
+  const canEdit = (msg: ChatMsg) =>
+    !msg.fileUrl && Date.now() - new Date(msg.createdAt).getTime() < EDIT_WINDOW_MS;
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('ลบข้อความนี้?')) return;
+    try {
+      await fetch(`/api/chat/message/${id}`, { method: 'DELETE' });
+      setMessages((prev) => prev.map((m) =>
+        m._id === id ? { ...m, isDeleted: true, message: '', fileUrl: '', fileType: '', fileName: '' } : m
+      ));
+    } catch {}
+  };
+
+  const handleSaveEdit = async (id: string) => {
+    if (!editText.trim()) return;
+    try {
+      await fetch(`/api/chat/message/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: editText }),
+      });
+      setMessages((prev) => prev.map((m) =>
+        m._id === id ? { ...m, message: editText.trim(), isEdited: true } : m
+      ));
+    } catch {}
+    setEditingId(null);
   };
 
   const fmtTime = (iso: string) =>
@@ -226,8 +266,54 @@ export default function ChatNotificationBubble() {
                     </div>
                   );
                 }
+                if (editingId === msg._id) {
+                  return (
+                    <div key={msg._id} className="flex justify-end">
+                      <div className="flex items-center gap-1.5 max-w-[80%]">
+                        <input
+                          type="text"
+                          className="input input-bordered input-xs h-8 rounded-xl text-sm flex-1"
+                          value={editText}
+                          autoFocus
+                          onChange={(e) => setEditText(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') handleSaveEdit(msg._id);
+                            if (e.key === 'Escape') setEditingId(null);
+                          }}
+                        />
+                        <button onClick={() => handleSaveEdit(msg._id)} className="btn btn-primary btn-xs h-8 rounded-lg">บันทึก</button>
+                        <button onClick={() => setEditingId(null)} className="btn btn-ghost btn-xs h-8 rounded-lg">ยกเลิก</button>
+                      </div>
+                    </div>
+                  );
+                }
                 return (
-                  <div key={msg._id} className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
+                  <div key={msg._id} className={`flex group ${isUser ? 'justify-end' : 'justify-start'}`}>
+                    {/* hover actions — only on the customer's own messages */}
+                    {isUser && (
+                      <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 self-center mx-1 shrink-0">
+                        {canEdit(msg) && (
+                          <button
+                            onClick={() => { setEditingId(msg._id); setEditText(msg.message); }}
+                            className="w-5 h-5 rounded-full bg-base-200 hover:bg-base-300 flex items-center justify-center"
+                            title="แก้ไข (ภายใน 2 นาที)"
+                          >
+                            <svg className="w-2.5 h-2.5 text-base-content/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            </svg>
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleDelete(msg._id)}
+                          className="w-5 h-5 rounded-full bg-base-200 hover:bg-error/15 flex items-center justify-center"
+                          title="ลบ"
+                        >
+                          <svg className="w-2.5 h-2.5 text-base-content/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      </div>
+                    )}
                     <div className={`max-w-[80%] flex flex-col gap-0.5 ${isUser ? 'items-end' : 'items-start'}`}>
                       {msg.fileUrl ? (
                         <ChatFileAttachment
@@ -244,6 +330,7 @@ export default function ChatNotificationBubble() {
                             : 'bg-base-200 text-base-content/85 rounded-tl-sm'
                         }`}>
                           {msg.message}
+                          {msg.isEdited && <span className="ml-1 opacity-50 text-[10px]">(แก้ไขแล้ว)</span>}
                         </div>
                       )}
                       <span className="text-[10px] text-base-content/30 px-1">{fmtTime(msg.createdAt)}</span>

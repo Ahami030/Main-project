@@ -45,6 +45,7 @@ export default function AdminPage() {
   const chatEndRef = useRef<HTMLDivElement>(null);
   const justSwitchedUser = useRef(false);
   const switchTimeRef = useRef<number>(0);
+  const autoScrollUntilRef = useRef(0); // ignore handleScroll during our own smooth animation
 
   // แยก initial load กับ polling
   useEffect(() => {
@@ -183,6 +184,9 @@ export default function AdminPage() {
   const handleScroll = () => {
     const container = chatContainerRef.current;
     if (!container) return;
+    // scroll events from our own smooth animation would otherwise read as
+    // "user scrolled up" and un-pin mid-flight (the stuck-at-top bug)
+    if (Date.now() < autoScrollUntilRef.current) return;
 
     const isAtBottom =
       container.scrollTop + container.clientHeight >= container.scrollHeight - 50;
@@ -207,6 +211,7 @@ export default function AdminPage() {
           });
           justSwitchedUser.current = false;
         } else {
+          autoScrollUntilRef.current = Date.now() + 700;
           container.scrollTo({
             top: container.scrollHeight,
             behavior: "smooth",
@@ -226,6 +231,7 @@ export default function AdminPage() {
   const scrollToBottom = () => {
     const container = chatContainerRef.current;
     if (container) {
+      autoScrollUntilRef.current = Date.now() + 700;
       container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
     }
     setShowNewButton(false);

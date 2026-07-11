@@ -48,6 +48,7 @@ type ChatMsg = {
   fileUrl?: string;
   fileType?: string;
   fileName?: string;
+  isDeleted?: boolean;
   createdAt: string;
 };
 type ChatUser = {
@@ -164,6 +165,13 @@ function ChatPanel({
             ) : (
               chats.map((chat) => {
                 const isAdmin = chat.senderRole === "admin";
+                if (chat.isDeleted) {
+                  return (
+                    <div key={chat._id} className={`flex ${isAdmin ? "justify-end" : "justify-start"}`}>
+                      <span className="text-xs italic text-base-content/30 px-2 py-1">ข้อความถูกลบแล้ว</span>
+                    </div>
+                  );
+                }
                 return (
                   <div key={chat._id} className={`flex ${isAdmin ? "justify-end" : "justify-start"}`}>
                     <div className={`max-w-[82%] flex flex-col gap-0.5 ${isAdmin ? "items-end" : "items-start"}`}>
@@ -266,6 +274,7 @@ export default function EditPage() {
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const justSwitchedUser = useRef(false);
   const switchTimeRef = useRef<number>(0);
+  const autoScrollUntilRef = useRef(0); // ignore handleChatScroll during our own smooth animation
   // Refs avoid stale-closure bugs inside interval callbacks
   const shouldAutoScrollRef = useRef(true);
   const prevChatsLengthRef = useRef(0);
@@ -372,20 +381,28 @@ export default function EditPage() {
     const el = chatContainerRef.current;
     if (!el) return;
     const timeSince = Date.now() - switchTimeRef.current;
-    el.scrollTo({ top: el.scrollHeight, behavior: justSwitchedUser.current || timeSince < 500 ? "instant" : "smooth" });
+    const useInstant = justSwitchedUser.current || timeSince < 500;
+    if (!useInstant) autoScrollUntilRef.current = Date.now() + 700;
+    el.scrollTo({ top: el.scrollHeight, behavior: useInstant ? "instant" : "smooth" });
     justSwitchedUser.current = false;
   }, [chats]);
 
   const handleChatScroll = () => {
     const el = chatContainerRef.current;
     if (!el) return;
+    // scroll events from our own smooth animation would otherwise read as
+    // "user scrolled up" and un-pin mid-flight (the stuck-at-top bug)
+    if (Date.now() < autoScrollUntilRef.current) return;
     const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 50;
     shouldAutoScrollRef.current = atBottom; // update ref only — no re-render
     if (atBottom) setShowNewMsgBtn(false);
   };
 
   const scrollToBottom = () => {
-    chatContainerRef.current?.scrollTo({ top: chatContainerRef.current.scrollHeight, behavior: "smooth" });
+    if (chatContainerRef.current) {
+      autoScrollUntilRef.current = Date.now() + 700;
+      chatContainerRef.current.scrollTo({ top: chatContainerRef.current.scrollHeight, behavior: "smooth" });
+    }
     setShowNewMsgBtn(false);
     shouldAutoScrollRef.current = true;
   };

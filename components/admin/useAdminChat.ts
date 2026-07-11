@@ -205,6 +205,17 @@ export function useAdminChat(opts: { enabled?: boolean; onRfqCount?: (n: number)
     setUploading(false);
   };
 
+  // Admin can delete any message; API blanks content and flags isDeleted
+  const deleteMessage = async (id: string) => {
+    if (!confirm('ลบข้อความนี้?')) return;
+    try {
+      await fetch(`/api/chat/message/${id}`, { method: 'DELETE' });
+      setMessages((prev) => prev.map((m) =>
+        m._id === id ? { ...m, isDeleted: true, message: '', fileUrl: '', fileType: '', fileName: '' } : m
+      ));
+    } catch {}
+  };
+
   const handleScroll = () => {
     const el = msgContainerRef.current;
     if (!el) return;
@@ -243,7 +254,7 @@ export function useAdminChat(opts: { enabled?: boolean; onRfqCount?: (n: number)
     users, displayedUsers, unreadCount, isUnread,
     activeUser, activeUserId, openUser, closeUser,
     messages, activeRfq,
-    draft, setDraft, sendMessage, uploadAndSend, uploading,
+    draft, setDraft, sendMessage, uploadAndSend, uploading, deleteMessage,
     msgContainerRef, handleScroll, scrollToBottom, showNewMsgButton, pinBottomAfterImage,
     fmtTime, userInitial, userName,
   };

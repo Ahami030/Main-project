@@ -15,12 +15,13 @@ export default function InlineChatPanel({ onRfqCount }: Props) {
     users, displayedUsers, unreadCount, isUnread,
     activeUser, openUser,
     messages, activeRfq,
-    draft, setDraft, sendMessage,
+    draft, setDraft, sendMessage, uploadAndSend, uploading, deleteMessage,
     msgContainerRef, handleScroll, scrollToBottom, showNewMsgButton, pinBottomAfterImage,
     fmtTime, userInitial, userName,
   } = useAdminChat({ onRfqCount });
 
   const chatDialogRef = useRef<HTMLDialogElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const openChatModal = (u: UserWithChat) => {
     openUser(u);
@@ -179,7 +180,17 @@ export default function InlineChatPanel({ onRfqCount }: Props) {
                       );
                     }
                     return (
-                      <div key={msg._id} className={`flex ${isAdmin ? 'justify-end' : 'justify-start'}`}>
+                      <div key={msg._id} className={`flex group ${isAdmin ? 'justify-end' : 'justify-start'}`}>
+                        {/* hover ⋮ delete — admin can remove any message */}
+                        <button
+                          onClick={() => deleteMessage(msg._id)}
+                          className={`opacity-0 group-hover:opacity-100 transition-opacity w-5 h-5 rounded-full bg-base-200 hover:bg-error/15 flex items-center justify-center self-center mx-1 shrink-0 ${isAdmin ? '' : 'order-last'}`}
+                          title="ลบ"
+                        >
+                          <svg className="w-2.5 h-2.5 text-base-content/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
                         <div className={`max-w-[78%] flex flex-col gap-0.5 ${isAdmin ? 'items-end' : 'items-start'}`}>
                           <div className={`px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed wrap-break-word ${
                             isAdmin
@@ -215,6 +226,28 @@ export default function InlineChatPanel({ onRfqCount }: Props) {
               {/* Input */}
               <div className="flex items-center gap-2 px-4 py-3 border-t border-base-200 shrink-0 bg-base-100">
                 <input
+                  type="file"
+                  ref={fileInputRef}
+                  className="hidden"
+                  accept="image/*,application/pdf"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) uploadAndSend(file);
+                    e.target.value = '';
+                  }}
+                />
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="btn btn-ghost btn-xs btn-square rounded-lg text-base-content/40 hover:text-base-content"
+                  disabled={uploading}
+                  aria-label="แนบไฟล์"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                      d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                  </svg>
+                </button>
+                <input
                   type="text"
                   placeholder="พิมพ์ข้อความ... (Enter)"
                   className="input input-bordered input-sm h-9 flex-1 rounded-xl text-sm bg-base-200/60 border-transparent focus:border-primary focus:bg-base-100 transition-colors"
@@ -227,12 +260,16 @@ export default function InlineChatPanel({ onRfqCount }: Props) {
                 <button
                   className="btn btn-primary btn-sm h-9 min-h-0 rounded-xl px-3.5"
                   onClick={sendMessage}
-                  disabled={!draft.trim()}
+                  disabled={!draft.trim() || uploading}
                 >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                      d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                  </svg>
+                  {uploading ? (
+                    <span className="loading loading-spinner loading-xs" />
+                  ) : (
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                        d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                    </svg>
+                  )}
                 </button>
               </div>
             </div>

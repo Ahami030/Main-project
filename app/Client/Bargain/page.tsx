@@ -49,6 +49,8 @@ export default function DocumentChatPage() {
   const [pastedImage, setPastedImage] = useState<File | null>(null);
 
   const chatContainerRef = useRef<HTMLDivElement>(null);
+  const autoScrollUntilRef = useRef(0); // ignore handleScroll during our own smooth animation
+  const firstChatLoadRef = useRef(true);
 
   // ── Mark chats as read เมื่อเข้าหน้านี้ ────────────────────
   useEffect(() => {
@@ -168,6 +170,9 @@ export default function DocumentChatPage() {
   const handleScroll = () => {
     const container = chatContainerRef.current;
     if (!container) return;
+    // scroll events from our own smooth animation would otherwise read as
+    // "user scrolled up" and un-pin mid-flight (the stuck-at-top bug)
+    if (Date.now() < autoScrollUntilRef.current) return;
     const isAtBottom =
       container.scrollTop + container.clientHeight >= container.scrollHeight - 50;
     setShouldAutoScroll(isAtBottom);
@@ -175,8 +180,16 @@ export default function DocumentChatPage() {
   };
 
   useEffect(() => {
-    if (shouldAutoScroll)
-      chatContainerRef.current?.scrollTo({ top: chatContainerRef.current.scrollHeight, behavior: "smooth" });
+    const el = chatContainerRef.current;
+    if (!el || !shouldAutoScroll || chats.length === 0) return;
+    if (firstChatLoadRef.current) {
+      // first load: appear already at the bottom, no long glide
+      firstChatLoadRef.current = false;
+      el.scrollTo({ top: el.scrollHeight });
+      return;
+    }
+    autoScrollUntilRef.current = Date.now() + 700;
+    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
   }, [chats, shouldAutoScroll]);
 
   useEffect(() => {
@@ -187,7 +200,10 @@ export default function DocumentChatPage() {
   }, [USER_ID]);
 
   const scrollToBottom = () => {
-    chatContainerRef.current?.scrollTo({ top: chatContainerRef.current.scrollHeight, behavior: "smooth" });
+    if (chatContainerRef.current) {
+      autoScrollUntilRef.current = Date.now() + 700;
+      chatContainerRef.current.scrollTo({ top: chatContainerRef.current.scrollHeight, behavior: "smooth" });
+    }
     setShowNewButton(false);
     setShouldAutoScroll(true);
   };

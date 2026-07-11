@@ -9,18 +9,18 @@ import { useAdminChat, type UserWithChat } from '@/components/admin/useAdminChat
 export default function ShortcutChat() {
   const pathname = usePathname();
 
-  // Suppress on pages that have inline chat
+  // Suppress on pages that have their own inline chat
+  // (/Admin/rfq/edit only shows chat *files*, not a chat — the bubble must stay available there)
   const hidden =
     pathname === '/Admin/chat' ||
-    pathname?.startsWith('/Admin/edit/') ||
-    pathname === '/Admin/rfq/edit';
+    pathname?.startsWith('/Admin/edit/');
 
   const {
     activeTab, setActiveTab,
     users, displayedUsers, unreadCount, isUnread,
     activeUserId, openUser, closeUser,
     messages, activeRfq,
-    draft, setDraft, sendMessage, uploadAndSend, uploading,
+    draft, setDraft, sendMessage, uploadAndSend, uploading, deleteMessage,
     msgContainerRef, handleScroll, scrollToBottom, showNewMsgButton, pinBottomAfterImage,
     fmtTime, userInitial, userName,
   } = useAdminChat({ enabled: !hidden });
@@ -249,7 +249,17 @@ export default function ShortcutChat() {
                       );
                     }
                     return (
-                      <div key={msg._id} className={`flex ${isAdmin ? 'justify-end' : 'justify-start'}`}>
+                      <div key={msg._id} className={`flex group ${isAdmin ? 'justify-end' : 'justify-start'}`}>
+                        {/* hover ⋮ delete — admin can remove any message */}
+                        <button
+                          onClick={() => deleteMessage(msg._id)}
+                          className={`opacity-0 group-hover:opacity-100 transition-opacity w-5 h-5 rounded-full bg-base-200 hover:bg-error/15 flex items-center justify-center self-center mx-1 shrink-0 ${isAdmin ? '' : 'order-last'}`}
+                          title="ลบ"
+                        >
+                          <svg className="w-2.5 h-2.5 text-base-content/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
                         <div className={`max-w-[78%] flex flex-col gap-0.5 ${isAdmin ? 'items-end' : 'items-start'}`}>
                           {msg.fileUrl ? (
                             <ChatFileAttachment
