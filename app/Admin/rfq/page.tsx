@@ -1,16 +1,20 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
+import UploadForCustomerModal from "@/components/admin/UploadForCustomerModal";
 
 type FilterTab = "all" | "pending";
 
 export default function RFQListPage() {
+  const { data: session } = useSession();
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [activeFilter, setActiveFilter] = useState<FilterTab>("all");
+  const [showUpload, setShowUpload] = useState(false);
   // userId → ISO timestamp ของข้อความล่าสุด
   const [chatTimes, setChatTimes] = useState<Record<string, string>>({});
   // userId → ms timestamp ที่ admin เคยกดเข้าไปดูล่าสุด
@@ -27,42 +31,46 @@ export default function RFQListPage() {
     } catch {}
   }, []);
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        const [rfqRes, chatRes, quotationRes] = await Promise.all([
-          fetch("/api/rfq"),
-          fetch("/api/chat/users", { cache: "no-store" }),
-          fetch("/api/quotation/all", { cache: "no-store" }),
-        ]);
-        if (!rfqRes.ok) throw new Error("Failed to fetch");
-        const result = await rfqRes.json();
-        setData(Array.isArray(result) ? result : []);
-        if (chatRes.ok) {
-          const chatData = await chatRes.json();
-          const users: any[] = chatData.users ?? chatData;
-          const times: Record<string, string> = {};
-          users.forEach((u) => { if (u.latestUserMessageTime) times[u.userId] = u.latestUserMessageTime; });
-          setChatTimes(times);
-        }
-        if (quotationRes.ok) {
-          const { quotations } = await quotationRes.json();
-          const pending = new Set<string>(
-            (quotations ?? [])
-              .filter((q: any) => q.status === "sent")
-              .map((q: any) => q.userId as string)
-          );
-          setPendingUserIds(pending);
-        }
-      } catch (err: any) {
-        setError(err.message);
-      } finally {
-        setLoading(false);
+  const fetchData = useCallback(async () => {
+    try {
+      setLoading(true);
+      const [rfqRes, chatRes, quotationRes] = await Promise.all([
+        fetch("/api/rfq"),
+        fetch("/api/chat/users", { cache: "no-store" }),
+        fetch("/api/quotation/all", { cache: "no-store" }),
+      ]);
+      if (!rfqRes.ok) throw new Error("Failed to fetch");
+      const result = await rfqRes.json();
+      setData(Array.isArray(result) ? result : []);
+      if (chatRes.ok) {
+        const chatData = await chatRes.json();
+        const users: any[] = chatData.users ?? chatData;
+        const times: Record<string, string> = {};
+        users.forEach((u) => { if (u.latestUserMessageTime) times[u.userId] = u.latestUserMessageTime; });
+        setChatTimes(times);
       }
-    };
-    fetchData();
+      if (quotationRes.ok) {
+        const { quotations } = await quotationRes.json();
+        const pending = new Set<string>(
+          (quotations ?? [])
+            .filter((q: any) => q.status === "sent")
+            .map((q: any) => q.userId as string)
+        );
+        setPendingUserIds(pending);
+      }
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => { fetchData(); }, [fetchData]);
+
+  const sessionUser = session?.user as { role?: string; permissions?: string[] } | undefined;
+  const canUploadForCustomer =
+    sessionUser?.role === "admin" ||
+    (sessionUser?.role === "employee" && sessionUser?.permissions?.includes("quotation"));
 
   const hasNewChat = (userId: string) => {
     if (!chatTimes[userId]) return false;
@@ -161,16 +169,36 @@ export default function RFQListPage() {
             {data.length} document{data.length !== 1 ? "s" : ""} total
           </p>
         </div>
-        <button
-          className="btn btn-primary btn-sm h-9 min-h-0 rounded-xl gap-1.5 text-xs font-semibold"
-          onClick={() => router.push("/Admin")}
-        >
-          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-          </svg>
-          Back
-        </button>
+        <div className="flex items-center gap-2">
+          {canUploadForCustomer && (
+            <button
+              className="btn btn-accent btn-sm h-9 min-h-0 rounded-xl gap-1.5 text-xs font-semibold"
+              onClick={() => setShowUpload(true)}
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              อัปโหลดแทนลูกค้า
+            </button>
+          )}
+          <button
+            className="btn btn-primary btn-sm h-9 min-h-0 rounded-xl gap-1.5 text-xs font-semibold"
+            onClick={() => router.push("/Admin")}
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+            Back
+          </button>
+        </div>
       </div>
+
+      {showUpload && (
+        <UploadForCustomerModal
+          onClose={() => setShowUpload(false)}
+          onDone={fetchData}
+        />
+      )}
 
       {/* ── Filter tabs ── */}
       <div className="flex items-center gap-2">
