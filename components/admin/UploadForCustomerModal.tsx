@@ -185,6 +185,18 @@ export default function UploadForCustomerModal({ onClose, onDone }: Props) {
               <p className="text-sm text-base-content/50">
                 ระบบกำลังประมวลผล — รายการจะโผล่ในหน้านี้เมื่อสกัดข้อมูลเสร็จ (ไม่กี่วินาที)
               </p>
+              {creds && (
+                <div className="w-full rounded-2xl border border-warning/30 bg-warning/8 p-3.5 space-y-1.5 text-left">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-bold text-warning">บัญชีลูกค้า — แสดงครั้งเดียว บันทึกก่อนปิด</p>
+                    <button onClick={copyCreds} className="btn btn-warning btn-xs rounded-lg">
+                      {copied ? 'คัดลอกแล้ว ✓' : 'คัดลอก'}
+                    </button>
+                  </div>
+                  <p className="text-sm font-mono">{creds.email}</p>
+                  <p className="text-sm font-mono">{creds.password}</p>
+                </div>
+              )}
             </div>
           ) : (
             <>

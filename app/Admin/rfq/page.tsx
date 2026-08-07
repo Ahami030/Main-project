@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import UploadForCustomerModal from "@/components/admin/UploadForCustomerModal";
+import CustomerListModal from "@/components/admin/CustomerListModal";
 
 type FilterTab = "all" | "pending";
 
@@ -15,6 +16,11 @@ export default function RFQListPage() {
   const [search, setSearch] = useState("");
   const [activeFilter, setActiveFilter] = useState<FilterTab>("all");
   const [showUpload, setShowUpload] = useState(false);
+  const [showCustomers, setShowCustomers] = useState(false);
+  // userId → customer info (for the hold-to-peek tooltip)
+  const [customerMap, setCustomerMap] = useState<Record<string, { email: string; name?: string }>>({});
+  const [hoverTip, setHoverTip] = useState<{ id: string; x: number; y: number } | null>(null);
+  const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // userId → ISO timestamp ของข้อความล่าสุด
   const [chatTimes, setChatTimes] = useState<Record<string, string>>({});
   // userId → ms timestamp ที่ admin เคยกดเข้าไปดูล่าสุด
@@ -31,9 +37,11 @@ export default function RFQListPage() {
     } catch {}
   }, []);
 
-  const fetchData = useCallback(async () => {
+  // silent = no full-page spinner — the loading early-return unmounts everything
+  // (including an open modal, wiping its one-time credentials)
+  const fetchData = useCallback(async (silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const [rfqRes, chatRes, quotationRes] = await Promise.all([
         fetch("/api/rfq"),
         fetch("/api/chat/users", { cache: "no-store" }),
@@ -58,6 +66,17 @@ export default function RFQListPage() {
         );
         setPendingUserIds(pending);
       }
+      // customer emails for the hold-to-peek tooltip — 403 for staff without
+      // quotation permission is fine, the tooltip just shows less
+      try {
+        const cusRes = await fetch("/api/customers", { cache: "no-store" });
+        if (cusRes.ok) {
+          const customers: { _id: string; email: string; name?: string }[] = await cusRes.json();
+          const map: Record<string, { email: string; name?: string }> = {};
+          customers.forEach((c) => { map[c._id] = { email: c.email, name: c.name }; });
+          setCustomerMap(map);
+        }
+      } catch {}
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -86,6 +105,16 @@ export default function RFQListPage() {
   };
 
   const isPending = (userId: string) => pendingUserIds.has(userId);
+
+  // hold-to-peek: hover a row for 1.5s → tooltip with customer email + submitted date
+  const startHover = (id: string, x: number, y: number) => {
+    if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
+    hoverTimerRef.current = setTimeout(() => setHoverTip({ id, x, y }), 1500);
+  };
+  const cancelHover = () => {
+    if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
+    setHoverTip(null);
+  };
 
   const pendingCount = data.filter((item) => isPending(item.USER_ID)).length;
 
@@ -171,15 +200,27 @@ export default function RFQListPage() {
         </div>
         <div className="flex items-center gap-2">
           {canUploadForCustomer && (
-            <button
-              className="btn btn-accent btn-sm h-9 min-h-0 rounded-xl gap-1.5 text-xs font-semibold"
-              onClick={() => setShowUpload(true)}
-            >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
-              อัปโหลดแทนลูกค้า
-            </button>
+            <>
+              <button
+                className="btn btn-ghost btn-sm h-9 min-h-0 rounded-xl gap-1.5 text-xs font-semibold border border-base-300"
+                onClick={() => setShowCustomers(true)}
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                    d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
+                บัญชีลูกค้า
+              </button>
+              <button
+                className="btn btn-accent btn-sm h-9 min-h-0 rounded-xl gap-1.5 text-xs font-semibold"
+                onClick={() => setShowUpload(true)}
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                อัปโหลดแทนลูกค้า
+              </button>
+            </>
           )}
           <button
             className="btn btn-primary btn-sm h-9 min-h-0 rounded-xl gap-1.5 text-xs font-semibold"
@@ -196,9 +237,32 @@ export default function RFQListPage() {
       {showUpload && (
         <UploadForCustomerModal
           onClose={() => setShowUpload(false)}
-          onDone={fetchData}
+          onDone={() => fetchData(true)}
         />
       )}
+
+      {showCustomers && <CustomerListModal onClose={() => setShowCustomers(false)} />}
+
+      {/* hold-to-peek tooltip (desktop) */}
+      {hoverTip && (() => {
+        const item = data.find((d) => d._id === hoverTip.id);
+        if (!item) return null;
+        const cus = customerMap[item.USER_ID];
+        return (
+          <div
+            className="fixed z-50 pointer-events-none rounded-xl bg-neutral text-neutral-content shadow-lg px-3.5 py-2.5 text-xs space-y-0.5"
+            style={{ left: hoverTip.x + 14, top: hoverTip.y + 14 }}
+          >
+            <p className="font-semibold">{cus?.name || 'ไม่พบข้อมูลลูกค้า'}</p>
+            {cus?.email && <p className="font-mono opacity-80">{cus.email}</p>}
+            <p className="opacity-60">
+              ส่งเมื่อ {item.createdAt
+                ? new Date(item.createdAt).toLocaleString('th-TH', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+                : '-'}
+            </p>
+          </div>
+        );
+      })()}
 
       {/* ── Filter tabs ── */}
       <div className="flex items-center gap-2">
@@ -300,6 +364,8 @@ export default function RFQListPage() {
                           pending ? "bg-error/3 hover:bg-error/6" : "hover:bg-base-50"
                         }`}
                         onClick={() => { markSeen(item.USER_ID); router.push(`/Admin/edit/${item._id}`); }}
+                        onMouseEnter={(e) => startHover(item._id, e.clientX, e.clientY)}
+                        onMouseLeave={cancelHover}
                       >
                         <td className="pl-5 py-3.5 w-10">
                           {pending ? (
