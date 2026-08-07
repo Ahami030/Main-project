@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireEmployee } from "@/lib/apiAuth";
 import { connectMongoDB } from "@/lib/mongo";
 import User from "@/app/models/User";
+import WalkinCredential from "@/app/models/WalkinCredential";
+import { encryptPassword } from "@/lib/walkinCrypto";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 
@@ -18,8 +20,16 @@ export async function GET() {
   const customers = await User.find(
     { role: "user" },
     { name: 1, email: 1, phone: 1, organizationName: 1, createdAt: 1 }
-  ).sort({ createdAt: -1 }).lean();
-  return NextResponse.json(customers);
+  ).sort({ createdAt: -1 }).lean() as Array<{ _id: { toString(): string }; [k: string]: unknown }>;
+
+  // walk-in accounts (created by staff) have a stored credential → password viewable
+  const credIds = new Set(
+    (await WalkinCredential.find({}, { userId: 1 }).lean() as Array<{ userId: string }>)
+      .map((c) => c.userId)
+  );
+  return NextResponse.json(
+    customers.map((c) => ({ ...c, hasCred: credIds.has(c._id.toString()) }))
+  );
 }
 
 export async function POST(req: NextRequest) {
@@ -67,7 +77,9 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // keep the credential (encrypted) so the front desk can look it up later
+  await WalkinCredential.create({ userId: user._id.toString(), password: encryptPassword(password) });
+
   const { password: _pw, ...safe } = user.toObject();
-  // plaintext password leaves the server exactly once, here — shown to staff one time
   return NextResponse.json({ user: safe, password }, { status: 201 });
 }

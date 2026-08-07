@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 type Customer = {
   _id: string;
@@ -9,27 +9,30 @@ type Customer = {
   phone?: string;
   organizationName?: string;
   createdAt?: string;
+  hasCred?: boolean; // walk-in account — stored (encrypted) password viewable
 };
 
-// Customer directory for the front desk: look up a walk-in's login email anytime,
-// and issue a fresh password when they forget (bcrypt hashes can't be read back —
-// reset-and-show-once is the only correct path).
+// Customer directory for the front desk.
+// Walk-in accounts (created by staff): password stored encrypted → view anytime + delete (archived).
+// Self-registered accounts: password unknowable (bcrypt) → reset-and-show-once.
 export default function CustomerListModal({ onClose }: { onClose: () => void }) {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
-  const [resetting, setResetting] = useState<string | null>(null);
-  // one visible reset result at a time: { customerId, password }
-  const [resetResult, setResetResult] = useState<{ id: string; password: string } | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  // one visible password at a time: { customerId, password, label }
+  const [revealed, setRevealed] = useState<{ id: string; password: string; label: string } | null>(null);
   const [copied, setCopied] = useState(false);
 
-  useEffect(() => {
+  const load = useCallback(() => {
     fetch('/api/customers')
       .then((r) => (r.ok ? r.json() : []))
       .then(setCustomers)
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => { load(); }, [load]);
 
   const filtered = customers.filter((c) => {
     const q = search.toLowerCase();
@@ -42,23 +45,52 @@ export default function CustomerListModal({ onClose }: { onClose: () => void }) 
   const fmtDate = (iso?: string) =>
     iso ? new Date(iso).toLocaleString('th-TH', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-';
 
+  const viewPassword = async (c: Customer) => {
+    if (revealed?.id === c._id) { setRevealed(null); return; }
+    setBusyId(c._id);
+    try {
+      const res = await fetch(`/api/customers/${c._id}`);
+      const data = await res.json().catch(() => null);
+      if (!res.ok) { alert(data?.message ?? 'ดูรหัสไม่สำเร็จ'); return; }
+      setRevealed({ id: c._id, password: data.password, label: 'รหัสผ่าน' });
+      setCopied(false);
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   const resetPassword = async (c: Customer) => {
-    if (!confirm(`รีเซ็ตรหัสผ่านของ ${c.name || c.email}?\n\nรหัสเดิมจะใช้ไม่ได้อีก และรหัสใหม่จะแสดงครั้งเดียว`)) return;
-    setResetting(c._id);
+    if (!confirm(`รีเซ็ตรหัสผ่านของ ${c.name || c.email}?\n\nรหัสเดิมจะใช้ไม่ได้อีก`)) return;
+    setBusyId(c._id);
     try {
       const res = await fetch(`/api/customers/${c._id}`, { method: 'PATCH' });
       const data = await res.json().catch(() => null);
       if (!res.ok) { alert(data?.message ?? 'รีเซ็ตไม่สำเร็จ'); return; }
-      setResetResult({ id: c._id, password: data.password });
+      setRevealed({ id: c._id, password: data.password, label: 'รหัสใหม่' });
       setCopied(false);
+      load(); // walk-in adoption may flip hasCred
     } finally {
-      setResetting(null);
+      setBusyId(null);
     }
   };
 
-  const copyResult = (c: Customer) => {
-    if (!resetResult) return;
-    navigator.clipboard.writeText(`อีเมล: ${c.email}\nรหัสผ่าน: ${resetResult.password}`).catch(() => {});
+  const deleteCustomer = async (c: Customer) => {
+    if (!confirm(`ลบบัญชี ${c.name || c.email}?\n\n• แชทและ RFQ จะถูกสำรองเข้า archive ก่อน (เหมือน Reset)\n• ไฟล์ PDF, ใบเสนอราคา และตัวบัญชีจะถูกลบ\n• ถ้ามี PO/ใบวางบิล/การชำระเงินผูกอยู่ ระบบจะไม่ลบให้`)) return;
+    setBusyId(c._id);
+    try {
+      const res = await fetch(`/api/customers/${c._id}`, { method: 'DELETE' });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) { alert(data?.message ?? 'ลบไม่สำเร็จ'); return; }
+      setCustomers((prev) => prev.filter((x) => x._id !== c._id));
+      if (revealed?.id === c._id) setRevealed(null);
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const copyRevealed = (c: Customer) => {
+    if (!revealed) return;
+    navigator.clipboard.writeText(`อีเมล: ${c.email}\nรหัสผ่าน: ${revealed.password}`).catch(() => {});
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -101,31 +133,59 @@ export default function CustomerListModal({ onClose }: { onClose: () => void }) 
                 <div key={c._id} className="px-4 py-3">
                   <div className="flex items-center justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="text-sm font-medium truncate">{c.name || '—'}</p>
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-sm font-medium truncate">{c.name || '—'}</p>
+                        {c.hasCred && (
+                          <span className="badge badge-ghost badge-xs text-[9px] font-semibold shrink-0">walk-in</span>
+                        )}
+                      </div>
                       <p className="text-xs text-base-content/50 font-mono truncate">{c.email}</p>
                       <p className="text-[11px] text-base-content/35 mt-0.5">
                         {c.phone ? `${c.phone} · ` : ''}สร้างเมื่อ {fmtDate(c.createdAt)}
                       </p>
                     </div>
-                    <button
-                      onClick={() => resetPassword(c)}
-                      disabled={resetting === c._id}
-                      className="btn btn-outline btn-xs rounded-lg shrink-0"
-                    >
-                      {resetting === c._id
-                        ? <span className="loading loading-spinner loading-xs" />
-                        : 'รีเซ็ตรหัสผ่าน'}
-                    </button>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {c.hasCred ? (
+                        <>
+                          <button
+                            onClick={() => viewPassword(c)}
+                            disabled={busyId === c._id}
+                            className="btn btn-outline btn-xs rounded-lg"
+                          >
+                            {busyId === c._id
+                              ? <span className="loading loading-spinner loading-xs" />
+                              : revealed?.id === c._id ? 'ซ่อนรหัส' : 'ดูรหัสผ่าน'}
+                          </button>
+                          <button
+                            onClick={() => deleteCustomer(c)}
+                            disabled={busyId === c._id}
+                            className="btn btn-outline btn-error btn-xs rounded-lg"
+                          >
+                            ลบ
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          onClick={() => resetPassword(c)}
+                          disabled={busyId === c._id}
+                          className="btn btn-outline btn-xs rounded-lg"
+                        >
+                          {busyId === c._id
+                            ? <span className="loading loading-spinner loading-xs" />
+                            : 'รีเซ็ตรหัสผ่าน'}
+                        </button>
+                      )}
+                    </div>
                   </div>
 
-                  {resetResult?.id === c._id && (
+                  {revealed?.id === c._id && (
                     <div className="mt-2 rounded-xl border border-warning/30 bg-warning/8 p-3 flex items-center justify-between gap-2">
                       <div>
-                        <p className="text-[11px] font-bold text-warning">รหัสใหม่ — แสดงครั้งเดียว</p>
-                        <p className="text-sm font-mono">{resetResult.password}</p>
+                        <p className="text-[11px] font-bold text-warning">{revealed.label}</p>
+                        <p className="text-sm font-mono">{revealed.password}</p>
                       </div>
-                      <button onClick={() => copyResult(c)} className="btn btn-warning btn-xs rounded-lg shrink-0">
-                        {copied ? 'คัดลอกแล้ว ✓' : 'คัดลอก'}
+                      <button onClick={() => copyRevealed(c)} className="btn btn-warning btn-xs rounded-lg shrink-0">
+                        {copied ? 'คัดลอกแล้ว ✓' : 'คัดลอกอีเมล+รหัส'}
                       </button>
                     </div>
                   )}

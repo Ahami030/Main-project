@@ -188,13 +188,14 @@ export default function UploadForCustomerModal({ onClose, onDone }: Props) {
               {creds && (
                 <div className="w-full rounded-2xl border border-warning/30 bg-warning/8 p-3.5 space-y-1.5 text-left">
                   <div className="flex items-center justify-between">
-                    <p className="text-xs font-bold text-warning">บัญชีลูกค้า — แสดงครั้งเดียว บันทึกก่อนปิด</p>
+                    <p className="text-xs font-bold text-warning">บัญชีลูกค้า</p>
                     <button onClick={copyCreds} className="btn btn-warning btn-xs rounded-lg">
                       {copied ? 'คัดลอกแล้ว ✓' : 'คัดลอก'}
                     </button>
                   </div>
                   <p className="text-sm font-mono">{creds.email}</p>
                   <p className="text-sm font-mono">{creds.password}</p>
+                  <p className="text-[11px] text-base-content/40">ดูย้อนหลังได้ที่ปุ่ม "บัญชีลูกค้า" ในหน้า RFQ List</p>
                 </div>
               )}
             </div>
@@ -267,13 +268,14 @@ export default function UploadForCustomerModal({ onClose, onDone }: Props) {
               {creds && (
                 <div className="rounded-2xl border border-warning/30 bg-warning/8 p-3.5 space-y-1.5">
                   <div className="flex items-center justify-between">
-                    <p className="text-xs font-bold text-warning">บัญชีลูกค้า — แสดงครั้งเดียว บันทึกทันที</p>
+                    <p className="text-xs font-bold text-warning">บัญชีลูกค้า</p>
                     <button onClick={copyCreds} className="btn btn-warning btn-xs rounded-lg">
                       {copied ? 'คัดลอกแล้ว ✓' : 'คัดลอก'}
                     </button>
                   </div>
                   <p className="text-sm font-mono">{creds.email}</p>
                   <p className="text-sm font-mono">{creds.password}</p>
+                  <p className="text-[11px] text-base-content/40">ดูย้อนหลังได้ที่ปุ่ม "บัญชีลูกค้า" ในหน้า RFQ List</p>
                 </div>
               )}
 
