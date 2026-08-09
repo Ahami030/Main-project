@@ -41,10 +41,7 @@ export default function ChatNotificationBubble() {
 
   const userId = (session?.user as any)?.id;
 
-  const hidden =
-    pathname === '/Client/Bargain' ||
-    pathname?.startsWith('/Client/pdf') ||
-    pathname?.startsWith('/Client/sendpdf');
+  const hidden = pathname === '/Client/Bargain';
 
   // Hydrate from localStorage cache → instant display before the (slow) first DB fetch
   useEffect(() => {
@@ -223,8 +220,8 @@ export default function ChatNotificationBubble() {
       {/* Chat panel */}
       {open && (
         <div
-          className="fixed bottom-24 right-6 z-50 w-80 flex flex-col rounded-2xl shadow-2xl overflow-hidden border border-base-200 bg-base-100"
-          style={{ height: '520px' }}
+          className="fixed bottom-24 right-6 z-50 w-[calc(100vw-3rem)] sm:w-80 flex flex-col rounded-2xl shadow-2xl overflow-hidden border border-base-200 bg-base-100"
+          style={{ height: 'min(520px, 70dvh)' }}
         >
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-base-200 shrink-0">
@@ -292,7 +289,7 @@ export default function ChatNotificationBubble() {
                   <div key={msg._id} className={`flex group ${isUser ? 'justify-end' : 'justify-start'}`}>
                     {/* hover actions — only on the customer's own messages */}
                     {isUser && (
-                      <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 self-center mx-1 shrink-0">
+                      <div className="opacity-60 md:opacity-0 md:group-hover:opacity-100 transition-opacity flex items-center gap-1 self-center mx-1 shrink-0">
                         {canEdit(msg) && (
                           <button
                             onClick={() => { setEditingId(msg._id); setEditText(msg.message); }}

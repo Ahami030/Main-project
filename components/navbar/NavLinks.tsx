@@ -30,7 +30,7 @@ export default function NavLinks({ session, latestStatus }: Props) {
   const permissions = ((session?.user as any)?.permissions ?? []) as string[];
 
   return (
-    <div className="hidden md:flex items-center gap-6">
+    <div className="hidden lg:flex items-center gap-6">
       <Link href="/" className={linkClass}>Home</Link>
 
       {role === "user" && (

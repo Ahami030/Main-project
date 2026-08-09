@@ -108,7 +108,7 @@ export default function AdminPaymentsListPage() {
         </div>
 
         {/* Financial Summary Cards */}
-        <div className="stats stats-horizontal shadow w-full bg-base-100 flex-wrap">
+        <div className="stats stats-vertical sm:stats-horizontal shadow w-full bg-base-100">
           <div className="stat">
             <div className="stat-figure text-warning">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">

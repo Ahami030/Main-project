@@ -841,23 +841,23 @@ export default function Page(): JSX.Element {
         <div className="card bg-base-100 border border-base-300/70 rounded-[2.5rem] shadow-mc transition-shadow duration-300 hover:shadow-mc-lg">
           <div className="card-body py-7 px-7 md:px-9">
             <div className="flex items-center justify-between gap-4">
-              <div className="flex items-center gap-5">
+              <div className="flex items-center gap-4 sm:gap-5 min-w-0">
                 {/* Circular ink portrait */}
                 <div className="avatar placeholder shrink-0">
                   <div className="w-16 h-16 rounded-full bg-primary text-primary-content font-medium text-2xl tracking-mc flex items-center justify-center">
                     <span>{name[0]?.toUpperCase()}</span>
                   </div>
                 </div>
-                <div>
+                <div className="min-w-0">
                   {/* Eyebrow */}
                   <p className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.16em] text-base-content/55 mb-1.5">
                     <span className="w-1.5 h-1.5 rounded-full bg-accent" />
                     Dashboard
                   </p>
-                  <h2 className="font-medium text-2xl leading-tight tracking-mc">
+                  <h2 className="font-medium text-2xl leading-tight tracking-mc truncate">
                     สวัสดี, {name}
                   </h2>
-                  <p className="text-sm text-base-content/55 mt-1">
+                  <p className="text-sm text-base-content/55 mt-1 truncate">
                     {email}
                   </p>
                 </div>
@@ -1035,7 +1035,7 @@ export default function Page(): JSX.Element {
 
           /* ── Hero CTA (ยังไม่มี quotation) ── */
           <div className="card bg-base-100 border border-base-300/70 rounded-[2.5rem] shadow-mc transition-shadow duration-300 hover:shadow-mc-lg overflow-hidden">
-            <div className="card-body py-12 px-8 md:px-12 gap-0">
+            <div className="card-body py-8 md:py-12 px-4 sm:px-8 md:px-12 gap-0">
               <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-10">
 
                 {/* Left: text */}
@@ -1044,7 +1044,7 @@ export default function Page(): JSX.Element {
                     <span className="w-1.5 h-1.5 rounded-full bg-accent" />
                     Quotation Request System
                   </p>
-                  <h1 className="text-5xl md:text-6xl font-medium tracking-mc leading-[1.05] mb-5">
+                  <h1 className="text-3xl sm:text-5xl md:text-6xl font-medium tracking-mc leading-[1.05] mb-5">
                     ส่งเอกสาร<br />
                     เพื่อจัดทำ<span className="text-accent">ใบเสนอราคา</span>
                   </h1>
@@ -1259,7 +1259,7 @@ export default function Page(): JSX.Element {
 
           /* ── PO Hero CTA ── */
           <div className="card bg-base-100 border border-base-300/70 rounded-[2.5rem] shadow-mc transition-shadow duration-300 hover:shadow-mc-lg overflow-hidden">
-            <div className="card-body py-12 px-8 md:px-12 gap-0">
+            <div className="card-body py-8 md:py-12 px-4 sm:px-8 md:px-12 gap-0">
               <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-10">
 
                 {/* Left: text */}
@@ -1268,7 +1268,7 @@ export default function Page(): JSX.Element {
                     <span className="w-1.5 h-1.5 rounded-full bg-secondary" />
                     Purchase Order System
                   </p>
-                  <h2 className="text-5xl md:text-6xl font-medium tracking-mc leading-[1.05] mb-5">
+                  <h2 className="text-3xl sm:text-5xl md:text-6xl font-medium tracking-mc leading-[1.05] mb-5">
                     ส่งรายการสินค้า<br />
                     เพื่อ<span className="text-secondary">สั่งซื้อ</span>
                   </h2>
@@ -1316,8 +1316,8 @@ export default function Page(): JSX.Element {
 
       {/* ── Billing Modal ─────────────────────────────────────── */}
       {(modalBilling || billingModalLoading) && (
-        <dialog className="modal modal-open">
-          <div className="modal-box w-11/12 max-w-4xl h-[92vh] p-0 overflow-hidden flex flex-col">
+        <dialog className="modal modal-open modal-bottom sm:modal-middle">
+          <div className="modal-box w-full sm:w-11/12 max-w-4xl h-[92vh] p-0 overflow-hidden flex flex-col">
 
             {/* Header */}
             <div className="flex items-center justify-between px-4 py-2.5 bg-base-100 border-b border-base-300 shrink-0">
@@ -1524,8 +1524,8 @@ export default function Page(): JSX.Element {
       {/* ── Document Modal ────────────────────────────────────── */}
       {modalQuotation && (
         <>
-          <dialog className="modal modal-open">
-            <div className="modal-box w-11/12 max-w-4xl h-[92vh] p-0 overflow-hidden flex flex-col">
+          <dialog className="modal modal-open modal-bottom sm:modal-middle">
+            <div className="modal-box w-full sm:w-11/12 max-w-4xl h-[92vh] p-0 overflow-hidden flex flex-col">
 
               {/* Header */}
               <div className="flex flex-col shrink-0 bg-base-100 border-b border-base-300">

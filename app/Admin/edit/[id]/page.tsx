@@ -635,7 +635,7 @@ export default function EditPage() {
                         <td className="py-1.5"><input type="text" inputMode="decimal" value={focusedLineField === `${i}-price` ? String(item.unit_price || "") : fmtCurrency(item.unit_price || 0)} onFocus={() => setFocusedLineField(`${i}-price`)} onBlur={() => setFocusedLineField("")} onChange={(e) => handleLineChange(i, "unit_price", e.target.value)} className="input input-sm h-8 w-full rounded-lg bg-transparent border-transparent hover:border-base-300 focus:border-primary focus:bg-base-100 transition-all text-xs text-right" /></td>
                         <td className="text-right text-xs font-semibold text-primary py-1.5 tabular-nums">{fmt(total)}</td>
                         <td className="py-1.5">
-                          <button className="btn btn-ghost btn-xs h-7 min-h-0 w-7 rounded-lg p-0 text-base-content/30 hover:text-error hover:bg-error/10 opacity-0 group-hover:opacity-100 transition-all" onClick={() => removeItem(i)}>
+                          <button className="btn btn-ghost btn-xs h-7 min-h-0 w-7 rounded-lg p-0 text-base-content/30 hover:text-error hover:bg-error/10 opacity-60 md:opacity-0 md:group-hover:opacity-100 transition-all" onClick={() => removeItem(i)}>
                             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                           </button>
                         </td>
@@ -671,7 +671,7 @@ export default function EditPage() {
   return (
     <>
       {/* ─── MOBILE (< lg) ─── */}
-      <div className="lg:hidden flex flex-col h-screen bg-base-200 overflow-hidden">
+      <div className="lg:hidden flex flex-col h-[calc(100dvh-4rem)] bg-base-200 overflow-hidden">
         <div className="flex items-center justify-between px-3 py-2.5 bg-base-100 border-b border-base-300 shrink-0">
           <button className="btn btn-ghost btn-xs h-7 min-h-0 gap-1 rounded-lg text-xs text-base-content/60" onClick={() => router.push("/Admin/rfq")}>
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
@@ -716,7 +716,7 @@ export default function EditPage() {
       </div>
 
       {/* ─── DESKTOP (≥ lg) ─── */}
-      <div className="hidden lg:grid h-screen bg-base-200 p-4 gap-4 grid-cols-[42%_1fr] grid-rows-[1fr_380px] overflow-hidden">
+      <div className="hidden lg:grid h-[calc(100dvh-4rem)] bg-base-200 p-4 gap-4 grid-cols-[42%_1fr] grid-rows-[1fr_380px] overflow-hidden">
 
         {/* LEFT: PDF / Chat file viewer (full height) */}
         <div ref={pdfRef} className="bg-base-100 rounded-2xl border border-base-300 flex flex-col gap-3 p-4 row-span-2 overflow-hidden">
@@ -832,7 +832,7 @@ export default function EditPage() {
                             <td className="py-1.5"><input type="text" inputMode="decimal" value={focusedLineField === `${i}-price` ? String(item.unit_price || "") : fmtCurrency(item.unit_price || 0)} onFocus={() => setFocusedLineField(`${i}-price`)} onBlur={() => setFocusedLineField("")} onChange={(e) => handleLineChange(i, "unit_price", e.target.value)} className="input input-sm h-8 w-full rounded-lg bg-transparent border-transparent hover:border-base-300 focus:border-primary focus:bg-base-100 transition-all text-xs text-right" /></td>
                             <td className="text-right text-xs font-semibold text-primary py-1.5 tabular-nums">{fmt(total)}</td>
                             <td className="py-1.5">
-                              <button className="btn btn-ghost btn-xs h-7 min-h-0 w-7 rounded-lg p-0 text-base-content/30 hover:text-error hover:bg-error/10 opacity-0 group-hover:opacity-100 transition-all" onClick={() => removeItem(i)}>
+                              <button className="btn btn-ghost btn-xs h-7 min-h-0 w-7 rounded-lg p-0 text-base-content/30 hover:text-error hover:bg-error/10 opacity-60 md:opacity-0 md:group-hover:opacity-100 transition-all" onClick={() => removeItem(i)}>
                                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                               </button>
                             </td>

@@ -401,7 +401,7 @@ export default function PaymentSubmitPage({ params }: { params: Promise<{ billin
                 </div>
 
                 {/* Date + Installment — equal columns */}
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="form-control">
                     <label className="label pb-1.5">
                       <span className="label-text font-medium">วันที่โอนเงิน</span>
@@ -440,7 +440,7 @@ export default function PaymentSubmitPage({ params }: { params: Promise<{ billin
               </div>
               <div className="space-y-4">
                 {/* Payment method cards */}
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   {([
                     {
                       value: "bank_transfer",

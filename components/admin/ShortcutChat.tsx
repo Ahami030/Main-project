@@ -253,7 +253,7 @@ export default function ShortcutChat() {
                         {/* hover ⋮ delete — admin can remove any message */}
                         <button
                           onClick={() => deleteMessage(msg._id)}
-                          className={`opacity-0 group-hover:opacity-100 transition-opacity w-5 h-5 rounded-full bg-base-200 hover:bg-error/15 flex items-center justify-center self-center mx-1 shrink-0 ${isAdmin ? '' : 'order-last'}`}
+                          className={`opacity-60 md:opacity-0 md:group-hover:opacity-100 transition-opacity w-5 h-5 rounded-full bg-base-200 hover:bg-error/15 flex items-center justify-center self-center mx-1 shrink-0 ${isAdmin ? '' : 'order-last'}`}
                           title="ลบ"
                         >
                           <svg className="w-2.5 h-2.5 text-base-content/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">

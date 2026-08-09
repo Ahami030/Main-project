@@ -239,9 +239,12 @@ export default function AdminPage() {
   };
 
   return (
-    <div className="flex h-screen bg-gray-50">
+    // dvh minus the sticky navbar; on mobile the list and the room swap full-screen
+    <div className="flex h-[calc(100dvh-4rem)] bg-gray-50">
       {/* Sidebar - Users List */}
-      <div className="w-64 bg-white border-r border-gray-200 flex flex-col">
+      <div className={`w-full md:w-64 bg-white border-r border-gray-200 flex-col ${
+        selectedUserId ? "hidden md:flex" : "flex"
+      }`}>
         <div className="p-4 bg-linear-to-r from-blue-600 to-green-600 text-white font-bold">
           💬 Messages
         </div>
@@ -284,22 +287,31 @@ export default function AdminPage() {
       </div>
 
       {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col">
+      <div className={`flex-1 flex-col min-w-0 ${selectedUserId ? "flex" : "hidden md:flex"}`}>
         {selectedUserId ? (
           <>
             {/* Chat Header */}
-            <div className="p-4 bg-white border-b border-gray-200 flex items-center justify-between">
-              <div>
-                <div className="font-bold text-gray-900">
+            <div className="p-4 bg-white border-b border-gray-200 flex items-center justify-between gap-2">
+              <button
+                onClick={() => setSelectedUserId(null)}
+                className="md:hidden btn btn-ghost btn-sm btn-square shrink-0"
+                aria-label="กลับ"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
+              <div className="min-w-0 flex-1">
+                <div className="font-bold text-gray-900 truncate">
                   {users.find((u) => u.userId === selectedUserId)?.user?.name ||
                     users.find((u) => u.userId === selectedUserId)?.user?.email ||
                     "Chat"}
                 </div>
-                <div className="text-sm text-gray-500">
+                <div className="text-sm text-gray-500 truncate">
                   {users.find((u) => u.userId === selectedUserId)?.user?.email}
                 </div>
               </div>
-              <div className="text-xs px-2 py-1 bg-green-100 text-green-700 rounded">
+              <div className="text-xs px-2 py-1 bg-green-100 text-green-700 rounded shrink-0">
                 Active
               </div>
             </div>
@@ -317,7 +329,7 @@ export default function AdminPage() {
 
                   {/* ⋮ actions — admin แก้/ลบของตัวเอง, ลบของ user ได้ */}
                   {!chat.isDeleted && editingId !== chat._id && (
-                    <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 self-center mx-1">
+                    <div className="opacity-60 md:opacity-0 md:group-hover:opacity-100 transition-opacity flex items-center gap-1 self-center mx-1 shrink-0">
                       {isAdmin && canEdit(chat) && (
                         <button
                           onClick={() => { setEditingId(chat._id); setEditText(chat.message); }}
@@ -341,7 +353,7 @@ export default function AdminPage() {
                     </div>
                   )}
 
-                  <div className={`px-4 py-2 rounded-lg max-w-xs ${
+                  <div className={`px-4 py-2 rounded-lg max-w-[75%] sm:max-w-xs ${
                     isAdmin
                       ? "bg-linear-to-r from-blue-500 to-green-500 text-white rounded-br-none"
                       : "bg-white border border-gray-200 text-gray-900 rounded-bl-none"
@@ -367,12 +379,15 @@ export default function AdminPage() {
               <div ref={chatEndRef} />
 
               {showNewButton && (
-                <button
-                  onClick={scrollToBottom}
-                  className="fixed bottom-24 left-1/2 -translate-x-1/2 bg-linear-to-r from-blue-600 to-green-600 text-white px-4 py-2 rounded-full shadow-lg hover:shadow-xl transition-shadow"
-                >
-                  ↓ New Message
-                </button>
+                // sticky inside the scroll container, not fixed to the viewport
+                <div className="sticky bottom-2 flex justify-center">
+                  <button
+                    onClick={scrollToBottom}
+                    className="bg-linear-to-r from-blue-600 to-green-600 text-white px-4 py-2 rounded-full shadow-lg hover:shadow-xl transition-shadow text-sm"
+                  >
+                    ↓ New Message
+                  </button>
+                </div>
               )}
             </div>
 
@@ -434,9 +449,9 @@ export default function AdminPage() {
             )}
 
             {/* Input Area */}
-            <div className="p-4 bg-white border-t border-gray-200 flex gap-2">
+            <div className="p-3 sm:p-4 bg-white border-t border-gray-200 flex gap-2">
               <input
-                className="flex-1 border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="flex-1 min-w-0 border border-gray-300 rounded-lg px-4 py-2 text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 placeholder="Type a message..."
                 value={message}
                 onPaste={handlePaste}
@@ -450,7 +465,7 @@ export default function AdminPage() {
               />
               <button
                 onClick={sendMessage}
-                className="bg-linear-to-r from-blue-600 to-green-600 text-white px-6 py-2 rounded-lg hover:from-blue-700 hover:to-green-700 transition-all font-semibold"
+                className="bg-linear-to-r from-blue-600 to-green-600 text-white px-4 sm:px-6 py-2 rounded-lg hover:from-blue-700 hover:to-green-700 transition-all font-semibold shrink-0"
               >
                 Send
               </button>

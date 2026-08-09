@@ -279,14 +279,12 @@ export default function AdminPODetailPage() {
                     ref={iframeRef}
                     src={fileUrl}
                     title="product list"
-                    className="w-full rounded-lg border border-base-300"
-                    style={{ height: "calc(100vh - 11rem)", minHeight: "480px" }}
+                    className="w-full rounded-lg border border-base-300 h-[60vh] lg:h-[calc(100vh-11rem)]"
                   />
                 ) : isImage ? (
                   <div
                     id="po-product-print-area"
-                    className="flex items-center justify-center rounded-lg border border-base-300 bg-base-200/50 overflow-hidden"
-                    style={{ height: "calc(100vh - 11rem)", minHeight: "480px" }}
+                    className="flex items-center justify-center rounded-lg border border-base-300 bg-base-200/50 overflow-hidden h-[60vh] lg:h-[calc(100vh-11rem)]"
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img

@@ -92,6 +92,8 @@ export default function PaymentReceiptPage({ params }: { params: Promise<{ proof
         </button>
       </div>
 
+      {/* the document is a fixed 210mm sheet — scroll it inside its own box, not the page */}
+      <div className="overflow-x-auto print:overflow-visible">
       <PaymentReceiptDocument
         receipt={{
           proofNumber:       proof.proofNumber,
@@ -108,6 +110,7 @@ export default function PaymentReceiptPage({ params }: { params: Promise<{ proof
           installmentNumber: proof.installmentNumber,
         } satisfies PaymentReceiptProps["receipt"]}
       />
+      </div>
     </div>
   );
 }

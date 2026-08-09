@@ -65,8 +65,8 @@ export default function LoginForm() {
   return (
     <>
       {exiting && <div className="fixed inset-0 z-9999 bg-base-200" />}
-      <main className="min-h-screen bg-base-200 flex items-center justify-center p-6">
-        <div className="w-full max-w-md bg-base-100 rounded-box shadow border border-base-300 p-6 min-h-125">
+      <main className="min-h-screen bg-base-200 flex items-center justify-center p-4 sm:p-6">
+        <div className="w-full max-w-md bg-base-100 rounded-box shadow border border-base-300 p-4 sm:p-6">
 
           <header className="mb-6 text-center">
             <div className="mx-auto h-10 w-10 rounded-full bg-primary flex items-center justify-center text-primary-content font-bold">

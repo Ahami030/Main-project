@@ -329,7 +329,8 @@ export default function DocumentChatPage() {
         }
       `}</style>
 
-      <div className="print-root h-screen w-screen flex flex-col md:flex-row bg-base-300 overflow-hidden font-sans">
+      {/* dvh - navbar height: w-screen ignores the scrollbar and h-screen overflows under the sticky nav */}
+      <div className="print-root h-[calc(100dvh-4rem)] w-full flex flex-col md:flex-row bg-base-300 overflow-hidden font-sans">
 
         {/* ── Mobile Tab Bar ── */}
         <div className="print-hide md:hidden shrink-0 flex bg-base-100 border-b border-base-content/10">
@@ -562,7 +563,7 @@ export default function DocumentChatPage() {
                   )}
                 </button>
                 <textarea
-                  className="flex-1 bg-transparent text-base-content text-xs placeholder-base-content/20 resize-none outline-none leading-relaxed max-h-16 min-h-6.5 py-0.5 px-1"
+                  className="flex-1 bg-transparent text-base-content text-base md:text-xs placeholder-base-content/20 resize-none outline-none leading-relaxed max-h-16 min-h-6.5 py-0.5 px-1"
                   placeholder="พิมพ์ข้อความ... (Enter ส่ง)"
                   value={message}
                   rows={1}
@@ -604,7 +605,7 @@ export default function DocumentChatPage() {
                   <div className="flex items-center gap-2">
                     <input
                       autoFocus
-                      className="flex-1 bg-base-200 rounded-full px-3 py-1.5 text-xs text-base-content outline-none focus:ring-1 focus:ring-primary/30 transition-all"
+                      className="flex-1 bg-base-200 rounded-full px-3 py-1.5 text-base md:text-xs text-base-content outline-none focus:ring-1 focus:ring-primary/30 transition-all"
                       value={editText}
                       onChange={e => setEditText(e.target.value)}
                       onKeyDown={e => {

@@ -195,7 +195,7 @@ export default function UploadForCustomerModal({ onClose, onDone }: Props) {
                   </div>
                   <p className="text-sm font-mono">{creds.email}</p>
                   <p className="text-sm font-mono">{creds.password}</p>
-                  <p className="text-[11px] text-base-content/40">ดูย้อนหลังได้ที่ปุ่ม "บัญชีลูกค้า" ในหน้า RFQ List</p>
+                  <p className="text-[11px] text-base-content/40">ดูย้อนหลังได้ที่ปุ่ม &quot;บัญชีลูกค้า&quot; ในหน้า RFQ List</p>
                 </div>
               )}
             </div>
@@ -275,7 +275,7 @@ export default function UploadForCustomerModal({ onClose, onDone }: Props) {
                   </div>
                   <p className="text-sm font-mono">{creds.email}</p>
                   <p className="text-sm font-mono">{creds.password}</p>
-                  <p className="text-[11px] text-base-content/40">ดูย้อนหลังได้ที่ปุ่ม "บัญชีลูกค้า" ในหน้า RFQ List</p>
+                  <p className="text-[11px] text-base-content/40">ดูย้อนหลังได้ที่ปุ่ม &quot;บัญชีลูกค้า&quot; ในหน้า RFQ List</p>
                 </div>
               )}
 

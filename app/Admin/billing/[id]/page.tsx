@@ -226,7 +226,7 @@ export default function AdminBillingDetailPage() {
       <div className="min-h-screen bg-base-200 print:hidden">
         {/* Top bar */}
         <div className="sticky top-0 z-20 bg-base-100 border-b border-base-300 shadow-sm">
-          <div className="max-w-4xl mx-auto px-4 md:px-6 h-14 flex items-center gap-3">
+          <div className="max-w-4xl mx-auto px-4 md:px-6 min-h-14 py-2 flex items-center gap-x-3 gap-y-1 flex-wrap">
             <button className="btn btn-ghost btn-sm gap-1.5" onClick={() => router.push("/Admin/billing")}>
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -278,7 +278,7 @@ export default function AdminBillingDetailPage() {
           {/* Payment proof link (only for finalized billings) */}
           {isFinalized && (
             <div className="card bg-base-100 border border-primary/20 shadow-sm">
-              <div className="card-body p-4 flex flex-row items-center justify-between gap-3">
+              <div className="card-body p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
                   <div className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -304,7 +304,7 @@ export default function AdminBillingDetailPage() {
           {/* Expiry card */}
           <div className={`card border shadow-sm overflow-hidden ${isExpired ? "border-error/40 bg-error/5" : "bg-base-100 border-base-300"}`}>
             <div className="card-body p-5 gap-4">
-              <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center justify-between gap-x-3 gap-y-2 flex-wrap">
                 <div className="flex items-center gap-2">
                   <svg className={`w-4 h-4 ${isExpired ? "text-error" : "text-base-content/50"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -312,7 +312,7 @@ export default function AdminBillingDetailPage() {
                   </svg>
                   <h2 className="font-bold text-sm">วันหมดอายุเอกสาร</h2>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   {billing.expiresAt && !isExpired && (
                     <button className="btn btn-ghost btn-xs text-base-content/40" onClick={handleClearExpiry}>
                       ยกเลิกวันหมดอายุ

@@ -131,7 +131,7 @@ export default function CustomerListModal({ onClose }: { onClose: () => void }) 
             <div className="rounded-2xl border border-base-200 divide-y divide-base-200">
               {filtered.map((c) => (
                 <div key={c._id} className="px-4 py-3">
-                  <div className="flex items-center justify-between gap-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3">
                     <div className="min-w-0">
                       <div className="flex items-center gap-1.5">
                         <p className="text-sm font-medium truncate">{c.name || '—'}</p>

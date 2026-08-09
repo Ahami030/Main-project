@@ -74,7 +74,7 @@ export default function AdminPDFEdit() {
     <div className="min-h-screen bg-base-200 p-4 flex flex-col gap-4">
 
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
         <div>
           <h1 className="text-lg font-bold text-base-content tracking-tight">PDF Documents</h1>
           <p className="text-[11px] text-base-content/40 mt-0.5">
@@ -92,11 +92,11 @@ export default function AdminPDFEdit() {
         </button>
       </div>
 
-      {/* Body */}
-      <div className="flex gap-4 flex-1 h-[calc(100vh-8rem)]">
+      {/* Body — stacks on mobile, side-by-side from lg */}
+      <div className="flex flex-col lg:flex-row gap-4 flex-1 lg:h-[calc(100dvh-8rem)] min-h-0">
 
         {/* Left: file list */}
-        <div className="w-64 shrink-0 bg-base-100 rounded-2xl border border-base-300 flex flex-col overflow-hidden">
+        <div className="w-full lg:w-64 shrink-0 bg-base-100 rounded-2xl border border-base-300 flex flex-col overflow-hidden max-h-72 lg:max-h-none">
           {/* PDF section */}
           <div className="px-4 py-3 border-b border-base-200 shrink-0">
             <span className="text-[10px] font-semibold tracking-[0.15em] uppercase text-base-content/40">
@@ -188,7 +188,7 @@ export default function AdminPDFEdit() {
         </div>
 
         {/* Right: viewer */}
-        <div className="flex-1 bg-base-100 rounded-2xl border border-base-300 flex flex-col overflow-hidden">
+        <div className="flex-1 min-h-0 bg-base-100 rounded-2xl border border-base-300 flex flex-col overflow-hidden">
           <div className="flex items-center justify-between px-4 py-3 border-b border-base-200 shrink-0">
             <div className="flex items-center gap-2">
               <svg className="w-3.5 h-3.5 text-base-content/40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -222,7 +222,8 @@ export default function AdminPDFEdit() {
             </div>
           </div>
 
-          <div className="flex-1 min-h-0">
+          {/* fixed height on mobile: iframes have no intrinsic height in a stacked column */}
+          <div className="flex-1 min-h-0 h-[60vh] lg:h-auto">
             {viewMode === "chatfile" && activeChatFile ? (
               activeChatFile.fileType === "image" ? (
                 <div className="w-full h-full flex items-center justify-center p-4 overflow-auto">

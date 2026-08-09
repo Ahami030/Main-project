@@ -184,7 +184,7 @@ export default function RFQListPage() {
     <div className="min-h-screen bg-base-200 p-4 md:p-6 flex flex-col gap-5">
 
       {/* ── Header ── */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-lg font-bold text-base-content tracking-tight">RFQ List</h1>
@@ -198,7 +198,7 @@ export default function RFQListPage() {
             {data.length} document{data.length !== 1 ? "s" : ""} total
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           {canUploadForCustomer && (
             <>
               <button

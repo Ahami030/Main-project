@@ -165,7 +165,10 @@ export default function ClientPODetailPage() {
                 พิมพ์ใบวางบิล
               </button>
             </div>
-            <BillingNoteDocument po={billingNoteProps} />
+            {/* fixed 210mm sheet — scroll inside its own box, not the page */}
+            <div className="overflow-x-auto print:overflow-visible">
+              <BillingNoteDocument po={billingNoteProps} />
+            </div>
           </>
         ) : (
           <div className="card bg-base-100 shadow-sm print:hidden">

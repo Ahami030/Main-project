@@ -41,7 +41,7 @@ export default function ArchivedChatsPage() {
       <div className="max-w-4xl mx-auto flex flex-col gap-5">
 
         {/* Header */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
           <button
             className="btn btn-ghost btn-sm"
             onClick={() => router.push("/Admin")}

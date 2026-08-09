@@ -31,7 +31,7 @@ interface Props {
 
 export default function ChatRfqSidebar({ rfq, onNavigate, className }: Props) {
   return (
-    <div className={`w-64 shrink-0 flex flex-col bg-base-100 overflow-y-auto ${className ?? ''}`}>
+    <div className={`w-full md:w-64 shrink-0 flex flex-col bg-base-100 overflow-y-auto ${className ?? ''}`}>
 
       {/* RFQ header */}
       <div className="px-4 pt-4 pb-3 border-b border-base-200">

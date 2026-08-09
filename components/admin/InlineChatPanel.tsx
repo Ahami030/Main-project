@@ -138,10 +138,10 @@ export default function InlineChatPanel({ onRfqCount }: Props) {
       </div>
 
       {/* ── Chat Modal ── */}
-      <dialog ref={chatDialogRef} className="modal modal-middle">
+      <dialog ref={chatDialogRef} className="modal modal-bottom sm:modal-middle">
         <div
-          className="modal-box p-0 overflow-hidden w-full max-w-3xl flex flex-col"
-          style={{ height: '600px' }}
+          className="modal-box p-0 overflow-hidden w-full sm:max-w-3xl flex flex-col"
+          style={{ height: '600px', maxHeight: '90vh' }}
         >
           {/* Modal header */}
           <div className="flex items-center justify-between px-5 py-3.5 border-b border-base-200 shrink-0 bg-base-100">
@@ -198,7 +198,7 @@ export default function InlineChatPanel({ onRfqCount }: Props) {
                         {/* hover ⋮ delete — admin can remove any message */}
                         <button
                           onClick={() => deleteMessage(msg._id)}
-                          className={`opacity-0 group-hover:opacity-100 transition-opacity w-5 h-5 rounded-full bg-base-200 hover:bg-error/15 flex items-center justify-center self-center mx-1 shrink-0 ${isAdmin ? '' : 'order-last'}`}
+                          className={`opacity-60 md:opacity-0 md:group-hover:opacity-100 transition-opacity w-5 h-5 rounded-full bg-base-200 hover:bg-error/15 flex items-center justify-center self-center mx-1 shrink-0 ${isAdmin ? '' : 'order-last'}`}
                           title="ลบ"
                         >
                           <svg className="w-2.5 h-2.5 text-base-content/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -309,8 +309,8 @@ export default function InlineChatPanel({ onRfqCount }: Props) {
               </div>
             </div>
 
-            {/* ── RIGHT: RFQ info ── */}
-            <ChatRfqSidebar rfq={activeRfq} onNavigate={closeChatModal} />
+            {/* ── RIGHT: RFQ info — desktop only, same guard as ShortcutChat ── */}
+            <ChatRfqSidebar rfq={activeRfq} onNavigate={closeChatModal} className="hidden md:flex" />
           </div>
         </div>
 
