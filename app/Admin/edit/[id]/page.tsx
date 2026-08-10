@@ -326,22 +326,22 @@ export default function EditPage() {
 
   // ── Fetch chat users (poll 3s) ─────────────────────────────
   useEffect(() => {
+    // keep the previous array when nothing changed — a fresh array every 3s would
+    // re-render the whole page (and the edit form) for no reason
+    const applyUsers = (incoming: ChatUser[]) =>
+      setChatUsers((prev) =>
+        JSON.stringify(prev) === JSON.stringify(incoming) ? prev : incoming
+      );
     const load = async () => {
       try {
         const res = await fetch("/api/chat/users", { cache: "no-store" });
         const data = await res.json();
-        setChatUsers(data.users ?? data);
+        applyUsers(data.users ?? data);
       } catch {}
       finally { setLoadingUsers(false); }
     };
     load();
-    const iv = setInterval(async () => {
-      try {
-        const res = await fetch("/api/chat/users", { cache: "no-store" });
-        const data = await res.json();
-        setChatUsers(data.users ?? data);
-      } catch {}
-    }, 3000);
+    const iv = setInterval(load, 3000);
     return () => clearInterval(iv);
   }, []);
 
@@ -518,7 +518,11 @@ export default function EditPage() {
   // ── Panels ─────────────────────────────────────────────────
 
 
-  const EditPanel = ({ className = "" }: { className?: string }) => (
+  // A render function, NOT a component: declaring a component inside EditPage gives it a
+  // new identity on every render, so React unmounts/remounts the whole panel — which wiped
+  // the line-items table's horizontal scroll (and input focus) every time a chat poll landed.
+  // Called inline, the JSX joins EditPage's own tree and the DOM is reused.
+  const renderEditPanel = (className = "") => (
     <div className={`bg-base-100 rounded-2xl border border-base-300 flex flex-col gap-4 p-4 overflow-hidden min-h-0 ${className}`}>
       <div className="flex items-center justify-between">
         <span className="text-[10px] font-semibold tracking-[0.15em] uppercase text-base-content/40">RFQ Data</span>
@@ -694,7 +698,7 @@ export default function EditPage() {
 
         <div className="flex-1 overflow-hidden p-3">
           {mobileTab === "pdf" && <PdfPanel filename={form.filename} className="h-full" />}
-          {mobileTab === "edit" && <div className="h-full overflow-auto"><EditPanel className="min-h-full" /></div>}
+          {mobileTab === "edit" && <div className="h-full overflow-auto">{renderEditPanel("min-h-full")}</div>}
           {mobileTab === "chat" && (
             <ChatPanel
               className="h-full"
