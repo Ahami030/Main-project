@@ -175,10 +175,10 @@ function ConditionsAndSignatures({
           <p style={{ margin: "0 0 1px" }}>2. เงื่อนไขการชำระเงิน: {paymentTerms}</p>
         )}
         <p style={{ margin: "0 0 1px" }}>
-          {paymentTerms ? "3" : "2"}. ราคาที่ยื่นเสนอยืนอยู่ได้ภายในกำหนด 15 วัน นับตั้งแต่วันที่ได้ยื่นใบเสนอราคา
+          {paymentTerms ? "3" : "2"}. ราคาที่ยื่นเสนอยืนอยู่ได้ภายในกำหนด 30 วัน นับตั้งแต่วันที่ได้ยื่นใบเสนอราคา
         </p>
         <p style={{ margin: "0 0 1px" }}>
-          {paymentTerms ? "4" : "3"}. กำหนดส่งมอบพัสดุตามรายละเอียดรายการข้างต้นภายใน {deliveryTime} นับถัดจากวันลงนาม
+          {paymentTerms ? "4" : "3"}. กำหนดส่งมอบพัสดุตามรายละเอียดรายการข้างต้นภายใน 30 วัน นับถัดจากวันลงนาม
           {deliveryLocation && <> ณ {deliveryLocation}</>}
         </p>
         <p style={{ textAlign: "center", marginTop: "6px", marginBottom: 0, color: "#64748b", fontSize: "10.5px" }}>
