@@ -3,6 +3,7 @@
 import { useParams, useRouter } from "next/navigation";
 import { memo, useEffect, useRef, useState } from "react";
 import ChatFileAttachment from "@/components/chat/ChatFileAttachment";
+import QuotationPreviewModal from "@/components/QuotationPreviewModal";
 
 // memo wrapper — ป้องกัน iframe reload ตอน chat polling trigger parent re-render
 const StableIframe = memo(({ src }: { src: string }) => (
@@ -262,6 +263,8 @@ export default function EditPage() {
 
   // ── Confirm modal ──────────────────────────────────────────
   const [showConfirm, setShowConfirm] = useState(false);
+  const [savedOk, setSavedOk] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
 
   // ── Debug state ────────────────────────────────────────────
   const [quotationDebug, setQuotationDebug] = useState<{ id: string; status: string } | null>(null);
@@ -509,7 +512,9 @@ export default function EditPage() {
       setSaving(true);
       const res = await fetch(`/api/rfq/${id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) });
       if (!res.ok) throw new Error("Failed to save");
-      router.push("/Admin/rfq");
+      // stay put — staff usually wants to preview/download the quotation right after saving
+      // (to send over LINE) instead of bouncing back to the list
+      setSavedOk(true);
     } catch (err: any) { alert(err.message); }
     finally { setSaving(false); }
   };
@@ -527,6 +532,10 @@ export default function EditPage() {
       <div className="flex items-center justify-between">
         <span className="text-[10px] font-semibold tracking-[0.15em] uppercase text-base-content/40">RFQ Data</span>
         <div className="flex items-center gap-2">
+          <button className="btn btn-ghost btn-sm gap-1.5 h-8 min-h-0 rounded-xl text-xs border border-base-300" onClick={() => setShowPreview(true)} title="ดูใบเสนอราคา / ดาวน์โหลด PDF">
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+            ใบเสนอราคา
+          </button>
           <button className="btn btn-outline btn-sm gap-1.5 h-8 min-h-0 rounded-xl text-xs" onClick={() => router.push("/Admin/rfq")}>Cancel</button>
           <button className="btn btn-primary btn-sm gap-1.5 h-8 min-h-0 rounded-xl text-xs" onClick={() => setShowConfirm(true)} disabled={saving}>
             {saving ? <><span className="loading loading-spinner loading-xs" />Saving...</> : <><svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>Save</>}
@@ -783,7 +792,11 @@ export default function EditPage() {
           <div className="flex items-center justify-between">
             <span className="text-[10px] font-semibold tracking-[0.15em] uppercase text-base-content/40">RFQ Data</span>
             <div className="flex items-center gap-2">
-              <button className="btn btn-outline btn-sm gap-1.5 h-8 min-h-0 rounded-xl text-xs" onClick={() => router.push("/Admin/rfq")}>Cancel</button>
+              <button className="btn btn-ghost btn-sm gap-1.5 h-8 min-h-0 rounded-xl text-xs border border-base-300" onClick={() => setShowPreview(true)} title="ดูใบเสนอราคา / ดาวน์โหลด PDF">
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+            ใบเสนอราคา
+          </button>
+          <button className="btn btn-outline btn-sm gap-1.5 h-8 min-h-0 rounded-xl text-xs" onClick={() => router.push("/Admin/rfq")}>Cancel</button>
               <button className="btn btn-primary btn-sm gap-1.5 h-8 min-h-0 rounded-xl text-xs" onClick={() => setShowConfirm(true)} disabled={saving}>
                 {saving ? <><span className="loading loading-spinner loading-xs" />Saving...</> : <><svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>Save</>}
               </button>
@@ -994,6 +1007,39 @@ export default function EditPage() {
           </div>
           <div className="modal-backdrop bg-black/40" onClick={() => !saving && setShowConfirm(false)} />
         </dialog>
+      )}
+
+      {/* Saved — offer the quotation right here instead of bouncing to the list */}
+      {savedOk && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 w-[calc(100vw-2rem)] max-w-md print:hidden">
+          <div className="bg-base-100 border border-success/30 rounded-2xl shadow-mc p-3.5 flex items-center gap-3">
+            <div className="w-8 h-8 rounded-full bg-success/15 flex items-center justify-center shrink-0">
+              <svg className="w-4 h-4 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <span className="text-sm font-medium flex-1">บันทึกแล้ว</span>
+            <button className="btn btn-primary btn-xs rounded-lg" onClick={() => setShowPreview(true)}>
+              ดูใบเสนอราคา
+            </button>
+            <button className="btn btn-ghost btn-xs rounded-lg" onClick={() => router.push("/Admin/rfq")}>
+              กลับ
+            </button>
+            <button className="btn btn-ghost btn-xs btn-square rounded-lg" onClick={() => setSavedOk(false)} aria-label="ปิด">
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {showPreview && form && (
+        <QuotationPreviewModal
+          rfq={form}
+          confirmed={quotationDebug?.status === "confirmed"}
+          onClose={() => setShowPreview(false)}
+        />
       )}
     </>
   );

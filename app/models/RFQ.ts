@@ -16,6 +16,8 @@ const ChangeLogEntrySchema = new mongoose.Schema({
 
 const RFQSchema = new mongoose.Schema({
   USER_ID: String,
+  // null / missing = sits at the root of the folder tree (pre-folder RFQs included)
+  folderId: { type: String, default: null },
   document_type: String,
   rfq_number: String,
   rfq_date: String,
