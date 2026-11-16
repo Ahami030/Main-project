@@ -9,7 +9,7 @@ import PaymentStatusBadge from "@/components/payment/PaymentStatusBadge";
 import PaymentHistoryModal from "@/components/payment/PaymentHistoryModal";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-type QuotationStatus = "processing" | "sent" | "reviewing" | "completed" | "bargaining" | "confirmed";
+type QuotationStatus = "processing" | "sent" | "reviewing" | "completed" | "bargaining" | "confirmed" | "failed";
 
 interface Quotation {
   _id: string;
@@ -18,6 +18,7 @@ interface Quotation {
   createdAt: string;
   pdfId:   string | null;
   pdfPath: string | null;
+  failReason?: string | null;
 }
 
 type POStatus = "pending" | "accepted" | "billed";
@@ -70,6 +71,7 @@ const STEPS: { key: QuotationStatus; label: string; sublabel: string }[] = [
 
 const STATUS_ORDER: Record<QuotationStatus, number> = {
   processing: 0, sent: 1, reviewing: 2, completed: 3, bargaining: 4, confirmed: 5,
+  failed: -1, // off the timeline — no step is done
 };
 
 const STATUS_META: Record<QuotationStatus, {
@@ -81,6 +83,7 @@ const STATUS_META: Record<QuotationStatus, {
   completed:  { spotlight: "border-primary/25 bg-primary/5",  dot: "bg-primary", bar: "from-primary to-primary/30",   badge: "badge-primary", label: "เสร็จสิ้น" },
   bargaining: { spotlight: "border-accent/25  bg-accent/5",   dot: "bg-accent",  bar: "from-accent  to-accent/30",    badge: "badge-accent",  label: "พร้อมต่อรอง" },
   confirmed:  { spotlight: "border-success/40 bg-success/10", dot: "bg-success", bar: "from-success to-success/40",   badge: "badge-success", label: "ยืนยันแล้ว" },
+  failed:     { spotlight: "border-error/25 bg-error/5",      dot: "bg-error",   bar: "from-error to-error/30",       badge: "badge-error",   label: "ไม่สำเร็จ" },
 };
 
 const PROCESS_STEPS = [
@@ -551,7 +554,10 @@ export default function Page(): JSX.Element {
   // ── Derived state ─────────────────────────────────────────────────────────
   const latest      = quotations[0] ?? null;
   const meta        = latest ? STATUS_META[latest.status] : null;
-  const currentStep = latest ? STEPS.find((s) => s.key === latest.status)! : null;
+  const currentStep = !latest ? null : STEPS.find((s) => s.key === latest.status) ?? {
+    label: "ประมวลผลเอกสารไม่สำเร็จ",
+    sublabel: latest.failReason ?? "กรุณาตรวจสอบไฟล์แล้วอัปโหลดใหม่อีกครั้ง",
+  };
   const isInProgress = latest?.status === "processing" || latest?.status === "sent" || latest?.status === "reviewing";
 
   const poLatest       = poOrders[0] ?? null;
@@ -946,7 +952,16 @@ export default function Page(): JSX.Element {
                   </div>
 
                   {/* Next step hint */}
-                  {latest.status !== "bargaining" && latest.status !== "confirmed" && (
+                  {latest.status === "failed" && (
+                    <button
+                      onClick={() => router.push("/Client/quotation")}
+                      className="btn btn-primary w-full font-semibold gap-2 shadow-lg shadow-primary/20"
+                    >
+                      อัปโหลดเอกสารใหม่
+                      <IconArrow />
+                    </button>
+                  )}
+                  {latest.status !== "bargaining" && latest.status !== "confirmed" && latest.status !== "failed" && (
                     STEPS[STATUS_ORDER[latest.status] + 1] ? (
                       <div className="flex items-center gap-3 text-xs text-base-content/30">
                         <div className="flex-1 h-px bg-base-300" />

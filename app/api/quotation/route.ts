@@ -1,14 +1,14 @@
 import { NextResponse } from "next/server";
 import { requireSession, getUser } from "@/lib/apiAuth";
 import { connectMongoDB } from "@/lib/mongo";
-import Quotation from "@/app/models/Quotation";
+import Quotation, { expireStuckQuotations } from "@/app/models/Quotation";
 
 export async function POST(req: Request) {
   const sessionOrRes = await requireSession();
   if (sessionOrRes instanceof NextResponse) return sessionOrRes;
   const session = sessionOrRes;
 
-  const { filename, pdfId, pdfPath, userId: targetUserId } = await req.json();
+  const { filename, pdfId, pdfPath, rfqNumber, userId: targetUserId } = await req.json();
   if (!filename) {
     return NextResponse.json({ message: "filename required" }, { status: 400 });
   }
@@ -32,7 +32,9 @@ export async function POST(req: Request) {
 
   // "processing" until n8n's callback (/api/rfq/callback) confirms the RFQ is in the DB —
   // the admin's new-work badge counts "sent", so it only fires when the work actually exists
-  const quotation = await Quotation.create({ userId, filename, pdfId, pdfPath, status: "processing" });
+  const quotation = await Quotation.create({
+    userId, filename, pdfId, pdfPath, rfqNumber: rfqNumber ?? null, status: "processing",
+  });
 
   return NextResponse.json({ quotation }, { status: 201 });
 }
@@ -45,6 +47,7 @@ export async function GET() {
   await connectMongoDB();
 
   const userId = getUser(session).id ?? "unknown";
+  await expireStuckQuotations({ userId });
   const quotations = await Quotation.find({ userId }).sort({ createdAt: -1 });
 
   return NextResponse.json({ quotations });

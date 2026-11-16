@@ -1,13 +1,14 @@
 import { NextResponse } from "next/server";
 import { requireEmployee } from "@/lib/apiAuth";
 import { connectMongoDB } from "@/lib/mongo";
-import Quotation from "@/app/models/Quotation";
+import Quotation, { expireStuckQuotations } from "@/app/models/Quotation";
 
 export async function GET() {
   const sessionOrRes = await requireEmployee("quotation");
   if (sessionOrRes instanceof NextResponse) return sessionOrRes;
 
   await connectMongoDB();
+  await expireStuckQuotations();
   const quotations = await Quotation.find().sort({ createdAt: -1 });
   return NextResponse.json({ quotations });
 }

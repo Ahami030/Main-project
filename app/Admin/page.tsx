@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import InlineChatPanel from '@/components/admin/InlineChatPanel';
 
-type QuotationStatus = 'processing' | 'sent' | 'reviewing' | 'completed' | 'bargaining' | 'confirmed';
+type QuotationStatus = 'processing' | 'sent' | 'reviewing' | 'completed' | 'bargaining' | 'confirmed' | 'failed';
 
 interface Quotation {
   _id: string;
@@ -27,6 +27,7 @@ const STATUS_LABELS: Record<QuotationStatus, string> = {
   completed:  'เสร็จสิ้น',
   bargaining: 'พร้อมต่อรอง',
   confirmed:  'ยืนยันแล้ว',
+  failed:     'ประมวลผลไม่สำเร็จ',
 };
 
 const STATUS_BADGE: Record<QuotationStatus, string> = {
@@ -36,6 +37,7 @@ const STATUS_BADGE: Record<QuotationStatus, string> = {
   completed:  'badge-primary',
   bargaining: 'badge-accent',
   confirmed:  'badge-success',
+  failed:     'badge-error',
 };
 
 const NEXT_STATUS: Record<QuotationStatus, QuotationStatus | null> = {
@@ -47,6 +49,7 @@ const NEXT_STATUS: Record<QuotationStatus, QuotationStatus | null> = {
   completed:  'bargaining',
   bargaining: null,
   confirmed:  null,
+  failed:     null, // customer re-uploads; nothing for staff to advance
 };
 
 // ─── Reusable navigation card (Mastercard editorial) ───────────────────────────
