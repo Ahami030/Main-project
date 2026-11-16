@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import InlineChatPanel from '@/components/admin/InlineChatPanel';
 
-type QuotationStatus = 'sent' | 'reviewing' | 'completed' | 'bargaining' | 'confirmed';
+type QuotationStatus = 'processing' | 'sent' | 'reviewing' | 'completed' | 'bargaining' | 'confirmed';
 
 interface Quotation {
   _id: string;
@@ -21,6 +21,7 @@ interface ToastNotification {
 }
 
 const STATUS_LABELS: Record<QuotationStatus, string> = {
+  processing: 'กำลังประมวลผล',
   sent:       'ส่งแล้ว',
   reviewing:  'กำลังดำเนินการ',
   completed:  'เสร็จสิ้น',
@@ -29,6 +30,7 @@ const STATUS_LABELS: Record<QuotationStatus, string> = {
 };
 
 const STATUS_BADGE: Record<QuotationStatus, string> = {
+  processing: 'badge-info',
   sent:       'badge-success',
   reviewing:  'badge-warning',
   completed:  'badge-primary',
@@ -37,6 +39,9 @@ const STATUS_BADGE: Record<QuotationStatus, string> = {
 };
 
 const NEXT_STATUS: Record<QuotationStatus, QuotationStatus | null> = {
+  // processing → sent happens via the n8n callback, not manually — but leave the manual
+  // path as an escape hatch for a dead workflow
+  processing: 'sent',
   sent:       'reviewing',
   reviewing:  'completed',
   completed:  'bargaining',
@@ -99,7 +104,7 @@ function SectionHeader({ label }: { label: string }) {
 
 export default function AdminPage() {
   const router = useRouter();
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
   const role = (session?.user as any)?.role as string | undefined;
   const permissions = ((session?.user as any)?.permissions ?? []) as string[];
 
@@ -158,9 +163,13 @@ export default function AdminPage() {
     }
   }, []);
 
-  useEffect(() => { fetchQuotations(); }, [fetchQuotations]);
+  useEffect(() => {
+    if (status !== 'authenticated') return;
+    fetchQuotations();
+  }, [status, fetchQuotations]);
 
   useEffect(() => {
+    if (status !== 'authenticated') return;
     const fetchPoCount = async () => {
       try {
         const res = await fetch('/api/po');
@@ -173,10 +182,10 @@ export default function AdminPage() {
     fetchPoCount();
     const id = setInterval(fetchPoCount, 10000);
     return () => clearInterval(id);
-  }, []);
+  }, [status]);
 
-  // ── Pending payment-proofs awaiting review ──────────────────────────────────
   useEffect(() => {
+    if (status !== 'authenticated') return;
     const fetchPaymentCount = async () => {
       try {
         const res = await fetch('/api/payment-proof');
@@ -189,7 +198,7 @@ export default function AdminPage() {
     fetchPaymentCount();
     const id = setInterval(fetchPaymentCount, 10000);
     return () => clearInterval(id);
-  }, []);
+  }, [status]);
 
   const updateStatus = async (id: string, status: QuotationStatus) => {
     setUpdating(id);
@@ -206,12 +215,13 @@ export default function AdminPage() {
     }
   };
 
-  const deleteQuotation = async (id: string) => {
-    setUpdating(id);
+  const deleteQuotation = async (q: Quotation) => {
+    if (!confirm(`ลบถาวรของ ${q.userId}?\n\n⚠️ ต่างจาก Reset: ไม่มีการสำรองข้อมูลใดๆ\nสิ่งที่จะถูกลบทิ้งถาวร:\n• ไฟล์ PDF\n• แชททั้งหมดของผู้ใช้นี้\n• RFQ ทั้งหมดของผู้ใช้นี้\n• รายการใบเสนอราคานี้`)) return;
+    setUpdating(q._id);
     try {
-      const res = await fetch(`/api/quotation/${id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/quotation/${q._id}`, { method: 'DELETE' });
       if (!res.ok) return;
-      setQuotations((prev) => prev.filter((q) => q._id !== id));
+      setQuotations((prev) => prev.filter((x) => x._id !== q._id));
     } finally {
       setUpdating(null);
     }
@@ -278,6 +288,11 @@ export default function AdminPage() {
             <p className="text-base text-base-content/55 mt-3 max-w-lg leading-relaxed">
               จัดการใบเสนอราคา ใบสั่งซื้อ การชำระเงิน และดูประวัติย้อนหลังได้จากที่นี่
             </p>
+          </div>
+
+          {/* ── Chat panel: desktop only (mobile uses floating button) ── */}
+          <div className="hidden lg:block bg-base-100 border border-base-300/70 rounded-[2rem] overflow-hidden shadow-mc-sm" style={{ height: '480px' }}>
+            <InlineChatPanel onRfqCount={handleRfqCount} />
           </div>
 
           {/* ── Management section ──────────────────────────────────────── */}
@@ -358,7 +373,7 @@ export default function AdminPage() {
                   category="System"
                   title="จัดการ User"
                   desc="เพิ่ม แก้ไข และกำหนดสิทธิ์ผู้ใช้"
-                  iconWrap="bg-neutral/10 text-neutral-content"
+                  iconWrap="bg-neutral/10 text-neutral"
                   onClick={() => router.push('/Admin/users')}
                   icon={
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -426,11 +441,6 @@ export default function AdminPage() {
               </div>
             </section>
           )}
-
-          {/* ── Chat panel: desktop only (mobile uses floating button) ── */}
-          <div className="hidden lg:block bg-base-100 border border-base-300/70 rounded-[2rem] overflow-hidden shadow-mc-sm" style={{ height: '480px' }}>
-            <InlineChatPanel onRfqCount={handleRfqCount} />
-          </div>
 
           {/* ── จัดการใบเสนอราคา — collapse ── */}
           <div className="collapse collapse-arrow bg-base-100 border border-base-300/70 rounded-[2rem] shadow-mc-sm">
@@ -528,7 +538,7 @@ export default function AdminPage() {
                               <td>
                                 <div className="flex gap-1.5">
                                   <button
-                                    onClick={() => deleteQuotation(q._id)}
+                                    onClick={() => deleteQuotation(q)}
                                     disabled={updating === q._id || resetting === q._id}
                                     className="btn btn-xs btn-error btn-outline"
                                   >

@@ -3,14 +3,13 @@
 import { JSX, useCallback, useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import ChatNotificationBubble from "@/components/client/ChatNotificationBubble";
 import QuotationDocument, { RFQData } from "@/components/QuotationDocument";
 import BillingNoteDocument from "@/components/BillingNoteDocument";
 import PaymentStatusBadge from "@/components/payment/PaymentStatusBadge";
 import PaymentHistoryModal from "@/components/payment/PaymentHistoryModal";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-type QuotationStatus = "sent" | "reviewing" | "completed" | "bargaining" | "confirmed";
+type QuotationStatus = "processing" | "sent" | "reviewing" | "completed" | "bargaining" | "confirmed";
 
 interface Quotation {
   _id: string;
@@ -61,6 +60,7 @@ interface ModalBillingData {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const STEPS: { key: QuotationStatus; label: string; sublabel: string }[] = [
+  { key: "processing", label: "กำลังประมวลผลเอกสาร", sublabel: "ระบบกำลังอ่านและสกัดข้อมูลจากไฟล์" },
   { key: "sent",       label: "ส่งไฟล์แล้ว",        sublabel: "ระบบได้รับเอกสารของคุณแล้ว" },
   { key: "reviewing",  label: "ตรวจสอบ / จัดทำราย", sublabel: "ทีมงานกำลังตรวจสอบเอกสาร" },
   { key: "completed",  label: "ดำเนินการเสร็จสิ้น",  sublabel: "ใบเสนอราคาพร้อมแล้ว" },
@@ -69,12 +69,13 @@ const STEPS: { key: QuotationStatus; label: string; sublabel: string }[] = [
 ];
 
 const STATUS_ORDER: Record<QuotationStatus, number> = {
-  sent: 0, reviewing: 1, completed: 2, bargaining: 3, confirmed: 4,
+  processing: 0, sent: 1, reviewing: 2, completed: 3, bargaining: 4, confirmed: 5,
 };
 
 const STATUS_META: Record<QuotationStatus, {
   spotlight: string; dot: string; bar: string; badge: string; label: string;
 }> = {
+  processing: { spotlight: "border-info/25 bg-info/5",        dot: "bg-info",    bar: "from-info to-info/30",         badge: "badge-info",    label: "กำลังประมวลผล" },
   sent:       { spotlight: "border-success/25 bg-success/5",  dot: "bg-success", bar: "from-success to-success/30",   badge: "badge-success", label: "ส่งแล้ว" },
   reviewing:  { spotlight: "border-warning/25 bg-warning/5",  dot: "bg-warning", bar: "from-warning to-warning/30",   badge: "badge-warning", label: "กำลังดำเนินการ" },
   completed:  { spotlight: "border-primary/25 bg-primary/5",  dot: "bg-primary", bar: "from-primary to-primary/30",   badge: "badge-primary", label: "เสร็จสิ้น" },
@@ -194,6 +195,7 @@ export default function Page(): JSX.Element {
   // ── Page state ───────────────────────────────────────────────────────────
   const [loading, setLoading] = useState(true);
   const [quotations, setQuotations] = useState<Quotation[]>([]);
+  const [pageVisible, setPageVisible] = useState(false);
   const [learnMore, setLearnMore]   = useState(false);
   const [modalQuotation, setModalQuotation] = useState<Quotation | null>(null);
   const [rfqForModal, setRfqForModal]             = useState<RFQData | null>(null);
@@ -246,6 +248,13 @@ export default function Page(): JSX.Element {
     const id = setInterval(() => fetchPOOrders(true), 8000);
     return () => clearInterval(id);
   }, [fetchPOOrders]);
+
+  // ── Reveal page once both initial fetches complete ───────────────────────
+  useEffect(() => {
+    if (loading || poLoading) return;
+    const t = setTimeout(() => setPageVisible(true), 60);
+    return () => clearTimeout(t);
+  }, [loading, poLoading]);
 
   // ── Fetch payment proofs ─────────────────────────────────────────────────
   type PaymentInfo = {
@@ -543,7 +552,7 @@ export default function Page(): JSX.Element {
   const latest      = quotations[0] ?? null;
   const meta        = latest ? STATUS_META[latest.status] : null;
   const currentStep = latest ? STEPS.find((s) => s.key === latest.status)! : null;
-  const isInProgress = latest?.status === "sent" || latest?.status === "reviewing";
+  const isInProgress = latest?.status === "processing" || latest?.status === "sent" || latest?.status === "reviewing";
 
   const poLatest       = poOrders[0] ?? null;
   const poMeta         = poLatest ? PO_STATUS_META[poLatest.status] : null;
@@ -751,29 +760,104 @@ export default function Page(): JSX.Element {
         <div className="absolute -bottom-[26rem] -left-[12rem] w-[42rem] h-[42rem] rounded-full border border-secondary/[0.08]" />
       </div>
 
-      <div id="client-dashboard-content" className="relative max-w-6xl mx-auto px-4 md:px-8 py-8 md:py-14 space-y-5 md:space-y-7">
+      {!pageVisible && (
+        <div className="fixed inset-0 z-30 bg-base-200 overflow-y-auto pt-16">
+          <div className="max-w-6xl mx-auto px-4 md:px-8 py-8 md:py-14 space-y-5">
+
+            {/* User card skeleton */}
+            <div className="bg-base-100 rounded-[2.5rem] border border-base-300/70 shadow-mc py-7 px-7 md:px-9">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-5">
+                  <div className="w-16 h-16 rounded-full bg-base-300 animate-pulse shrink-0" />
+                  <div className="space-y-3">
+                    <div className="h-3 w-20 bg-base-300 animate-pulse rounded-full" />
+                    <div className="h-7 w-48 bg-base-300 animate-pulse rounded-full" />
+                    <div className="h-4 w-56 bg-base-300 animate-pulse rounded-full" />
+                  </div>
+                </div>
+                <div className="h-9 w-24 bg-base-300 animate-pulse rounded-full hidden md:block" />
+              </div>
+            </div>
+
+            {/* Quotation card skeleton */}
+            <div className="bg-base-100 rounded-[2.5rem] border border-base-300/70 shadow-mc py-7 px-7 md:px-9 space-y-6">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex items-start gap-3">
+                  <div className="w-12 h-12 rounded-full bg-base-300 animate-pulse shrink-0" />
+                  <div className="space-y-2.5">
+                    <div className="h-3 w-28 bg-base-300 animate-pulse rounded-full" />
+                    <div className="h-6 w-64 bg-base-300 animate-pulse rounded-full" />
+                    <div className="h-4 w-36 bg-base-300 animate-pulse rounded-full" />
+                  </div>
+                </div>
+                <div className="h-8 w-24 bg-base-300 animate-pulse rounded-full shrink-0 hidden md:block" />
+              </div>
+              <div className="space-y-4 pt-1">
+                {[...Array(4)].map((_, i) => (
+                  <div key={i} className="flex gap-3 items-start">
+                    <div className="w-7 h-7 rounded-full bg-base-300 animate-pulse shrink-0" />
+                    <div className="flex-1 space-y-2 pt-0.5">
+                      <div className="h-4 bg-base-300 animate-pulse rounded-full" style={{ width: `${62 - i * 8}%` }} />
+                      <div className="h-3 w-40 bg-base-300 animate-pulse rounded-full" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* PO card skeleton */}
+            <div className="bg-base-100 rounded-[2.5rem] border border-base-300/70 shadow-mc py-7 px-7 md:px-9 space-y-5">
+              <div className="flex items-start gap-3">
+                <div className="w-12 h-12 rounded-full bg-base-300 animate-pulse shrink-0" />
+                <div className="space-y-2.5">
+                  <div className="h-3 w-24 bg-base-300 animate-pulse rounded-full" />
+                  <div className="h-6 w-48 bg-base-300 animate-pulse rounded-full" />
+                </div>
+              </div>
+              <div className="space-y-4">
+                {[...Array(3)].map((_, i) => (
+                  <div key={i} className="flex gap-3 items-start">
+                    <div className="w-7 h-7 rounded-full bg-base-300 animate-pulse shrink-0" />
+                    <div className="flex-1 space-y-2 pt-0.5">
+                      <div className="h-4 bg-base-300 animate-pulse rounded-full" style={{ width: `${58 - i * 10}%` }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      <div
+        id="client-dashboard-content"
+        className={`relative max-w-6xl mx-auto px-4 md:px-8 py-8 md:py-14 space-y-5 md:space-y-7 transition-all duration-700 ease-out ${
+          pageVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6 pointer-events-none'
+        }`}
+      >
 
         {/* ── User Card ─────────────────────────────────────────── */}
         <div className="card bg-base-100 border border-base-300/70 rounded-[2.5rem] shadow-mc transition-shadow duration-300 hover:shadow-mc-lg">
           <div className="card-body py-7 px-7 md:px-9">
             <div className="flex items-center justify-between gap-4">
-              <div className="flex items-center gap-5">
+              <div className="flex items-center gap-4 sm:gap-5 min-w-0">
                 {/* Circular ink portrait */}
                 <div className="avatar placeholder shrink-0">
                   <div className="w-16 h-16 rounded-full bg-primary text-primary-content font-medium text-2xl tracking-mc flex items-center justify-center">
                     <span>{name[0]?.toUpperCase()}</span>
                   </div>
                 </div>
-                <div>
+                <div className="min-w-0">
                   {/* Eyebrow */}
                   <p className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.16em] text-base-content/55 mb-1.5">
                     <span className="w-1.5 h-1.5 rounded-full bg-accent" />
                     Dashboard
                   </p>
-                  <h2 className="font-medium text-2xl leading-tight tracking-mc">
+                  <h2 className="font-medium text-2xl leading-tight tracking-mc truncate">
                     สวัสดี, {name}
                   </h2>
-                  <p className="text-sm text-base-content/55 mt-1">
+                  <p className="text-sm text-base-content/55 mt-1 truncate">
                     {email}
                   </p>
                 </div>
@@ -951,7 +1035,7 @@ export default function Page(): JSX.Element {
 
           /* ── Hero CTA (ยังไม่มี quotation) ── */
           <div className="card bg-base-100 border border-base-300/70 rounded-[2.5rem] shadow-mc transition-shadow duration-300 hover:shadow-mc-lg overflow-hidden">
-            <div className="card-body py-12 px-8 md:px-12 gap-0">
+            <div className="card-body py-8 md:py-12 px-4 sm:px-8 md:px-12 gap-0">
               <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-10">
 
                 {/* Left: text */}
@@ -960,7 +1044,7 @@ export default function Page(): JSX.Element {
                     <span className="w-1.5 h-1.5 rounded-full bg-accent" />
                     Quotation Request System
                   </p>
-                  <h1 className="text-5xl md:text-6xl font-medium tracking-mc leading-[1.05] mb-5">
+                  <h1 className="text-3xl sm:text-5xl md:text-6xl font-medium tracking-mc leading-[1.05] mb-5">
                     ส่งเอกสาร<br />
                     เพื่อจัดทำ<span className="text-accent">ใบเสนอราคา</span>
                   </h1>
@@ -1175,7 +1259,7 @@ export default function Page(): JSX.Element {
 
           /* ── PO Hero CTA ── */
           <div className="card bg-base-100 border border-base-300/70 rounded-[2.5rem] shadow-mc transition-shadow duration-300 hover:shadow-mc-lg overflow-hidden">
-            <div className="card-body py-12 px-8 md:px-12 gap-0">
+            <div className="card-body py-8 md:py-12 px-4 sm:px-8 md:px-12 gap-0">
               <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-10">
 
                 {/* Left: text */}
@@ -1184,7 +1268,7 @@ export default function Page(): JSX.Element {
                     <span className="w-1.5 h-1.5 rounded-full bg-secondary" />
                     Purchase Order System
                   </p>
-                  <h2 className="text-5xl md:text-6xl font-medium tracking-mc leading-[1.05] mb-5">
+                  <h2 className="text-3xl sm:text-5xl md:text-6xl font-medium tracking-mc leading-[1.05] mb-5">
                     ส่งรายการสินค้า<br />
                     เพื่อ<span className="text-secondary">สั่งซื้อ</span>
                   </h2>
@@ -1230,12 +1314,10 @@ export default function Page(): JSX.Element {
 
       </div>
 
-      <ChatNotificationBubble />
-
       {/* ── Billing Modal ─────────────────────────────────────── */}
       {(modalBilling || billingModalLoading) && (
-        <dialog className="modal modal-open">
-          <div className="modal-box w-11/12 max-w-4xl h-[92vh] p-0 overflow-hidden flex flex-col">
+        <dialog className="modal modal-open modal-bottom sm:modal-middle">
+          <div className="modal-box w-full sm:w-11/12 max-w-4xl h-[92vh] p-0 overflow-hidden flex flex-col">
 
             {/* Header */}
             <div className="flex items-center justify-between px-4 py-2.5 bg-base-100 border-b border-base-300 shrink-0">
@@ -1442,8 +1524,8 @@ export default function Page(): JSX.Element {
       {/* ── Document Modal ────────────────────────────────────── */}
       {modalQuotation && (
         <>
-          <dialog className="modal modal-open">
-            <div className="modal-box w-11/12 max-w-4xl h-[92vh] p-0 overflow-hidden flex flex-col">
+          <dialog className="modal modal-open modal-bottom sm:modal-middle">
+            <div className="modal-box w-full sm:w-11/12 max-w-4xl h-[92vh] p-0 overflow-hidden flex flex-col">
 
               {/* Header */}
               <div className="flex flex-col shrink-0 bg-base-100 border-b border-base-300">

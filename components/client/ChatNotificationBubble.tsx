@@ -1,105 +1,412 @@
-"use client";
+'use client';
 
-import { useEffect, useRef, useState } from "react";
-import { useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from 'react';
+import { useSession } from 'next-auth/react';
+import { usePathname } from 'next/navigation';
+import ChatFileAttachment from '@/components/chat/ChatFileAttachment';
 
-type Chat = { _id: string; senderRole: "user" | "admin"; message: string; createdAt: string };
+type ChatMsg = {
+  _id: string;
+  senderRole: 'user' | 'admin';
+  message: string;
+  fileUrl?: string;
+  fileType?: string;
+  fileName?: string;
+  isDeleted?: boolean;
+  isEdited?: boolean;
+  createdAt: string;
+};
+
+const EDIT_WINDOW_MS = 2 * 60 * 1000; // API allows editing own text messages for 2 minutes
 
 export default function ChatNotificationBubble() {
   const { data: session } = useSession();
-  const router = useRouter();
+  const pathname = usePathname();
+
+  const [open, setOpen] = useState(false);
+  const [messages, setMessages] = useState<ChatMsg[]>([]);
+  const [draft, setDraft] = useState('');
+  const [pastedImage, setPastedImage] = useState<File | null>(null);
+  const [pastedPreview, setPastedPreview] = useState('');
+  const [uploading, setUploading] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
-  const [latestMsg, setLatestMsg] = useState("");
-  const [visible, setVisible] = useState(false);
-  const prevCountRef = useRef(0);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editText, setEditText] = useState('');
+
+  const msgContainerRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const shouldAutoScrollRef = useRef(true);
+  const prevMsgCountRef = useRef(0);
+  const autoScrollUntilRef = useRef(0); // ignore handleScroll during our own smooth animation
 
   const userId = (session?.user as any)?.id;
 
+  const hidden = pathname === '/Client/Bargain';
+
+  // Hydrate from localStorage cache → instant display before the (slow) first DB fetch
   useEffect(() => {
     if (!userId) return;
-
-    const check = async () => {
-      try {
-        const res = await fetch(`/api/chat/${userId}`, { cache: "no-store" });
-        if (!res.ok) return;
-        const chats: Chat[] = await res.json();
-        const lastSeen = parseInt(localStorage.getItem("client_chat_last_seen") || "0");
-        const unread = chats.filter(
-          (c) => c.senderRole === "admin" && new Date(c.createdAt).getTime() > lastSeen
-        );
-        const count = unread.length;
-
-        // animate in เมื่อมีข้อความใหม่เข้ามา
-        if (count > prevCountRef.current && count > 0) {
-          setVisible(false);
-          setTimeout(() => setVisible(true), 50);
-        }
-        prevCountRef.current = count;
-        setUnreadCount(count);
-        if (unread.length > 0) setLatestMsg(unread[unread.length - 1].message);
-      } catch {}
-    };
-
-    check();
-    const id = setInterval(check, 5000);
-    return () => clearInterval(id);
+    try {
+      const cached = localStorage.getItem(`chat_cache_${userId}`);
+      if (cached) setMessages(JSON.parse(cached));
+    } catch {}
   }, [userId]);
 
-  if (!unreadCount || !visible) return null;
+  useEffect(() => {
+    if (!userId || hidden) return;
+    const fetchMsgs = async () => {
+      try {
+        const res = await fetch(`/api/chat/${userId}`, { cache: 'no-store' });
+        if (!res.ok) return;
+        const data: ChatMsg[] = await res.json();
+        setMessages((prev) => {
+          const lastSame = data[data.length - 1]?._id === prev[prev.length - 1]?._id;
+          if (data.length === prev.length && lastSame) return prev; // no change → skip re-render
+          return data;
+        });
+        try { localStorage.setItem(`chat_cache_${userId}`, JSON.stringify(data)); } catch {}
+        const lastSeen = parseInt(localStorage.getItem('client_chat_last_seen') || '0');
+        const unread = data.filter(
+          (c) => c.senderRole === 'admin' && new Date(c.createdAt).getTime() > lastSeen
+        );
+        setUnreadCount(unread.length);
+      } catch {}
+    };
+    fetchMsgs();
+    const iv = setInterval(fetchMsgs, open ? 1000 : 3000);
+    return () => clearInterval(iv);
+  }, [userId, open, hidden]);
+
+  // Auto-scroll on new messages
+  useEffect(() => {
+    if (!open) return;
+    const newCount = messages.length;
+    const isNew = newCount > prevMsgCountRef.current;
+    prevMsgCountRef.current = newCount;
+    if (!isNew || !shouldAutoScrollRef.current) return;
+    if (msgContainerRef.current) {
+      autoScrollUntilRef.current = Date.now() + 700;
+      msgContainerRef.current.scrollTo({ top: msgContainerRef.current.scrollHeight, behavior: 'smooth' });
+    }
+  }, [messages, open]);
+
+  // Re-pin to bottom after an image finishes loading (img has no height until loaded → initial scroll lands short)
+  const pinBottomAfterImage = () => {
+    if (!shouldAutoScrollRef.current) return;
+    requestAnimationFrame(() => {
+      const el = msgContainerRef.current;
+      if (el) el.scrollTo({ top: el.scrollHeight });
+    });
+  };
+
+  // Revoke object URL for paste preview
+  useEffect(() => {
+    if (!pastedImage) { setPastedPreview(''); return; }
+    const url = URL.createObjectURL(pastedImage);
+    setPastedPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [pastedImage]);
+
+  if (hidden) return null;
+
+  const openPanel = () => {
+    setOpen(true);
+    shouldAutoScrollRef.current = true;
+    localStorage.setItem('client_chat_last_seen', Date.now().toString());
+    setUnreadCount(0);
+    setTimeout(() => {
+      msgContainerRef.current?.scrollTo({ top: msgContainerRef.current.scrollHeight, behavior: 'instant' });
+    }, 50);
+  };
+
+  const uploadAndSend = async (file: File) => {
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const up = await fetch('/api/chat/upload', { method: 'POST', body: fd });
+      if (!up.ok) return;
+      const { fileUrl, fileType, fileName } = await up.json();
+      if (!fileUrl) return; // never save an empty bubble
+      await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, senderRole: 'user', message: '', fileUrl, fileType, fileName }),
+      });
+      shouldAutoScrollRef.current = true;
+    } catch {}
+    setUploading(false);
+  };
+
+  const sendMessage = async () => {
+    if (pastedImage) {
+      const file = pastedImage;
+      setPastedImage(null);
+      await uploadAndSend(file);
+      return;
+    }
+    if (!draft.trim()) return;
+    const text = draft;
+    setDraft('');
+    try {
+      await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, senderRole: 'user', message: text }),
+      });
+      shouldAutoScrollRef.current = true;
+    } catch {}
+  };
+
+  const handleScroll = () => {
+    const el = msgContainerRef.current;
+    if (!el) return;
+    // scroll events from our own smooth animation would otherwise read as
+    // "user scrolled up" and un-pin mid-flight (the stuck-at-top bug)
+    if (Date.now() < autoScrollUntilRef.current) return;
+    shouldAutoScrollRef.current = el.scrollTop + el.clientHeight >= el.scrollHeight - 50;
+  };
+
+  const canEdit = (msg: ChatMsg) =>
+    !msg.fileUrl && Date.now() - new Date(msg.createdAt).getTime() < EDIT_WINDOW_MS;
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('ลบข้อความนี้?')) return;
+    try {
+      await fetch(`/api/chat/message/${id}`, { method: 'DELETE' });
+      setMessages((prev) => prev.map((m) =>
+        m._id === id ? { ...m, isDeleted: true, message: '', fileUrl: '', fileType: '', fileName: '' } : m
+      ));
+    } catch {}
+  };
+
+  const handleSaveEdit = async (id: string) => {
+    if (!editText.trim()) return;
+    try {
+      await fetch(`/api/chat/message/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: editText }),
+      });
+      setMessages((prev) => prev.map((m) =>
+        m._id === id ? { ...m, message: editText.trim(), isEdited: true } : m
+      ));
+    } catch {}
+    setEditingId(null);
+  };
+
+  const fmtTime = (iso: string) =>
+    new Date(iso).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
 
   return (
-    <button
-      onClick={() => router.push("/Client/Bargain")}
-      className="fixed bottom-6 right-6 z-50 max-w-72 flex items-center gap-3
-                 bg-base-100 border border-primary/30 rounded-2xl px-4 py-3
-                 shadow-2xl shadow-primary/20 hover:shadow-primary/40
-                 hover:border-primary/60 active:scale-95
-                 transition-all duration-200
-                 animate-[slideUp_0.3s_ease-out]"
-      style={{ animation: "slideUp 0.3s ease-out" }}
-    >
-      {/* ไอคอน chat พร้อม badge */}
-      <div className="relative shrink-0">
-        <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center">
-          <svg className="w-4.5 h-4.5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-              d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-          </svg>
-        </div>
-        <span className="absolute -top-1 -right-1 min-w-4 h-4 px-0.5 rounded-full bg-error text-error-content text-[9px] font-bold flex items-center justify-center">
-          {unreadCount > 9 ? "9+" : unreadCount}
-        </span>
-        {/* ping animation */}
-        <span className="absolute -top-1 -right-1 min-w-4 h-4 rounded-full bg-error animate-ping opacity-40" />
-      </div>
-
-      {/* ข้อความ */}
-      <div className="flex flex-col items-start min-w-0">
-        <span className="text-xs font-semibold text-base-content leading-tight">
-          เจ้าหน้าที่ตอบกลับ
-          {unreadCount > 1 && (
-            <span className="ml-1 text-primary font-bold">{unreadCount} ข้อความ</span>
-          )}
-        </span>
-        {latestMsg && (
-          <span className="text-[11px] text-base-content/50 truncate max-w-44 mt-0.5">
-            {latestMsg}
+    <>
+      {/* Floating button */}
+      <button
+        onClick={openPanel}
+        className="fixed bottom-6 right-6 z-50 btn btn-primary btn-circle shadow-xl w-14 h-14"
+        aria-label="เปิด chat"
+      >
+        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+            d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+        </svg>
+        {unreadCount > 0 && (
+          <span className="absolute -top-1 -right-1 badge badge-error badge-sm min-w-5 h-5 text-[10px] font-bold px-1">
+            {unreadCount > 99 ? '99+' : unreadCount}
           </span>
         )}
-      </div>
+      </button>
 
-      {/* arrow */}
-      <svg className="w-3.5 h-3.5 text-primary/60 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-      </svg>
+      {/* Chat panel */}
+      {open && (
+        <div
+          className="fixed bottom-24 right-6 z-50 w-[calc(100vw-3rem)] sm:w-80 flex flex-col rounded-2xl shadow-2xl overflow-hidden border border-base-200 bg-base-100"
+          style={{ height: 'min(520px, 70dvh)' }}
+        >
+          {/* Header */}
+          <div className="flex items-center justify-between px-4 py-3 border-b border-base-200 shrink-0">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-full bg-primary/15 flex items-center justify-center">
+                <svg className="w-3.5 h-3.5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                    d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                </svg>
+              </div>
+              <span className="text-sm font-bold text-base-content">Chat กับเจ้าหน้าที่</span>
+            </div>
+            <button
+              onClick={() => setOpen(false)}
+              className="btn btn-ghost btn-xs btn-square rounded-lg"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
 
-      <style>{`
-        @keyframes slideUp {
-          from { opacity: 0; transform: translateY(16px) scale(0.95); }
-          to   { opacity: 1; transform: translateY(0)   scale(1); }
-        }
-      `}</style>
-    </button>
+          {/* Messages */}
+          <div
+            ref={msgContainerRef}
+            onScroll={handleScroll}
+            className="flex-1 overflow-y-auto px-4 py-3 flex flex-col gap-2 min-h-0"
+          >
+            {messages.length === 0 ? (
+              <div className="flex-1 flex items-center justify-center text-base-content/30 text-xs">
+                ยังไม่มีข้อความ
+              </div>
+            ) : (
+              messages.map((msg) => {
+                const isUser = msg.senderRole === 'user';
+                if (msg.isDeleted) {
+                  return (
+                    <div key={msg._id} className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
+                      <span className="text-xs italic text-base-content/30 px-3 py-1.5">ข้อความถูกลบแล้ว</span>
+                    </div>
+                  );
+                }
+                if (editingId === msg._id) {
+                  return (
+                    <div key={msg._id} className="flex justify-end">
+                      <div className="flex items-center gap-1.5 max-w-[80%]">
+                        <input
+                          type="text"
+                          className="input input-bordered input-xs h-8 rounded-xl text-sm flex-1"
+                          value={editText}
+                          autoFocus
+                          onChange={(e) => setEditText(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') handleSaveEdit(msg._id);
+                            if (e.key === 'Escape') setEditingId(null);
+                          }}
+                        />
+                        <button onClick={() => handleSaveEdit(msg._id)} className="btn btn-primary btn-xs h-8 rounded-lg">บันทึก</button>
+                        <button onClick={() => setEditingId(null)} className="btn btn-ghost btn-xs h-8 rounded-lg">ยกเลิก</button>
+                      </div>
+                    </div>
+                  );
+                }
+                return (
+                  <div key={msg._id} className={`flex group ${isUser ? 'justify-end' : 'justify-start'}`}>
+                    {/* hover actions — only on the customer's own messages */}
+                    {isUser && (
+                      <div className="opacity-60 md:opacity-0 md:group-hover:opacity-100 transition-opacity flex items-center gap-1 self-center mx-1 shrink-0">
+                        {canEdit(msg) && (
+                          <button
+                            onClick={() => { setEditingId(msg._id); setEditText(msg.message); }}
+                            className="w-5 h-5 rounded-full bg-base-200 hover:bg-base-300 flex items-center justify-center"
+                            title="แก้ไข (ภายใน 2 นาที)"
+                          >
+                            <svg className="w-2.5 h-2.5 text-base-content/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            </svg>
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleDelete(msg._id)}
+                          className="w-5 h-5 rounded-full bg-base-200 hover:bg-error/15 flex items-center justify-center"
+                          title="ลบ"
+                        >
+                          <svg className="w-2.5 h-2.5 text-base-content/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      </div>
+                    )}
+                    <div className={`max-w-[80%] flex flex-col gap-0.5 ${isUser ? 'items-end' : 'items-start'}`}>
+                      {msg.fileUrl ? (
+                        <ChatFileAttachment
+                          fileUrl={msg.fileUrl}
+                          fileType={msg.fileType!}
+                          fileName={msg.fileName!}
+                          isAdmin={isUser}
+                          onImageLoad={pinBottomAfterImage}
+                        />
+                      ) : (
+                        <div className={`px-3 py-2 rounded-2xl text-sm leading-relaxed wrap-break-word ${
+                          isUser
+                            ? 'bg-primary text-primary-content rounded-tr-sm'
+                            : 'bg-base-200 text-base-content/85 rounded-tl-sm'
+                        }`}>
+                          {msg.message}
+                          {msg.isEdited && <span className="ml-1 opacity-50 text-[10px]">(แก้ไขแล้ว)</span>}
+                        </div>
+                      )}
+                      <span className="text-[10px] text-base-content/30 px-1">{fmtTime(msg.createdAt)}</span>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          {/* Paste preview bar */}
+          {pastedImage && pastedPreview && (
+            <div className="px-4 py-2 border-t border-base-200 bg-base-200/40 shrink-0 flex items-center gap-2">
+              <img src={pastedPreview} alt="paste preview" className="w-12 h-12 object-cover rounded-lg shrink-0" />
+              <span className="text-xs text-base-content/60 flex-1 truncate">{pastedImage.name}</span>
+              <button onClick={() => setPastedImage(null)} className="btn btn-ghost btn-xs btn-square rounded-lg">
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+              <span className="text-[10px] text-base-content/40">Enter เพื่อส่ง</span>
+            </div>
+          )}
+
+          {/* Input area */}
+          <div className="flex items-center gap-2 px-4 py-3 border-t border-base-200 shrink-0">
+            <input
+              type="file"
+              ref={fileInputRef}
+              className="hidden"
+              accept="image/*,application/pdf"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) uploadAndSend(file);
+                e.target.value = '';
+              }}
+            />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="btn btn-ghost btn-xs btn-square rounded-lg text-base-content/40 hover:text-base-content"
+              disabled={uploading}
+              aria-label="แนบไฟล์"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+              </svg>
+            </button>
+            <input
+              type="text"
+              placeholder={pastedImage ? 'Enter เพื่อส่งรูป' : 'พิมพ์ข้อความ...'}
+              className="input input-bordered input-sm h-9 flex-1 rounded-xl text-sm bg-base-200/60 border-transparent focus:border-primary focus:bg-base-100 transition-colors"
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+              }}
+              onPaste={(e) => {
+                const file = e.clipboardData?.files?.[0];
+                if (file?.type.startsWith('image/')) { e.preventDefault(); setPastedImage(file); }
+              }}
+            />
+            <button
+              className="btn btn-primary btn-sm h-9 min-h-0 rounded-xl px-3"
+              onClick={sendMessage}
+              disabled={(!draft.trim() && !pastedImage) || uploading}
+            >
+              {uploading ? (
+                <span className="loading loading-spinner loading-xs" />
+              ) : (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                </svg>
+              )}
+            </button>
+          </div>
+        </div>
+      )}
+    </>
   );
 }

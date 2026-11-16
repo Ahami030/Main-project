@@ -16,6 +16,8 @@ export async function GET(_req: NextRequest, { params }: Params) {
 
   const proof = await PaymentProof.findById(id).lean() as {
     customerId?: string;
+    billingId?: unknown;
+    poId?: unknown;
     [key: string]: unknown;
   } | null;
   if (!proof) return NextResponse.json({ message: "Not found" }, { status: 404 });
@@ -24,6 +26,14 @@ export async function GET(_req: NextRequest, { params }: Params) {
   const canViewAll = user.role === "admin" || user.role === "employee";
   if (!canViewAll && proof.customerId !== user.id) {
     return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+  }
+
+  // PO-based proofs are stored with billingId: null; the PO's billing may exist by now.
+  // Resolve it here so every consumer gets a usable billingId without a data migration.
+  if (!proof.billingId && proof.poId) {
+    const billing = await Billing.findOne({ poIds: proof.poId }).select("_id").lean() as
+      { _id: { toString(): string } } | null;
+    if (billing) proof.billingId = billing._id.toString();
   }
 
   return NextResponse.json(proof);

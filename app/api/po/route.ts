@@ -38,19 +38,11 @@ export async function POST(req: NextRequest) {
 
   await connectMongoDB();
 
-  let poNumber: string;
-  let retries = 0;
-  while (true) {
-    try {
-      poNumber = await generatePONumber();
-      break;
-    } catch {
-      if (retries++ >= 3) throw new Error("Failed to generate PO number");
-    }
-  }
+  const { _id, number: poNumber } = generatePONumber();
 
   const user = getUser(session);
   const po = await PurchaseOrder.create({
+    _id,
     poNumber,
     userId:       user.id,
     userName:     session.user?.name ?? "",

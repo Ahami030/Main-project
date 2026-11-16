@@ -25,7 +25,7 @@ const PurchaseOrderSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-export const generatePONumber = () => generateDocumentNumber("PurchaseOrder", "poNumber", "PO");
+export const generatePONumber = () => generateDocumentNumber("PO");
 
 clearDevModel("PurchaseOrder");
 

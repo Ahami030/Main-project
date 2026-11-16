@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 
-export type QuotationStatus = "sent" | "reviewing" | "completed" | "bargaining" | "confirmed";
+// "processing" = n8n is still extracting the RFQ; flips to "sent" when the callback arrives
+export type QuotationStatus = "processing" | "sent" | "reviewing" | "completed" | "bargaining" | "confirmed";
 
 const QuotationSchema = new mongoose.Schema(
   {
@@ -10,7 +11,7 @@ const QuotationSchema = new mongoose.Schema(
     pdfPath: { type: String, default: null },
     status: {
       type: String,
-      enum: ["sent", "reviewing", "completed", "bargaining", "confirmed"],
+      enum: ["processing", "sent", "reviewing", "completed", "bargaining", "confirmed"],
       default: "sent",
     },
   },

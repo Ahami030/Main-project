@@ -1,0 +1,77 @@
+'use client';
+import { useRef } from 'react';
+
+function FileIcon({ type }: { type: string }) {
+  if (type === 'image') return (
+    <svg className="w-4 h-4 shrink-0 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+    </svg>
+  );
+  return (
+    <svg className="w-4 h-4 shrink-0 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+    </svg>
+  );
+}
+
+export { FileIcon };
+
+interface Props {
+  fileUrl: string;
+  fileType: string;
+  fileName: string;
+  onPdfClick?: (url: string) => void;
+  onImageLoad?: () => void;
+  isAdmin?: boolean;
+}
+
+export default function ChatFileAttachment({ fileUrl, fileType, fileName, onPdfClick, onImageLoad, isAdmin }: Props) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const proxyUrl = `/api/chat/file?url=${encodeURIComponent(fileUrl)}`;
+  const cardCls = `flex items-center gap-2 px-2.5 py-2 rounded-xl transition-colors max-w-[200px] ${isAdmin ? 'hover:bg-white/10 text-primary-content' : 'hover:bg-base-content/8 text-base-content/80'}`;
+
+  if (fileType === 'image') {
+    // ponytail: lightbox is its own <dialog> so it stacks above the chat <dialog> in the browser top layer
+    return (
+      <>
+        <button onClick={() => dialogRef.current?.showModal()} className="rounded-xl overflow-hidden hover:opacity-90 transition-opacity">
+          <img src={proxyUrl} alt={fileName} onLoad={onImageLoad} className="max-w-40 max-h-30 object-cover rounded-xl block" />
+        </button>
+
+        <dialog
+          ref={dialogRef}
+          onClick={() => dialogRef.current?.close()}
+          className="fixed inset-0 m-0 h-full max-h-full w-full max-w-full bg-black/85 backdrop-blur-sm p-0 backdrop:bg-transparent"
+        >
+          <div className="flex h-full w-full items-center justify-center p-6">
+            <div className="relative" onClick={(e) => e.stopPropagation()}>
+              <button
+                onClick={() => dialogRef.current?.close()}
+                className="absolute -top-4 -right-4 w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors z-10"
+              >
+                <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+              <img
+                src={proxyUrl}
+                alt={fileName}
+                className="max-w-[88vw] max-h-[85vh] object-contain rounded-2xl shadow-2xl"
+              />
+              <p className="text-center text-white/40 text-xs mt-3">{fileName}</p>
+            </div>
+          </div>
+        </dialog>
+      </>
+    );
+  }
+
+  // PDF
+  const handleClick = onPdfClick ? () => onPdfClick(proxyUrl) : () => window.open(proxyUrl, '_blank');
+  return (
+    <button onClick={handleClick} className={cardCls}>
+      <FileIcon type="pdf" />
+      <span className="text-xs truncate leading-none">{fileName}</span>
+    </button>
+  );
+}

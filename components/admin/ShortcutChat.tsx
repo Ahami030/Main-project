@@ -1,229 +1,62 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
-
-type UserWithChat = {
-  userId: string;
-  user: { name: string; email: string } | null;
-  latestMessage: string;
-  latestMessageTime: string;
-  latestUserMessageTime?: string | null;
-};
-
-type ChatMsg = {
-  _id: string;
-  senderRole: 'user' | 'admin';
-  message: string;
-  createdAt: string;
-};
-
-type RfqDoc = {
-  _id: string;
-  USER_ID: string;
-  rfq_number: string;
-  buyer_company_name: string;
-  vendor_company_name: string;
-  line_items: Array<{ quantity: number; unit_price: number }>;
-  due_date: string;
-};
+import { useRef, useState } from 'react';
+import { usePathname } from 'next/navigation';
+import ChatFileAttachment from '@/components/chat/ChatFileAttachment';
+import ChatRfqSidebar from '@/components/admin/ChatRfqSidebar';
+import { useAdminChat, type UserWithChat } from '@/components/admin/useAdminChat';
 
 export default function ShortcutChat() {
+  const pathname = usePathname();
+
+  // Suppress on pages that have their own inline chat
+  // (/Admin/rfq/edit only shows chat *files*, not a chat — the bubble must stay available there)
+  const hidden =
+    pathname === '/Admin/chat' ||
+    pathname?.startsWith('/Admin/edit/');
+
+  const {
+    activeTab, setActiveTab,
+    users, displayedUsers, unreadCount, isUnread,
+    activeUserId, openUser, closeUser,
+    messages, activeRfq,
+    draft, setDraft, sendMessage, uploadAndSend, uploading, deleteMessage,
+    msgContainerRef, handleScroll, scrollToBottom, showNewMsgButton, pinBottomAfterImage,
+    fmtTime, userInitial, userName,
+  } = useAdminChat({ enabled: !hidden });
+
   const [view, setView] = useState<'list' | 'chat'>('list');
-  const [activeTab, setActiveTab] = useState<'all' | 'unread'>('all');
-  const [activeUserId, setActiveUserId] = useState<string | null>(null);
-  const [users, setUsers] = useState<UserWithChat[]>([]);
-  const [messages, setMessages] = useState<ChatMsg[]>([]);
-  const [activeRfq, setActiveRfq] = useState<RfqDoc | null | undefined>(undefined);
-  const [draft, setDraft] = useState('');
-  const [seenAt, setSeenAt] = useState<Record<string, number>>({});
-  const [showNewMsgButton, setShowNewMsgButton] = useState(false);
+  // Pasted image kept with its object URL so cleanup is local — no effect needed.
+  const [pasted, setPasted] = useState<{ file: File; url: string } | null>(null);
 
   const dialogRef = useRef<HTMLDialogElement>(null);
-  const shouldAutoScrollRef = useRef(true);
-  const msgContainerRef = useRef<HTMLDivElement>(null);
-  const prevMsgCountRef = useRef(0);
-  const justSwitchedRef = useRef(false);
-  const switchTimeRef = useRef(0);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Effect A — load seenAt from localStorage
-  useEffect(() => {
-    try {
-      const stored = JSON.parse(localStorage.getItem('admin_seen_chats') || '{}');
-      setSeenAt(stored);
-    } catch {}
-  }, []);
+  const clearPasted = () => setPasted((p) => { if (p) URL.revokeObjectURL(p.url); return null; });
 
-  // Effect B — poll users every 3s (always-on for badge count)
-  useEffect(() => {
-    const fetchUsers = async () => {
-      try {
-        const res = await fetch('/api/chat/users', { cache: 'no-store' });
-        if (!res.ok) return;
-        const data = await res.json();
-        setUsers(data.users ?? []);
-      } catch {}
-    };
-    fetchUsers();
-    const iv = setInterval(fetchUsers, 3000);
-    return () => clearInterval(iv);
-  }, []);
+  if (hidden) return null;
 
-  // Effect C — poll messages every 1s when a chat is active
-  useEffect(() => {
-    if (!activeUserId) return;
-    const fetchMessages = async () => {
-      try {
-        const res = await fetch(`/api/chat/${activeUserId}`, { cache: 'no-store' });
-        if (!res.ok) return;
-        const data: ChatMsg[] = await res.json();
-        setMessages((prev) => {
-          const lastIdSame = data[data.length - 1]?._id === prev[prev.length - 1]?._id;
-          if (data.length === prev.length && lastIdSame) return prev;
-          if (data.length > prev.length && !shouldAutoScrollRef.current) {
-            setShowNewMsgButton(true);
-          }
-          return data;
-        });
-      } catch {}
-    };
-    fetchMessages();
-    const iv = setInterval(fetchMessages, 1000);
-    return () => clearInterval(iv);
-  }, [activeUserId]);
+  const openModal = () => { setView('list'); dialogRef.current?.showModal(); };
+  const closeModal = () => dialogRef.current?.close();
 
-  // Effect D — fetch RFQ when activeUserId changes
-  useEffect(() => {
-    if (!activeUserId) return;
-    setActiveRfq(undefined);
-    const fetchRfq = async () => {
-      try {
-        const res = await fetch(`/api/rfq?userId=${activeUserId}`, { cache: 'no-store' });
-        if (!res.ok) { setActiveRfq(null); return; }
-        const data = await res.json();
-        setActiveRfq(Array.isArray(data) && data.length > 0 ? data[0] : null);
-      } catch {
-        setActiveRfq(null);
-      }
-    };
-    fetchRfq();
-  }, [activeUserId]);
+  const openChat = (u: UserWithChat) => { openUser(u); setView('chat'); };
+  const goToList = () => { closeUser(); setView('list'); };
 
-  // Effect E — reset scroll state when switching users
-  useEffect(() => {
-    shouldAutoScrollRef.current = true;
-    prevMsgCountRef.current = 0;
-    setShowNewMsgButton(false);
-    setMessages([]);
-    justSwitchedRef.current = true;
-    switchTimeRef.current = Date.now();
-  }, [activeUserId]);
-
-  // Effect F — auto-scroll when messages arrive
-  useEffect(() => {
-    const newCount = messages.length;
-    const isNew = newCount > prevMsgCountRef.current;
-    prevMsgCountRef.current = newCount;
-    if (!isNew && !justSwitchedRef.current) return;
-    if (!shouldAutoScrollRef.current) return;
-    const el = msgContainerRef.current;
-    if (!el) return;
-    const timeSince = Date.now() - switchTimeRef.current;
-    const instant = justSwitchedRef.current || timeSince < 500;
-    el.scrollTo({ top: el.scrollHeight, behavior: instant ? 'instant' : 'smooth' });
-    justSwitchedRef.current = false;
-  }, [messages]);
-
-  // ── Helpers ──
-
-  const isUnread = (u: UserWithChat) => {
-    if (!u.latestUserMessageTime) return false;
-    return new Date(u.latestUserMessageTime).getTime() > (seenAt[u.userId] ?? 0);
+  const handleSend = async () => {
+    if (pasted) {
+      const file = pasted.file;
+      clearPasted();
+      await uploadAndSend(file);
+      return;
+    }
+    await sendMessage();
   };
-
-  const unreadCount = users.filter(isUnread).length;
-
-  const displayedUsers = activeTab === 'unread' ? users.filter(isUnread) : users;
-
-  const markSeen = (userId: string) => {
-    const updated = { ...seenAt, [userId]: Date.now() };
-    setSeenAt(updated);
-    try { localStorage.setItem('admin_seen_chats', JSON.stringify(updated)); } catch {}
-  };
-
-  const openModal = () => {
-    setView('list');
-    dialogRef.current?.showModal();
-  };
-
-  const closeModal = () => {
-    dialogRef.current?.close();
-  };
-
-  const openChat = (userId: string) => {
-    setActiveUserId(userId);
-    setView('chat');
-    markSeen(userId);
-  };
-
-  const goToList = () => {
-    setView('list');
-    setActiveUserId(null);
-  };
-
-  const sendMessage = async () => {
-    if (!draft.trim() || !activeUserId) return;
-    const text = draft;
-    setDraft('');
-    try {
-      await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: activeUserId, senderRole: 'admin', message: text }),
-      });
-      shouldAutoScrollRef.current = true;
-      setShowNewMsgButton(false);
-      const res = await fetch(`/api/chat/${activeUserId}`, { cache: 'no-store' });
-      if (res.ok) setMessages(await res.json());
-    } catch {}
-  };
-
-  const handleScroll = () => {
-    const el = msgContainerRef.current;
-    if (!el) return;
-    const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 50;
-    shouldAutoScrollRef.current = atBottom;
-    if (atBottom) setShowNewMsgButton(false);
-  };
-
-  const scrollToBottom = () => {
-    msgContainerRef.current?.scrollTo({ top: msgContainerRef.current.scrollHeight, behavior: 'smooth' });
-    setShowNewMsgButton(false);
-    shouldAutoScrollRef.current = true;
-  };
-
-  const calcRfqTotal = (rfq: RfqDoc) =>
-    (rfq.line_items || []).reduce(
-      (sum, li) => sum + (Number(li.quantity) || 0) * (Number(li.unit_price) || 0),
-      0
-    );
-
-  const fmtPrice = (n: number) =>
-    new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n || 0);
-
-  const fmtTime = (iso: string) =>
-    new Date(iso).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
-
-  const userInitial = (u: UserWithChat) =>
-    (u.user?.name || u.user?.email || '?')[0].toUpperCase();
-
-  const userName = (u: UserWithChat) =>
-    u.user?.name || u.user?.email || 'Unknown';
 
   return (
     <>
       {/* ── Floating trigger button ── */}
       <button
-        onClick={openModal}
+        onClick={() => (dialogRef.current?.open ? closeModal() : openModal())}
         className="fixed bottom-6 right-6 z-50 btn btn-primary btn-circle shadow-xl w-14 h-14"
         aria-label="Open messages"
       >
@@ -241,8 +74,8 @@ export default function ShortcutChat() {
       {/* ── Modal ── */}
       <dialog ref={dialogRef} className="modal modal-bottom sm:modal-middle">
         <div
-          className="modal-box p-0 flex flex-col overflow-hidden w-full sm:max-w-md"
-          style={{ height: '620px', maxHeight: '88vh' }}
+          className="modal-box p-0 flex flex-col overflow-hidden w-full sm:max-w-3xl"
+          style={{ height: '640px', maxHeight: '90vh' }}
         >
           {/* ── Modal Header ── */}
           <div className="flex items-center justify-between px-5 py-3.5 border-b border-base-200 shrink-0">
@@ -325,7 +158,7 @@ export default function ShortcutChat() {
                     return (
                       <button
                         key={u.userId}
-                        onClick={() => openChat(u.userId)}
+                        onClick={() => openChat(u)}
                         className="w-full flex items-center gap-3 px-5 py-3.5 border-b border-base-200 last:border-0 hover:bg-base-200/40 active:bg-base-200/70 transition-colors text-left"
                       >
                         {/* Avatar */}
@@ -362,33 +195,24 @@ export default function ShortcutChat() {
 
           {/* ── CHAT VIEW ── */}
           {view === 'chat' && activeUserId && (
-            <div className="flex-1 flex flex-col min-h-0">
+            <div className="flex-1 flex min-h-0">
 
-              {/* RFQ card */}
-              <div className="px-5 py-3 border-b border-base-200 shrink-0">
+            {/* LEFT: chat column */}
+            <div className="flex-1 flex flex-col min-w-0 md:border-r border-base-200">
+
+              {/* Compact RFQ chip — mobile only (desktop shows the full sidebar on the right) */}
+              <div className="md:hidden px-5 py-3 border-b border-base-200 shrink-0">
                 {activeRfq === undefined ? (
-                  <div className="skeleton h-14 w-full rounded-xl" />
+                  <div className="skeleton h-12 w-full rounded-xl" />
                 ) : activeRfq === null ? (
                   <div className="px-3 py-2.5 bg-base-200 rounded-xl text-xs text-base-content/40 text-center">
                     ไม่พบ RFQ ที่เชื่อมกับผู้ใช้นี้
                   </div>
                 ) : (
                   <div className="flex items-center justify-between gap-3 px-3.5 py-2.5 bg-primary/8 border border-primary/15 rounded-xl">
-                    <div className="flex flex-col gap-0.5 min-w-0">
-                      <span className="text-xs font-bold text-primary truncate">
-                        {activeRfq.rfq_number || 'RFQ'}
-                      </span>
-                      <span className="text-[11px] text-base-content/60 truncate">
-                        {activeRfq.buyer_company_name || '—'}
-                      </span>
-                      <span className="text-[11px] text-base-content/40">
-                        {activeRfq.line_items?.length || 0} รายการ
-                        {' · '}
-                        <span className="text-success font-semibold">
-                          {fmtPrice(calcRfqTotal(activeRfq))}
-                        </span>
-                      </span>
-                    </div>
+                    <span className="text-xs font-bold text-primary truncate">
+                      {activeRfq.rfq_number || 'RFQ'}
+                    </span>
                     <a
                       href={`/Admin/edit/${activeRfq._id}`}
                       className="btn btn-primary btn-xs h-8 min-h-0 rounded-lg shrink-0 gap-1.5 text-[11px] font-semibold"
@@ -408,7 +232,7 @@ export default function ShortcutChat() {
               <div
                 ref={msgContainerRef}
                 onScroll={handleScroll}
-                className="flex-1 overflow-y-auto px-5 py-4 flex flex-col gap-2.5 min-h-0"
+                className="flex-1 overflow-y-auto px-5 py-4 flex flex-col gap-2.5 min-h-0 bg-base-200/20"
               >
                 {messages.length === 0 ? (
                   <div className="flex-1 flex items-center justify-center text-base-content/30 text-xs">
@@ -417,16 +241,43 @@ export default function ShortcutChat() {
                 ) : (
                   messages.map((msg) => {
                     const isAdmin = msg.senderRole === 'admin';
+                    if (msg.isDeleted) {
+                      return (
+                        <div key={msg._id} className={`flex ${isAdmin ? 'justify-end' : 'justify-start'}`}>
+                          <span className="text-xs italic text-base-content/30 px-2 py-1">ข้อความถูกลบแล้ว</span>
+                        </div>
+                      );
+                    }
                     return (
-                      <div key={msg._id} className={`flex ${isAdmin ? 'justify-end' : 'justify-start'}`}>
+                      <div key={msg._id} className={`flex group ${isAdmin ? 'justify-end' : 'justify-start'}`}>
+                        {/* hover ⋮ delete — admin can remove any message */}
+                        <button
+                          onClick={() => deleteMessage(msg._id)}
+                          className={`opacity-60 md:opacity-0 md:group-hover:opacity-100 transition-opacity w-5 h-5 rounded-full bg-base-200 hover:bg-error/15 flex items-center justify-center self-center mx-1 shrink-0 ${isAdmin ? '' : 'order-last'}`}
+                          title="ลบ"
+                        >
+                          <svg className="w-2.5 h-2.5 text-base-content/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
                         <div className={`max-w-[78%] flex flex-col gap-0.5 ${isAdmin ? 'items-end' : 'items-start'}`}>
-                          <div className={`px-3.5 py-2 rounded-2xl text-sm leading-relaxed wrap-break-word ${
-                            isAdmin
-                              ? 'bg-primary text-primary-content rounded-tr-sm'
-                              : 'bg-base-200 text-base-content/85 rounded-tl-sm'
-                          }`}>
-                            {msg.message}
-                          </div>
+                          {msg.fileUrl ? (
+                            <ChatFileAttachment
+                              fileUrl={msg.fileUrl}
+                              fileType={msg.fileType!}
+                              fileName={msg.fileName!}
+                              isAdmin={isAdmin}
+                              onImageLoad={pinBottomAfterImage}
+                            />
+                          ) : (
+                            <div className={`px-3.5 py-2 rounded-2xl text-sm leading-relaxed wrap-break-word ${
+                              isAdmin
+                                ? 'bg-primary text-primary-content rounded-tr-sm'
+                                : 'bg-base-200 text-base-content/85 rounded-tl-sm'
+                            }`}>
+                              {msg.message}
+                            </div>
+                          )}
                           <span className="text-[10px] text-base-content/30 px-1">
                             {fmtTime(msg.createdAt)}
                           </span>
@@ -452,32 +303,83 @@ export default function ShortcutChat() {
                 )}
               </div>
 
+              {/* Paste preview bar */}
+              {pasted && (
+                <div className="px-5 py-2 border-t border-base-200 bg-base-200/40 shrink-0 flex items-center gap-2">
+                  <img src={pasted.url} alt="paste preview" className="w-12 h-12 object-cover rounded-lg shrink-0" />
+                  <span className="text-xs text-base-content/60 flex-1 truncate">{pasted.file.name}</span>
+                  <button onClick={clearPasted} className="btn btn-ghost btn-xs btn-square rounded-lg">
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                  <span className="text-[10px] text-base-content/40">Enter เพื่อส่ง</span>
+                </div>
+              )}
+
               {/* Input area */}
               <div className="flex items-center gap-2 px-5 py-3.5 border-t border-base-200 shrink-0">
                 <input
+                  type="file"
+                  ref={fileInputRef}
+                  className="hidden"
+                  accept="image/*,application/pdf"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) uploadAndSend(file);
+                    e.target.value = '';
+                  }}
+                />
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="btn btn-ghost btn-xs btn-square rounded-lg text-base-content/40 hover:text-base-content"
+                  disabled={uploading}
+                  aria-label="แนบไฟล์"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                      d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                  </svg>
+                </button>
+                <input
                   type="text"
-                  placeholder="พิมพ์ข้อความ... (Enter)"
+                  placeholder={pasted ? 'Enter เพื่อส่งรูป' : 'พิมพ์ข้อความ... (Enter)'}
                   className="input input-bordered input-sm h-9 flex-1 rounded-xl text-sm bg-base-200/60 border-transparent focus:border-primary focus:bg-base-100 transition-colors"
                   value={draft}
                   onChange={(e) => setDraft(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && !e.shiftKey) {
                       e.preventDefault();
-                      sendMessage();
+                      handleSend();
+                    }
+                  }}
+                  onPaste={(e) => {
+                    const file = e.clipboardData?.files?.[0];
+                    if (file?.type.startsWith('image/')) {
+                      e.preventDefault();
+                      setPasted((p) => { if (p) URL.revokeObjectURL(p.url); return { file, url: URL.createObjectURL(file) }; });
                     }
                   }}
                 />
                 <button
                   className="btn btn-primary btn-sm h-9 min-h-0 rounded-xl px-3"
-                  onClick={sendMessage}
-                  disabled={!draft.trim()}
+                  onClick={handleSend}
+                  disabled={(!draft.trim() && !pasted) || uploading}
                 >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                      d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                  </svg>
+                  {uploading ? (
+                    <span className="loading loading-spinner loading-xs" />
+                  ) : (
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                        d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                    </svg>
+                  )}
                 </button>
               </div>
+            </div>
+
+            {/* RIGHT: full RFQ sidebar — desktop only (mobile uses the compact chip above) */}
+            <ChatRfqSidebar rfq={activeRfq} onNavigate={closeModal} className="hidden md:flex" />
             </div>
           )}
         </div>

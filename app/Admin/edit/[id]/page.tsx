@@ -1,13 +1,55 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
+import ChatFileAttachment from "@/components/chat/ChatFileAttachment";
+import QuotationPreviewModal from "@/components/QuotationPreviewModal";
+
+// memo wrapper — ป้องกัน iframe reload ตอน chat polling trigger parent re-render
+const StableIframe = memo(({ src }: { src: string }) => (
+  <iframe src={src} className="w-full h-full" />
+));
+
+// top-level component (ไม่อยู่ใน EditPage) — ป้องกัน unmount/remount ทุก re-render
+const PdfPanel = memo(({ filename, className = "" }: { filename: string; className?: string }) => (
+  <div className={`bg-base-100 rounded-2xl border border-base-300 flex flex-col gap-3 p-4 ${className}`}>
+    <div className="flex items-center justify-between">
+      <span className="text-[10px] font-semibold tracking-[0.15em] uppercase text-base-content/40">Original Document</span>
+      <div className="flex items-center gap-1.5 px-2.5 py-1 bg-error/10 rounded-lg">
+        <div className="w-1.5 h-1.5 rounded-full bg-error" />
+        <span className="text-[10px] font-semibold text-error">PDF</span>
+      </div>
+    </div>
+    <div className="flex items-center gap-2 px-3 py-2 bg-base-200 rounded-xl border border-base-300">
+      <svg className="w-3.5 h-3.5 text-base-content/40 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+      </svg>
+      <span className="text-xs text-base-content/60 truncate">{filename || "ไม่มีไฟล์ PDF"}</span>
+    </div>
+    <div className="flex-1 rounded-xl overflow-hidden border border-base-300 bg-base-200 min-h-0">
+      {filename ? (
+        <StableIframe src={`/api/pdf/view?filename=${encodeURIComponent(filename)}`} />
+      ) : (
+        <div className="flex flex-col items-center justify-center h-full gap-2 text-base-content/30">
+          <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+          <span className="text-xs">ไม่มีไฟล์ PDF</span>
+        </div>
+      )}
+    </div>
+  </div>
+));
 
 // ── Chat types ──────────────────────────────────────────────
 type ChatMsg = {
   _id: string;
   senderRole: "user" | "admin";
   message: string;
+  fileUrl?: string;
+  fileType?: string;
+  fileName?: string;
+  isDeleted?: boolean;
   createdAt: string;
 };
 type ChatUser = {
@@ -33,6 +75,8 @@ type ChatPanelProps = {
   chatMessage: string;
   setChatMessage: (v: string) => void;
   sendChatMessage: () => void;
+  onPasteImage?: (file: File) => void;
+  onFileClick?: (url: string, type: string, name: string) => void;
 };
 
 function ChatPanel({
@@ -48,6 +92,8 @@ function ChatPanel({
   chatMessage,
   setChatMessage,
   sendChatMessage,
+  onPasteImage,
+  onFileClick,
 }: ChatPanelProps) {
   return (
     <div className={`bg-base-100 rounded-2xl border border-base-300 flex flex-col overflow-hidden ${className}`}>
@@ -122,6 +168,13 @@ function ChatPanel({
             ) : (
               chats.map((chat) => {
                 const isAdmin = chat.senderRole === "admin";
+                if (chat.isDeleted) {
+                  return (
+                    <div key={chat._id} className={`flex ${isAdmin ? "justify-end" : "justify-start"}`}>
+                      <span className="text-xs italic text-base-content/30 px-2 py-1">ข้อความถูกลบแล้ว</span>
+                    </div>
+                  );
+                }
                 return (
                   <div key={chat._id} className={`flex ${isAdmin ? "justify-end" : "justify-start"}`}>
                     <div className={`max-w-[82%] flex flex-col gap-0.5 ${isAdmin ? "items-end" : "items-start"}`}>
@@ -130,7 +183,15 @@ function ChatPanel({
                           ? "bg-primary text-primary-content rounded-tr-sm"
                           : "bg-base-200 text-base-content/80 rounded-tl-sm"
                       }`}>
-                        {chat.message}
+                        {chat.fileUrl
+                          ? <ChatFileAttachment
+                              fileUrl={chat.fileUrl}
+                              fileType={chat.fileType!}
+                              fileName={chat.fileName ?? "ไฟล์"}
+                              isAdmin={isAdmin}
+                              onPdfClick={chat.fileType === "pdf" ? () => onFileClick?.(chat.fileUrl!, chat.fileType!, chat.fileName ?? "ไฟล์") : undefined}
+                            />
+                          : chat.message}
                       </div>
                       <span className="text-[10px] text-base-content/30 px-1">{fmtTime(chat.createdAt)}</span>
                     </div>
@@ -164,6 +225,13 @@ function ChatPanel({
               value={chatMessage}
               onChange={(e) => setChatMessage(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendChatMessage(); } }}
+              onPaste={(e) => {
+                const file = e.clipboardData?.files?.[0];
+                if (file?.type.startsWith("image/") && onPasteImage) {
+                  e.preventDefault();
+                  onPasteImage(file); // ponytail: sends immediately, no preview bar — add one if misfires become a problem
+                }
+              }}
             />
             <button
               className="btn btn-primary btn-sm h-8 min-h-0 rounded-xl px-3"
@@ -195,6 +263,8 @@ export default function EditPage() {
 
   // ── Confirm modal ──────────────────────────────────────────
   const [showConfirm, setShowConfirm] = useState(false);
+  const [savedOk, setSavedOk] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
 
   // ── Debug state ────────────────────────────────────────────
   const [quotationDebug, setQuotationDebug] = useState<{ id: string; status: string } | null>(null);
@@ -202,6 +272,9 @@ export default function EditPage() {
   const [focusedLineField, setFocusedLineField] = useState<string>("");
   const [mobileTab, setMobileTab] = useState<"pdf" | "edit" | "chat">("pdf");
   const [summaryOpen, setSummaryOpen] = useState(false);
+
+  // ── Viewer state ───────────────────────────────────────────
+  const [viewerFile, setViewerFile] = useState<{ url: string; type: string; name: string } | null>(null);
 
   // ── Chat state ─────────────────────────────────────────────
   const [chatMessage, setChatMessage] = useState("");
@@ -213,6 +286,7 @@ export default function EditPage() {
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const justSwitchedUser = useRef(false);
   const switchTimeRef = useRef<number>(0);
+  const autoScrollUntilRef = useRef(0); // ignore handleChatScroll during our own smooth animation
   // Refs avoid stale-closure bugs inside interval callbacks
   const shouldAutoScrollRef = useRef(true);
   const prevChatsLengthRef = useRef(0);
@@ -255,22 +329,22 @@ export default function EditPage() {
 
   // ── Fetch chat users (poll 3s) ─────────────────────────────
   useEffect(() => {
+    // keep the previous array when nothing changed — a fresh array every 3s would
+    // re-render the whole page (and the edit form) for no reason
+    const applyUsers = (incoming: ChatUser[]) =>
+      setChatUsers((prev) =>
+        JSON.stringify(prev) === JSON.stringify(incoming) ? prev : incoming
+      );
     const load = async () => {
       try {
         const res = await fetch("/api/chat/users", { cache: "no-store" });
         const data = await res.json();
-        setChatUsers(data.users ?? data);
+        applyUsers(data.users ?? data);
       } catch {}
       finally { setLoadingUsers(false); }
     };
     load();
-    const iv = setInterval(async () => {
-      try {
-        const res = await fetch("/api/chat/users", { cache: "no-store" });
-        const data = await res.json();
-        setChatUsers(data.users ?? data);
-      } catch {}
-    }, 3000);
+    const iv = setInterval(load, 3000);
     return () => clearInterval(iv);
   }, []);
 
@@ -319,20 +393,28 @@ export default function EditPage() {
     const el = chatContainerRef.current;
     if (!el) return;
     const timeSince = Date.now() - switchTimeRef.current;
-    el.scrollTo({ top: el.scrollHeight, behavior: justSwitchedUser.current || timeSince < 500 ? "instant" : "smooth" });
+    const useInstant = justSwitchedUser.current || timeSince < 500;
+    if (!useInstant) autoScrollUntilRef.current = Date.now() + 700;
+    el.scrollTo({ top: el.scrollHeight, behavior: useInstant ? "instant" : "smooth" });
     justSwitchedUser.current = false;
   }, [chats]);
 
   const handleChatScroll = () => {
     const el = chatContainerRef.current;
     if (!el) return;
+    // scroll events from our own smooth animation would otherwise read as
+    // "user scrolled up" and un-pin mid-flight (the stuck-at-top bug)
+    if (Date.now() < autoScrollUntilRef.current) return;
     const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 50;
     shouldAutoScrollRef.current = atBottom; // update ref only — no re-render
     if (atBottom) setShowNewMsgBtn(false);
   };
 
   const scrollToBottom = () => {
-    chatContainerRef.current?.scrollTo({ top: chatContainerRef.current.scrollHeight, behavior: "smooth" });
+    if (chatContainerRef.current) {
+      autoScrollUntilRef.current = Date.now() + 700;
+      chatContainerRef.current.scrollTo({ top: chatContainerRef.current.scrollHeight, behavior: "smooth" });
+    }
     setShowNewMsgBtn(false);
     shouldAutoScrollRef.current = true;
   };
@@ -346,6 +428,27 @@ export default function EditPage() {
         body: JSON.stringify({ userId: selectedUserId, senderRole: "admin", message: chatMessage }),
       });
       setChatMessage("");
+      shouldAutoScrollRef.current = true;
+      setShowNewMsgBtn(false);
+      loadChats();
+    } catch {}
+  };
+
+  // Win+Shift+S paste → upload to blob then send as a file message
+  const pasteChatImage = async (file: File) => {
+    if (!selectedUserId) return;
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const up = await fetch("/api/chat/upload", { method: "POST", body: fd });
+      if (!up.ok) return;
+      const { fileUrl, fileType, fileName } = await up.json();
+      if (!fileUrl) return;
+      await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: selectedUserId, senderRole: "admin", message: "", fileUrl, fileType, fileName }),
+      });
       shouldAutoScrollRef.current = true;
       setShowNewMsgBtn(false);
       loadChats();
@@ -409,7 +512,9 @@ export default function EditPage() {
       setSaving(true);
       const res = await fetch(`/api/rfq/${id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) });
       if (!res.ok) throw new Error("Failed to save");
-      router.push("/Admin/rfq");
+      // stay put — staff usually wants to preview/download the quotation right after saving
+      // (to send over LINE) instead of bouncing back to the list
+      setSavedOk(true);
     } catch (err: any) { alert(err.message); }
     finally { setSaving(false); }
   };
@@ -417,41 +522,20 @@ export default function EditPage() {
   const grandTotal = calcGrandTotal(form.line_items || []);
   // ── Panels ─────────────────────────────────────────────────
 
-  const PdfPanel = ({ className = "" }: { className?: string }) => (
-    <div className={`bg-base-100 rounded-2xl border border-base-300 flex flex-col gap-3 p-4 ${className}`}>
-      <div className="flex items-center justify-between">
-        <span className="text-[10px] font-semibold tracking-[0.15em] uppercase text-base-content/40">Original Document</span>
-        <div className="flex items-center gap-1.5 px-2.5 py-1 bg-error/10 rounded-lg">
-          <div className="w-1.5 h-1.5 rounded-full bg-error" />
-          <span className="text-[10px] font-semibold text-error">PDF</span>
-        </div>
-      </div>
-      <div className="flex items-center gap-2 px-3 py-2 bg-base-200 rounded-xl border border-base-300">
-        <svg className="w-3.5 h-3.5 text-base-content/40 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-        </svg>
-        <span className="text-xs text-base-content/60 truncate">{form.filename || "ไม่มีไฟล์ PDF"}</span>
-      </div>
-      <div className="flex-1 rounded-xl overflow-hidden border border-base-300 bg-base-200 min-h-0">
-        {form.filename ? (
-          <iframe src={`/api/pdf/view?filename=${encodeURIComponent(form.filename)}`} className="w-full h-full" />
-        ) : (
-          <div className="flex flex-col items-center justify-center h-full gap-2 text-base-content/30">
-            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-            <span className="text-xs">ไม่มีไฟล์ PDF</span>
-          </div>
-        )}
-      </div>
-    </div>
-  );
 
-  const EditPanel = ({ className = "" }: { className?: string }) => (
+  // A render function, NOT a component: declaring a component inside EditPage gives it a
+  // new identity on every render, so React unmounts/remounts the whole panel — which wiped
+  // the line-items table's horizontal scroll (and input focus) every time a chat poll landed.
+  // Called inline, the JSX joins EditPage's own tree and the DOM is reused.
+  const renderEditPanel = (className = "") => (
     <div className={`bg-base-100 rounded-2xl border border-base-300 flex flex-col gap-4 p-4 overflow-hidden min-h-0 ${className}`}>
       <div className="flex items-center justify-between">
         <span className="text-[10px] font-semibold tracking-[0.15em] uppercase text-base-content/40">RFQ Data</span>
         <div className="flex items-center gap-2">
+          <button className="btn btn-ghost btn-sm gap-1.5 h-8 min-h-0 rounded-xl text-xs border border-base-300" onClick={() => setShowPreview(true)} title="ดูใบเสนอราคา / ดาวน์โหลด PDF">
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+            ใบเสนอราคา
+          </button>
           <button className="btn btn-outline btn-sm gap-1.5 h-8 min-h-0 rounded-xl text-xs" onClick={() => router.push("/Admin/rfq")}>Cancel</button>
           <button className="btn btn-primary btn-sm gap-1.5 h-8 min-h-0 rounded-xl text-xs" onClick={() => setShowConfirm(true)} disabled={saving}>
             {saving ? <><span className="loading loading-spinner loading-xs" />Saving...</> : <><svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>Save</>}
@@ -564,7 +648,7 @@ export default function EditPage() {
                         <td className="py-1.5"><input type="text" inputMode="decimal" value={focusedLineField === `${i}-price` ? String(item.unit_price || "") : fmtCurrency(item.unit_price || 0)} onFocus={() => setFocusedLineField(`${i}-price`)} onBlur={() => setFocusedLineField("")} onChange={(e) => handleLineChange(i, "unit_price", e.target.value)} className="input input-sm h-8 w-full rounded-lg bg-transparent border-transparent hover:border-base-300 focus:border-primary focus:bg-base-100 transition-all text-xs text-right" /></td>
                         <td className="text-right text-xs font-semibold text-primary py-1.5 tabular-nums">{fmt(total)}</td>
                         <td className="py-1.5">
-                          <button className="btn btn-ghost btn-xs h-7 min-h-0 w-7 rounded-lg p-0 text-base-content/30 hover:text-error hover:bg-error/10 opacity-0 group-hover:opacity-100 transition-all" onClick={() => removeItem(i)}>
+                          <button className="btn btn-ghost btn-xs h-7 min-h-0 w-7 rounded-lg p-0 text-base-content/30 hover:text-error hover:bg-error/10 opacity-60 md:opacity-0 md:group-hover:opacity-100 transition-all" onClick={() => removeItem(i)}>
                             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                           </button>
                         </td>
@@ -600,7 +684,7 @@ export default function EditPage() {
   return (
     <>
       {/* ─── MOBILE (< lg) ─── */}
-      <div className="lg:hidden flex flex-col h-screen bg-base-200 overflow-hidden">
+      <div className="lg:hidden flex flex-col h-[calc(100dvh-4rem)] bg-base-200 overflow-hidden">
         <div className="flex items-center justify-between px-3 py-2.5 bg-base-100 border-b border-base-300 shrink-0">
           <button className="btn btn-ghost btn-xs h-7 min-h-0 gap-1 rounded-lg text-xs text-base-content/60" onClick={() => router.push("/Admin/rfq")}>
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
@@ -622,8 +706,8 @@ export default function EditPage() {
         </div>
 
         <div className="flex-1 overflow-hidden p-3">
-          {mobileTab === "pdf" && <PdfPanel className="h-full" />}
-          {mobileTab === "edit" && <div className="h-full overflow-auto"><EditPanel className="min-h-full" /></div>}
+          {mobileTab === "pdf" && <PdfPanel filename={form.filename} className="h-full" />}
+          {mobileTab === "edit" && <div className="h-full overflow-auto">{renderEditPanel("min-h-full")}</div>}
           {mobileTab === "chat" && (
             <ChatPanel
               className="h-full"
@@ -638,30 +722,62 @@ export default function EditPage() {
               chatMessage={chatMessage}
               setChatMessage={setChatMessage}
               sendChatMessage={sendChatMessage}
+              onPasteImage={pasteChatImage}
             />
           )}
         </div>
       </div>
 
       {/* ─── DESKTOP (≥ lg) ─── */}
-      <div className="hidden lg:grid h-screen bg-base-200 p-4 gap-4 grid-cols-[42%_1fr] grid-rows-[1fr_380px] overflow-hidden">
+      <div className="hidden lg:grid h-[calc(100dvh-4rem)] bg-base-200 p-4 gap-4 grid-cols-[42%_1fr] grid-rows-[1fr_380px] overflow-hidden">
 
-        {/* LEFT: PDF (full height) */}
+        {/* LEFT: PDF / Chat file viewer (full height) */}
         <div ref={pdfRef} className="bg-base-100 rounded-2xl border border-base-300 flex flex-col gap-3 p-4 row-span-2 overflow-hidden">
           <div className="flex items-center justify-between">
-            <span className="text-[10px] font-semibold tracking-[0.15em] uppercase text-base-content/40">Original Document</span>
-            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-error/10 rounded-lg">
-              <div className="w-1.5 h-1.5 rounded-full bg-error" />
-              <span className="text-[10px] font-semibold text-error">PDF</span>
+            <span className="text-[10px] font-semibold tracking-[0.15em] uppercase text-base-content/40">
+              {viewerFile ? viewerFile.name : "Original Document"}
+            </span>
+            <div className="flex items-center gap-2">
+              {viewerFile && (
+                <button
+                  onClick={() => setViewerFile(null)}
+                  className="flex items-center gap-1 text-[10px] font-semibold text-base-content/60 hover:text-base-content transition-colors px-2 py-1 rounded-lg hover:bg-base-200"
+                >
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                  กลับ PDF
+                </button>
+              )}
+              <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg ${viewerFile ? "bg-accent/10" : "bg-error/10"}`}>
+                <div className={`w-1.5 h-1.5 rounded-full ${viewerFile ? "bg-accent" : "bg-error"}`} />
+                <span className={`text-[10px] font-semibold ${viewerFile ? "text-accent" : "text-error"}`}>
+                  {viewerFile ? (viewerFile.type === "image" ? "IMG" : "PDF") : "PDF"}
+                </span>
+              </div>
             </div>
           </div>
-          <div className="flex items-center gap-2 px-3 py-2 bg-base-200 rounded-xl border border-base-300">
-            <svg className="w-3.5 h-3.5 text-base-content/40 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-            <span className="text-xs text-base-content/60 truncate">{form.filename || "ไม่มีไฟล์ PDF"}</span>
-          </div>
+          {!viewerFile && (
+            <div className="flex items-center gap-2 px-3 py-2 bg-base-200 rounded-xl border border-base-300">
+              <svg className="w-3.5 h-3.5 text-base-content/40 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+              <span className="text-xs text-base-content/60 truncate">{form.filename || "ไม่มีไฟล์ PDF"}</span>
+            </div>
+          )}
           <div className="flex-1 rounded-xl overflow-hidden border border-base-300 bg-base-200 min-h-0">
-            {form.filename ? (
-              <iframe src={`/api/pdf/view?filename=${encodeURIComponent(form.filename)}`} className="w-full h-full" />
+            {viewerFile ? (
+              viewerFile.type === "image" ? (
+                <div className="w-full h-full flex items-center justify-center p-4 overflow-auto">
+                  <img
+                    src={`/api/chat/file?url=${encodeURIComponent(viewerFile.url)}`}
+                    alt={viewerFile.name}
+                    className="max-w-full max-h-full object-contain rounded-xl"
+                  />
+                </div>
+              ) : (
+                <StableIframe src={`/api/chat/file?url=${encodeURIComponent(viewerFile.url)}`} />
+              )
+            ) : form.filename ? (
+              <StableIframe src={`/api/pdf/view?filename=${encodeURIComponent(form.filename)}`} />
             ) : (
               <div className="flex flex-col items-center justify-center h-full gap-2 text-base-content/30">
                 <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
@@ -676,7 +792,11 @@ export default function EditPage() {
           <div className="flex items-center justify-between">
             <span className="text-[10px] font-semibold tracking-[0.15em] uppercase text-base-content/40">RFQ Data</span>
             <div className="flex items-center gap-2">
-              <button className="btn btn-outline btn-sm gap-1.5 h-8 min-h-0 rounded-xl text-xs" onClick={() => router.push("/Admin/rfq")}>Cancel</button>
+              <button className="btn btn-ghost btn-sm gap-1.5 h-8 min-h-0 rounded-xl text-xs border border-base-300" onClick={() => setShowPreview(true)} title="ดูใบเสนอราคา / ดาวน์โหลด PDF">
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+            ใบเสนอราคา
+          </button>
+          <button className="btn btn-outline btn-sm gap-1.5 h-8 min-h-0 rounded-xl text-xs" onClick={() => router.push("/Admin/rfq")}>Cancel</button>
               <button className="btn btn-primary btn-sm gap-1.5 h-8 min-h-0 rounded-xl text-xs" onClick={() => setShowConfirm(true)} disabled={saving}>
                 {saving ? <><span className="loading loading-spinner loading-xs" />Saving...</> : <><svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>Save</>}
               </button>
@@ -729,7 +849,7 @@ export default function EditPage() {
                             <td className="py-1.5"><input type="text" inputMode="decimal" value={focusedLineField === `${i}-price` ? String(item.unit_price || "") : fmtCurrency(item.unit_price || 0)} onFocus={() => setFocusedLineField(`${i}-price`)} onBlur={() => setFocusedLineField("")} onChange={(e) => handleLineChange(i, "unit_price", e.target.value)} className="input input-sm h-8 w-full rounded-lg bg-transparent border-transparent hover:border-base-300 focus:border-primary focus:bg-base-100 transition-all text-xs text-right" /></td>
                             <td className="text-right text-xs font-semibold text-primary py-1.5 tabular-nums">{fmt(total)}</td>
                             <td className="py-1.5">
-                              <button className="btn btn-ghost btn-xs h-7 min-h-0 w-7 rounded-lg p-0 text-base-content/30 hover:text-error hover:bg-error/10 opacity-0 group-hover:opacity-100 transition-all" onClick={() => removeItem(i)}>
+                              <button className="btn btn-ghost btn-xs h-7 min-h-0 w-7 rounded-lg p-0 text-base-content/30 hover:text-error hover:bg-error/10 opacity-60 md:opacity-0 md:group-hover:opacity-100 transition-all" onClick={() => removeItem(i)}>
                                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                               </button>
                             </td>
@@ -824,6 +944,8 @@ export default function EditPage() {
             chatMessage={chatMessage}
             setChatMessage={setChatMessage}
             sendChatMessage={sendChatMessage}
+            onPasteImage={pasteChatImage}
+            onFileClick={(url, type, name) => setViewerFile({ url, type, name })}
           />
         </div>
       </div>
@@ -885,6 +1007,39 @@ export default function EditPage() {
           </div>
           <div className="modal-backdrop bg-black/40" onClick={() => !saving && setShowConfirm(false)} />
         </dialog>
+      )}
+
+      {/* Saved — offer the quotation right here instead of bouncing to the list */}
+      {savedOk && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 w-[calc(100vw-2rem)] max-w-md print:hidden">
+          <div className="bg-base-100 border border-success/30 rounded-2xl shadow-mc p-3.5 flex items-center gap-3">
+            <div className="w-8 h-8 rounded-full bg-success/15 flex items-center justify-center shrink-0">
+              <svg className="w-4 h-4 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <span className="text-sm font-medium flex-1">บันทึกแล้ว</span>
+            <button className="btn btn-primary btn-xs rounded-lg" onClick={() => setShowPreview(true)}>
+              ดูใบเสนอราคา
+            </button>
+            <button className="btn btn-ghost btn-xs rounded-lg" onClick={() => router.push("/Admin/rfq")}>
+              กลับ
+            </button>
+            <button className="btn btn-ghost btn-xs btn-square rounded-lg" onClick={() => setSavedOk(false)} aria-label="ปิด">
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {showPreview && form && (
+        <QuotationPreviewModal
+          rfq={form}
+          confirmed={quotationDebug?.status === "confirmed"}
+          onClose={() => setShowPreview(false)}
+        />
       )}
     </>
   );

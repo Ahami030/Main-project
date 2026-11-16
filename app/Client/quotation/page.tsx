@@ -2,10 +2,11 @@
 import { JSX, useCallback, useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import { upload } from "@vercel/blob/client";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 type UploadStatus = "idle" | "uploading" | "success" | "error";
-type QuotationStatus = "sent" | "reviewing" | "completed" | "bargaining" | "confirmed";
+type QuotationStatus = "processing" | "sent" | "reviewing" | "completed" | "bargaining" | "confirmed";
 type View = "upload" | "history";
 
 interface Quotation {
@@ -18,11 +19,8 @@ interface Quotation {
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-const N8N_WEBHOOK_URL =
-  process.env.NEXT_PUBLIC_N8N_WEBHOOK_URL ??
-  "http://localhost:5678/webhook-test/pdf-test";
-
 const STEPS: { key: QuotationStatus; label: string; sublabel: string }[] = [
+  { key: "processing", label: "กำลังประมวลผลเอกสาร", sublabel: "ระบบกำลังอ่านและสกัดข้อมูลจากไฟล์" },
   { key: "sent",       label: "ส่งไฟล์แล้ว",        sublabel: "ระบบได้รับเอกสารของคุณแล้ว" },
   { key: "reviewing",  label: "ตรวจสอบ / จัดทำราย", sublabel: "ทีมงานกำลังตรวจสอบเอกสาร" },
   { key: "completed",  label: "ดำเนินการเสร็จสิ้น",  sublabel: "ใบเสนอราคาพร้อมแล้ว" },
@@ -31,10 +29,11 @@ const STEPS: { key: QuotationStatus; label: string; sublabel: string }[] = [
 ];
 
 const STATUS_ORDER: Record<QuotationStatus, number> = {
-  sent: 0, reviewing: 1, completed: 2, bargaining: 3, confirmed: 4,
+  processing: 0, sent: 1, reviewing: 2, completed: 3, bargaining: 4, confirmed: 5,
 };
 
 const STATUS_STYLE: Record<QuotationStatus, { spotlight: string; dot: string; bar: string; badge: string; label: string }> = {
+  processing: { spotlight: "border-info/25 bg-info/5",        dot: "bg-info",    bar: "from-info to-info/30",       badge: "badge-info",    label: "กำลังประมวลผล" },
   sent:       { spotlight: "border-success/25 bg-success/5",  dot: "bg-success", bar: "from-success to-success/30", badge: "badge-success", label: "ส่งแล้ว" },
   reviewing:  { spotlight: "border-warning/25 bg-warning/5",  dot: "bg-warning", bar: "from-warning to-warning/30", badge: "badge-warning", label: "กำลังดำเนินการ" },
   completed:  { spotlight: "border-primary/25 bg-primary/5",  dot: "bg-primary", bar: "from-primary to-primary/30", badge: "badge-primary", label: "เสร็จสิ้น" },
@@ -78,8 +77,11 @@ function QuotationCard({ q, onSpotlightClick }: { q: Quotation; onSpotlightClick
 
   const currentStep  = STEPS.find((s) => s.key === q.status)!;
   const nextStep     = STEPS[STATUS_ORDER[q.status] + 1] ?? null;
-  const isInProgress = q.status === "sent" || q.status === "reviewing";
+  const isInProgress = q.status === "processing" || q.status === "sent" || q.status === "reviewing";
   const { spotlight, dot, bar, badge, label } = STATUS_STYLE[q.status];
+
+  // n8n never called back (workflow died) — surface it instead of spinning forever
+  const isStuck = q.status === "processing" && Date.now() - new Date(q.createdAt).getTime() > 5 * 60 * 1000;
 
   return (
     <div className="card bg-base-100 border border-base-300 shadow-sm overflow-hidden">
@@ -114,12 +116,14 @@ function QuotationCard({ q, onSpotlightClick }: { q: Quotation; onSpotlightClick
               onClick={onSpotlightClick}
               className={`rounded-2xl border px-5 py-5 flex items-center gap-4 ${spotlight} ${onSpotlightClick ? "cursor-pointer hover:opacity-90 transition-opacity" : ""}`}
             >
-              <span className={`w-3 h-3 rounded-full shrink-0 ${dot} ${isInProgress ? "animate-pulse" : ""}`} />
+              <span className={`w-3 h-3 rounded-full shrink-0 ${isStuck ? "bg-warning" : dot} ${isInProgress ? "animate-pulse" : ""}`} />
               <div className="flex-1 min-w-0">
-                <p className="font-semibold">{currentStep.label}</p>
-                <p className="text-sm text-base-content/50 mt-0.5">{currentStep.sublabel}</p>
+                <p className="font-semibold">{isStuck ? "ใช้เวลานานกว่าปกติ" : currentStep.label}</p>
+                <p className="text-sm text-base-content/50 mt-0.5">
+                  {isStuck ? "เอกสารอาจมีปัญหาในการประมวลผล — ลองอัปโหลดใหม่อีกครั้ง" : currentStep.sublabel}
+                </p>
               </div>
-              {isInProgress && <span className="loading loading-dots loading-sm opacity-30" />}
+              {isInProgress && !isStuck && <span className="loading loading-dots loading-sm opacity-30" />}
               {onSpotlightClick && !isInProgress && (
                 <svg className="w-4 h-4 text-base-content/30 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -322,25 +326,48 @@ export default function Page(): JSX.Element {
       (session?.user as any)?.id ??
       "anonymous";
 
-    const formData = new FormData();
-    formData.append("file", pdfFile);
-    formData.append("userId", uid);
-
     setUploadStatus("uploading");
-    setUploadMessage("กำลังบันทึกไฟล์…");
+    setUploadMessage("กำลังอัปโหลดไฟล์…");
 
     let pdfData: { pdfId?: string; pdfPath?: string } = {};
     try {
-      const pdfFormData = new FormData();
-      pdfFormData.append("file", pdfFile);
-      const pdfRes = await fetch("/api/pdf", { method: "POST", body: pdfFormData });
+      // Direct browser→Blob upload — Vercel functions reject bodies > 4.5MB
+      // (FUNCTION_PAYLOAD_TOO_LARGE on image-layer PDFs), so the file never touches one.
+      // access "private" to match the store (public uploads get rejected with HTTP 400)
+      const blob = await upload(`PDF/${Date.now()}-${pdfFile.name}`, pdfFile, {
+        access: "private",
+        handleUploadUrl: "/api/pdf/upload",
+      });
+
+      const pdfRes = await fetch("/api/pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: blob.url, filename: pdfFile.name }),
+      });
       pdfData = pdfRes.ok ? await pdfRes.json() : {};
 
-      setUploadMessage("กำลังส่งข้อมูลไปยัง n8n…");
-      const storedFilename = (pdfData.pdfPath ?? pdfFile.name).replace(/^\/PDF\//, "");
-      formData.append("filename", storedFilename);
-      const res = await fetch(N8N_WEBHOOK_URL, { method: "POST", body: formData });
-      if (!res.ok) throw new Error(`ส่ง n8n ไม่สำเร็จ (HTTP ${res.status})`);
+      setUploadMessage("กำลังประมวลผลเอกสาร อาจใช้เวลาสักครู่…");
+      // rfq_number is generated here (RFQ-XXXXXX-YYMMDD, same style as PO/BILL/PAY numbers),
+      // not extracted from the PDF — re-uploading the same test file still gets a fresh number.
+      // The n8n prompt template copies body.rfq_number into the stored RFQ verbatim.
+      const d = new Date();
+      const rfqNumber = `RFQ-${crypto.randomUUID().replace(/-/g, "").slice(0, 6).toUpperCase()}-${String(d.getFullYear()).slice(-2)}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
+      // via our own API (small JSON — the server downloads the blob and forwards it to n8n)
+      const res = await fetch("/api/rfq/upload", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: uid,
+          filename: blob.url,
+          rfq_number: rfqNumber,
+          fileUrl: blob.url,
+          origName: pdfFile.name,
+        }),
+      });
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => null);
+        throw new Error(errBody?.message ?? `ส่ง n8n ไม่สำเร็จ (HTTP ${res.status})`);
+      }
 
       const saveRes  = await fetch("/api/quotation", {
         method: "POST",
@@ -351,7 +378,7 @@ export default function Page(): JSX.Element {
 
       const optimistic: Quotation = saveData.quotation ?? {
         _id: `temp-${Date.now()}`, filename: pdfFile.name,
-        status: "sent", createdAt: new Date().toISOString(),
+        status: "processing", createdAt: new Date().toISOString(),
         pdfId: null, pdfPath: null,
       };
       setQuotations([optimistic]);

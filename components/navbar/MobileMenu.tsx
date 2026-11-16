@@ -1,5 +1,9 @@
+"use client";
+
 import Link from "next/link";
+import { signOut } from "next-auth/react";
 import type { Session } from "next-auth";
+import ThemeSwitcher from "@/components/ThemeSwitcher";
 
 const adminLinks = [
   { href: "/Admin",          label: "Dashboard",   module: null },
@@ -31,7 +35,7 @@ export default function MobileMenu({ session, latestStatus, onClose }: Props) {
   const permissions = ((session?.user as any)?.permissions ?? []) as string[];
 
   return (
-    <div className="md:hidden border-t border-base-300 bg-base-100 px-6 py-4 space-y-1">
+    <div className="lg:hidden border-t border-base-300 bg-base-100 px-4 sm:px-6 py-4 space-y-1">
       <Link href="/" className={linkClass} onClick={onClose}>Home</Link>
 
       {role === "user" && (
@@ -52,6 +56,23 @@ export default function MobileMenu({ session, latestStatus, onClose }: Props) {
               {link.label}
             </Link>
           ))}
+
+      {session && (
+        <Link href="/profile" className={linkClass} onClick={onClose}>Profile</Link>
+      )}
+      <Link href="/checklist" className={linkClass} onClick={onClose}>📋 Checklist</Link>
+
+      <div className="flex items-center justify-between pt-2 mt-1 border-t border-base-200">
+        <ThemeSwitcher />
+        {session && (
+          <button
+            onClick={() => { onClose(); signOut(); }}
+            className="btn btn-ghost btn-sm text-error"
+          >
+            Logout
+          </button>
+        )}
+      </div>
     </div>
   );
 }

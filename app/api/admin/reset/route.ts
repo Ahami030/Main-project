@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/apiAuth";
 import { connectMongoDB } from "@/lib/mongo";
-import { unlink } from "fs/promises";
-import path from "path";
+import { del } from "@vercel/blob";
 import Quotation from "@/app/models/Quotation";
 import Chat from "@/models/Chat";
 import RFQ from "@/app/models/RFQ";
@@ -61,9 +60,8 @@ export async function POST(req: Request) {
     archivedRfq = true;
   }
 
-  if (quotation.pdfPath) {
-    const filePath = path.join(process.cwd(), quotation.pdfPath.replace(/^\//, ""));
-    try { await unlink(filePath); } catch {}
+  if (quotation.pdfPath?.startsWith("http")) {
+    try { await del(quotation.pdfPath); } catch {}
   }
 
   if (quotation.pdfId) {

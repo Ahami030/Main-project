@@ -4,13 +4,23 @@ import { useSession } from "next-auth/react";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import QuotationDocument, { RFQData } from "@/components/QuotationDocument";
+import ChatFileAttachment from "@/components/chat/ChatFileAttachment";
 
 type ChatType = {
   _id: string;
   senderRole: "user" | "admin";
   message: string;
+  fileUrl?: string;
+  fileType?: string;
+  fileName?: string;
+  isEdited?: boolean;
+  isDeleted?: boolean;
   createdAt: string;
 };
+
+const canEdit = (chat: ChatType) =>
+  !chat.fileUrl && !chat.isDeleted &&
+  Date.now() - new Date(chat.createdAt).getTime() < 2 * 60 * 1000;
 
 export default function DocumentChatPage() {
   const { data: session, status } = useSession();
@@ -19,6 +29,8 @@ export default function DocumentChatPage() {
 
   const [message, setMessage] = useState("");
   const [chats, setChats] = useState<ChatType[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
   const [showNewButton, setShowNewButton] = useState(false);
   const [rfq, setRfq] = useState<RFQData | null>(null);
@@ -31,8 +43,14 @@ export default function DocumentChatPage() {
   const [downloadReady, setDownloadReady] = useState(false);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [showHighlights, setShowHighlights] = useState(true);
+  const [pdfModal, setPdfModal]       = useState<string | null>(null);
+  const [editingId, setEditingId]     = useState<string | null>(null);
+  const [editText, setEditText]       = useState("");
+  const [pastedImage, setPastedImage] = useState<File | null>(null);
 
   const chatContainerRef = useRef<HTMLDivElement>(null);
+  const autoScrollUntilRef = useRef(0); // ignore handleScroll during our own smooth animation
+  const firstChatLoadRef = useRef(true);
 
   // ── Mark chats as read เมื่อเข้าหน้านี้ ────────────────────
   useEffect(() => {
@@ -80,7 +98,8 @@ export default function DocumentChatPage() {
   };
 
   const sendMessage = async () => {
-    if (!message.trim() || !USER_ID) return;
+    if (!message.trim() && !pastedImage || !USER_ID) return;
+    if (pastedImage) { await uploadAndSend(pastedImage); setPastedImage(null); return; }
     await fetch("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -92,9 +111,68 @@ export default function DocumentChatPage() {
     loadChats();
   };
 
+  const handleSaveEdit = async (id: string) => {
+    if (!editText.trim()) return;
+    await fetch(`/api/chat/message/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: editText }),
+    });
+    setEditingId(null);
+    loadChats();
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm("ลบข้อความนี้?")) return;
+    await fetch(`/api/chat/message/${id}`, { method: "DELETE" });
+    loadChats();
+  };
+
+  const uploadAndSend = async (file: File) => {
+    if (!USER_ID) return;
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/chat/upload", { method: "POST", body: fd });
+      if (!res.ok) { const d = await res.json(); alert(d.message ?? "อัปโหลดไม่สำเร็จ"); return; }
+      const { fileUrl, fileType, fileName } = await res.json();
+      await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: USER_ID, senderRole: "user", message: "", fileUrl, fileType, fileName }),
+      });
+      setShouldAutoScroll(true);
+      loadChats();
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+    await uploadAndSend(file);
+  };
+
+  const handlePaste = (e: React.ClipboardEvent) => {
+    for (const item of e.clipboardData.items) {
+      if (item.type.startsWith("image/")) {
+        e.preventDefault();
+        const file = item.getAsFile();
+        if (file) setPastedImage(new File([file], `screenshot-${Date.now()}.png`, { type: file.type }));
+        break;
+      }
+    }
+  };
+
   const handleScroll = () => {
     const container = chatContainerRef.current;
     if (!container) return;
+    // scroll events from our own smooth animation would otherwise read as
+    // "user scrolled up" and un-pin mid-flight (the stuck-at-top bug)
+    if (Date.now() < autoScrollUntilRef.current) return;
     const isAtBottom =
       container.scrollTop + container.clientHeight >= container.scrollHeight - 50;
     setShouldAutoScroll(isAtBottom);
@@ -102,8 +180,16 @@ export default function DocumentChatPage() {
   };
 
   useEffect(() => {
-    if (shouldAutoScroll)
-      chatContainerRef.current?.scrollTo({ top: chatContainerRef.current.scrollHeight, behavior: "smooth" });
+    const el = chatContainerRef.current;
+    if (!el || !shouldAutoScroll || chats.length === 0) return;
+    if (firstChatLoadRef.current) {
+      // first load: appear already at the bottom, no long glide
+      firstChatLoadRef.current = false;
+      el.scrollTo({ top: el.scrollHeight });
+      return;
+    }
+    autoScrollUntilRef.current = Date.now() + 700;
+    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
   }, [chats, shouldAutoScroll]);
 
   useEffect(() => {
@@ -114,7 +200,10 @@ export default function DocumentChatPage() {
   }, [USER_ID]);
 
   const scrollToBottom = () => {
-    chatContainerRef.current?.scrollTo({ top: chatContainerRef.current.scrollHeight, behavior: "smooth" });
+    if (chatContainerRef.current) {
+      autoScrollUntilRef.current = Date.now() + 700;
+      chatContainerRef.current.scrollTo({ top: chatContainerRef.current.scrollHeight, behavior: "smooth" });
+    }
     setShowNewButton(false);
     setShouldAutoScroll(true);
   };
@@ -240,7 +329,8 @@ export default function DocumentChatPage() {
         }
       `}</style>
 
-      <div className="print-root h-screen w-screen flex flex-col md:flex-row bg-base-300 overflow-hidden font-sans">
+      {/* dvh - navbar height: w-screen ignores the scrollbar and h-screen overflows under the sticky nav */}
+      <div className="print-root h-[calc(100dvh-4rem)] w-full flex flex-col md:flex-row bg-base-300 overflow-hidden font-sans">
 
         {/* ── Mobile Tab Bar ── */}
         <div className="print-hide md:hidden shrink-0 flex bg-base-100 border-b border-base-content/10">
@@ -355,7 +445,7 @@ export default function DocumentChatPage() {
                         <div className="flex-1 h-px bg-base-content/10" />
                       </div>
                     )}
-                    <div className={`flex items-end gap-1.5 ${isUser ? "justify-end" : "justify-start"}`}>
+                    <div className={`flex items-end gap-1.5 group ${isUser ? "justify-end" : "justify-start"}`}>
                       {!isUser && (
                         <div className="w-5 h-5 rounded-full bg-primary/20 border border-primary/30 flex items-center justify-center shrink-0 mb-0.5">
                           <svg className="w-2.5 h-2.5 text-primary" fill="currentColor" viewBox="0 0 20 20">
@@ -363,14 +453,48 @@ export default function DocumentChatPage() {
                           </svg>
                         </div>
                       )}
-                      <div
-                        className={`max-w-[78%] px-2.5 py-1.5 rounded-xl text-xs leading-relaxed ${
-                          isUser
-                            ? "bg-primary text-primary-content rounded-br-sm"
-                            : "bg-base-100 border border-base-content/10 text-base-content rounded-bl-sm"
-                        }`}
-                      >
-                        {chat.message}
+
+                      {/* ⋮ menu — เฉพาะ own message */}
+                      {isUser && !chat.isDeleted && editingId !== chat._id && (
+                        <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 order-first">
+                          {canEdit(chat) && (
+                            <button
+                              onClick={() => { setEditingId(chat._id); setEditText(chat.message); }}
+                              className="w-5 h-5 rounded-full bg-base-content/10 hover:bg-base-content/20 flex items-center justify-center transition-colors"
+                              title="แก้ไข"
+                            >
+                              <svg className="w-2.5 h-2.5 text-base-content/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                              </svg>
+                            </button>
+                          )}
+                          <button
+                            onClick={() => handleDelete(chat._id)}
+                            className="w-5 h-5 rounded-full bg-base-content/10 hover:bg-error/20 flex items-center justify-center transition-colors"
+                            title="ลบ"
+                          >
+                            <svg className="w-2.5 h-2.5 text-base-content/60 hover:text-error" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
+                        </div>
+                      )}
+
+                      <div className={`max-w-[78%] px-2.5 py-1.5 rounded-xl text-xs leading-relaxed ${
+                        isUser
+                          ? "bg-primary text-primary-content rounded-br-sm"
+                          : "bg-base-100 border border-base-content/20 shadow-mc-sm text-base-content rounded-bl-sm"
+                      }`}>
+                        {chat.isDeleted ? (
+                          <span className="italic opacity-40">ข้อความถูกลบแล้ว</span>
+                        ) : chat.fileUrl ? (
+                          <ChatFileAttachment fileUrl={chat.fileUrl} fileType={chat.fileType!} fileName={chat.fileName ?? "ไฟล์"} isAdmin={isUser} onPdfClick={(url) => setPdfModal(url)} />
+                        ) : (
+                          <div>
+                            {chat.message}
+                            {chat.isEdited && <span className="ml-1 opacity-40 text-[9px]">(แก้ไขแล้ว)</span>}
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -391,12 +515,59 @@ export default function DocumentChatPage() {
             </div>
 
             <div className="px-3 pb-2.5 pt-2 shrink-0 border-t border-base-content/10 bg-base-200">
+              {/* Paste image preview */}
+              {pastedImage && (
+                <div className="mb-2 flex items-center gap-2 bg-base-100 border border-base-content/10 rounded-lg p-2">
+                  <div className="relative shrink-0">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={URL.createObjectURL(pastedImage)}
+                      alt="preview"
+                      className="w-14 h-14 object-cover rounded-lg"
+                    />
+                    <button
+                      onClick={() => setPastedImage(null)}
+                      className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-base-content text-base-100 flex items-center justify-center"
+                    >
+                      <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[10px] text-base-content/60 truncate">{pastedImage.name}</p>
+                    <p className="text-[9px] text-base-content/40">{(pastedImage.size / 1024).toFixed(0)} KB · กด Enter เพื่อส่ง</p>
+                  </div>
+                </div>
+              )}
+              <input
+                type="file"
+                accept="image/*,application/pdf"
+                hidden
+                ref={fileInputRef}
+                onChange={handleFileSelect}
+              />
               <div className="flex items-end gap-2 bg-base-100 border border-base-content/10 rounded-lg p-1.5 focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/10 transition-all">
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploading}
+                  className="w-7 h-7 rounded-md hover:bg-base-200 disabled:opacity-30 transition-all flex items-center justify-center shrink-0"
+                  title="แนบไฟล์"
+                >
+                  {uploading ? (
+                    <span className="loading loading-spinner loading-xs" />
+                  ) : (
+                    <svg className="w-3.5 h-3.5 text-base-content/40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                    </svg>
+                  )}
+                </button>
                 <textarea
-                  className="flex-1 bg-transparent text-base-content text-xs placeholder-base-content/20 resize-none outline-none leading-relaxed max-h-16 min-h-6.5 py-0.5 px-1"
+                  className="flex-1 bg-transparent text-base-content text-base md:text-xs placeholder-base-content/20 resize-none outline-none leading-relaxed max-h-16 min-h-6.5 py-0.5 px-1"
                   placeholder="พิมพ์ข้อความ... (Enter ส่ง)"
                   value={message}
                   rows={1}
+                  onPaste={handlePaste}
                   onChange={(e) => {
                     setMessage(e.target.value);
                     e.target.style.height = "auto";
@@ -411,7 +582,7 @@ export default function DocumentChatPage() {
                 />
                 <button
                   onClick={sendMessage}
-                  disabled={!message.trim()}
+                  disabled={!message.trim() && !pastedImage}
                   className="w-7 h-7 rounded-md bg-primary hover:bg-primary/80 disabled:opacity-30 disabled:cursor-not-allowed transition-all flex items-center justify-center shrink-0"
                 >
                   <svg className="w-3 h-3 text-primary-content translate-x-px" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -419,6 +590,41 @@ export default function DocumentChatPage() {
                   </svg>
                 </button>
               </div>
+
+              {/* ── Facebook-style edit modal ── */}
+              {editingId && (
+                <div className="border-t border-base-content/10 bg-base-100 px-3 py-2.5 animate-in slide-in-from-bottom-2 duration-150">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[10px] font-semibold text-base-content/50 uppercase tracking-wider">แก้ไขข้อความ</span>
+                    <button onClick={() => setEditingId(null)} className="w-4 h-4 flex items-center justify-center text-base-content/40 hover:text-base-content transition-colors">
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      autoFocus
+                      className="flex-1 bg-base-200 rounded-full px-3 py-1.5 text-base md:text-xs text-base-content outline-none focus:ring-1 focus:ring-primary/30 transition-all"
+                      value={editText}
+                      onChange={e => setEditText(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === "Enter") handleSaveEdit(editingId);
+                        if (e.key === "Escape") setEditingId(null);
+                      }}
+                    />
+                    <button
+                      onClick={() => handleSaveEdit(editingId)}
+                      disabled={!editText.trim()}
+                      className="w-7 h-7 rounded-full bg-primary hover:bg-primary/80 disabled:opacity-30 flex items-center justify-center shrink-0 transition-all"
+                    >
+                      <svg className="w-3 h-3 text-primary-content" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -600,6 +806,25 @@ export default function DocumentChatPage() {
                 ยืนยัน
               </button>
             </div>
+          </div>
+        </div>
+      )}
+      {/* ── PDF Modal ── */}
+      {pdfModal && (
+        <div
+          className="fixed inset-0 z-99999 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => setPdfModal(null)}
+        >
+          <div className="relative w-full max-w-3xl h-[88vh]" onClick={(e) => e.stopPropagation()}>
+            <button
+              onClick={() => setPdfModal(null)}
+              className="absolute -top-4 -right-4 w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors z-10"
+            >
+              <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+            <iframe src={pdfModal} className="w-full h-full rounded-2xl" />
           </div>
         </div>
       )}

@@ -1,8 +1,14 @@
 import { NextResponse } from "next/server";
 import { requireSession, requireEmployee, getUser } from "@/lib/apiAuth";
 import { connectMongoDB } from "@/lib/mongo";
+import { del } from "@vercel/blob";
 import Quotation from "@/app/models/Quotation";
+import Chat from "@/models/Chat";
+import RFQ from "@/app/models/RFQ";
+import PDF from "@/app/models/PDF";
 
+// Hard delete: wipes the user's whole session (PDF file, chats, RFQs, quotation)
+// like /api/admin/reset but with NO archiving — gone for good.
 export async function DELETE(
   _req: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -13,13 +19,28 @@ export async function DELETE(
   await connectMongoDB();
 
   const { id } = await params;
-  const deleted = await Quotation.findByIdAndDelete(id);
-
-  if (!deleted) {
+  const quotation = await Quotation.findById(id);
+  if (!quotation) {
     return NextResponse.json({ message: "Not found" }, { status: 404 });
   }
 
-  return NextResponse.json({ message: "Deleted" });
+  const userId = quotation.userId;
+
+  if (quotation.pdfPath?.startsWith("http")) {
+    try { await del(quotation.pdfPath); } catch {}
+  }
+  if (quotation.pdfId) {
+    await PDF.findByIdAndDelete(quotation.pdfId);
+  }
+  const chats = await Chat.deleteMany({ userId });
+  const rfqs = await RFQ.deleteMany({ USER_ID: userId });
+  await Quotation.findByIdAndDelete(id);
+
+  return NextResponse.json({
+    message: "Deleted",
+    deletedChats: chats.deletedCount,
+    deletedRfqs: rfqs.deletedCount,
+  });
 }
 
 export async function PATCH(

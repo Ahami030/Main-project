@@ -14,9 +14,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   return (
     <>
       {children}
-      <div className="lg:hidden">
-        <ShortcutChat />
-      </div>
+      <ShortcutChat />
     </>
   );
 }
