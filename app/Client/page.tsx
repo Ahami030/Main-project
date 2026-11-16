@@ -954,7 +954,7 @@ export default function Page(): JSX.Element {
                   {/* Next step hint */}
                   {latest.status === "failed" && (
                     <button
-                      onClick={() => router.push("/Client/quotation")}
+                      onClick={() => router.push("/Client/quotation?upload=1")}
                       className="btn btn-primary w-full font-semibold gap-2 shadow-lg shadow-primary/20"
                     >
                       อัปโหลดเอกสารใหม่

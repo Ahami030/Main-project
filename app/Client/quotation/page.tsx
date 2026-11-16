@@ -262,7 +262,8 @@ export default function Page(): JSX.Element {
       const list: Quotation[] = data.quotations ?? [];
       setQuotations(list);
       setLastUpdated(new Date());
-      if (list.length > 0) setView("history");
+      // ?upload (dashboard "อัปโหลดเอกสารใหม่") lands on the form even when history exists
+      if (list.length > 0 && !new URLSearchParams(window.location.search).has("upload")) setView("history");
     } finally {
       if (!silent) setHistoryLoading(false);
       setInitializing(false);
