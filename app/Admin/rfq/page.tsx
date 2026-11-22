@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import UploadForCustomerModal from "@/components/admin/UploadForCustomerModal";
 import CustomerListModal from "@/components/admin/CustomerListModal";
+import { DUE_BADGE, byDue, dueInfo, isDueOpen } from "@/lib/dueDate";
 
 type FilterTab = "all" | "pending";
 type Folder = { _id: string; name: string; parentId: string | null };
@@ -35,6 +36,8 @@ export default function RFQListPage() {
   // งานที่ quotation ยัง "sent" ค้างอยู่ — key = rfq_number (ลูกค้ามีได้หลายงาน)
   // หรือ "user:<userId>" สำหรับ quotation เก่าที่ไม่มีเลข RFQ
   const [pendingKeys, setPendingKeys] = useState<Set<string>>(new Set());
+  // rfq_number → the job's quotation status + customer deadline
+  const [jobByRfq, setJobByRfq] = useState<Record<string, { status: string; dueAt: string | null }>>({});
   const router = useRouter();
 
   // โหลด "เคยดูแล้ว" จาก localStorage
@@ -73,6 +76,11 @@ export default function RFQListPage() {
             .map((q: any) => (q.rfqNumber ? q.rfqNumber : `user:${q.userId}`) as string)
         );
         setPendingKeys(pending);
+        const jobs: Record<string, { status: string; dueAt: string | null }> = {};
+        for (const q of quotations ?? []) {
+          if (q.rfqNumber) jobs[q.rfqNumber] = { status: q.status, dueAt: q.dueAt ?? null };
+        }
+        setJobByRfq(jobs);
       }
       try {
         const folderRes = await fetch("/api/rfq-folders", { cache: "no-store" });
@@ -131,6 +139,13 @@ export default function RFQListPage() {
 
   const pendingCount = data.filter((item) => isPending(item)).length;
 
+  const jobOf = (item: { rfq_number?: string }) =>
+    (item.rfq_number && jobByRfq[item.rfq_number]) || { status: "", dueAt: null };
+  const dueOf = (item: { rfq_number?: string }) => {
+    const job = jobOf(item);
+    return isDueOpen(job.status) ? dueInfo(job.dueAt) : null;
+  };
+
   const searchQuery = search.trim().toLowerCase();
 
   const filtered = data.filter((item) => {
@@ -142,7 +157,7 @@ export default function RFQListPage() {
       (item.buyer_company_name || "").toLowerCase().includes(searchQuery) ||
       (item.vendor_company_name || "").toLowerCase().includes(searchQuery)
     );
-  });
+  }).sort((a, b) => byDue(jobOf(a), jobOf(b))); // rush jobs first, soonest on top
 
   // ── Folder helpers ──────────────────────────────────────────
   const childFolders = searchQuery
@@ -634,6 +649,7 @@ export default function RFQListPage() {
                     const total = grandTotal(item);
                     const itemCount = item.line_items?.length || 0;
                     const pending = isPending(item);
+                    const due = dueOf(item);
                     return (
                       <tr
                         key={item._id}
@@ -673,6 +689,9 @@ export default function RFQListPage() {
                             </span>
                             {pending && (
                               <span className="badge badge-error badge-sm text-[9px] font-bold">ค้าง</span>
+                            )}
+                            {due && (
+                              <span className={`badge badge-sm text-[10px] whitespace-nowrap ${DUE_BADGE[due.tone]}`}>{due.label}</span>
                             )}
                             {hasNewChat(item.USER_ID) && (
                               <span className="flex items-center gap-1 px-1.5 py-0.5 bg-primary/10 rounded-md">
@@ -746,6 +765,7 @@ export default function RFQListPage() {
                 const total = grandTotal(item);
                 const itemCount = item.line_items?.length || 0;
                 const pending = isPending(item);
+                const due = dueOf(item);
                 return (
                   <div
                     key={item._id}
@@ -777,6 +797,9 @@ export default function RFQListPage() {
                           {item.rfq_number || "—"}
                         </p>
                         {pending && <span className="badge badge-error badge-xs text-[9px] shrink-0">ค้าง</span>}
+                        {due && (
+                          <span className={`badge badge-xs text-[9px] shrink-0 whitespace-nowrap ${DUE_BADGE[due.tone]}`}>{due.label}</span>
+                        )}
                         {hasNewChat(item.USER_ID) && (
                           <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse shrink-0" />
                         )}

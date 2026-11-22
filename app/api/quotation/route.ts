@@ -2,16 +2,19 @@ import { NextResponse } from "next/server";
 import { requireSession, getUser } from "@/lib/apiAuth";
 import { connectMongoDB } from "@/lib/mongo";
 import Quotation, { expireStuckQuotations, openQuotationLimitMessage } from "@/app/models/Quotation";
+import { parseDueAt } from "@/lib/dueDate";
 
 export async function POST(req: Request) {
   const sessionOrRes = await requireSession();
   if (sessionOrRes instanceof NextResponse) return sessionOrRes;
   const session = sessionOrRes;
 
-  const { filename, pdfId, pdfPath, rfqNumber, userId: targetUserId } = await req.json();
+  const { filename, pdfId, pdfPath, rfqNumber, dueAt: rawDueAt, userId: targetUserId } = await req.json();
   if (!filename) {
     return NextResponse.json({ message: "filename required" }, { status: 400 });
   }
+  const due = parseDueAt(rawDueAt);
+  if (!due.ok) return NextResponse.json({ message: due.message }, { status: 400 });
 
   await connectMongoDB();
 
@@ -36,7 +39,7 @@ export async function POST(req: Request) {
   // "processing" until n8n's callback (/api/rfq/callback) confirms the RFQ is in the DB —
   // the admin's new-work badge counts "sent", so it only fires when the work actually exists
   const quotation = await Quotation.create({
-    userId, filename, pdfId, pdfPath, rfqNumber: rfqNumber ?? null, status: "processing",
+    userId, filename, pdfId, pdfPath, rfqNumber: rfqNumber ?? null, dueAt: due.value, status: "processing",
   });
 
   return NextResponse.json({ quotation }, { status: 201 });

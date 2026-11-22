@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { upload } from '@vercel/blob/client';
+import { localInputMin, parseDueAt } from '@/lib/dueDate';
 
 type Customer = {
   _id: string;
@@ -31,6 +32,7 @@ export default function UploadForCustomerModal({ onClose, onDone }: Props) {
   const [creds, setCreds] = useState<{ email: string; password: string } | null>(null);
 
   const [file, setFile] = useState<File | null>(null);
+  const [dueAt, setDueAt] = useState(''); // datetime-local, '' = no deadline
   const [status, setStatus] = useState<'idle' | 'working' | 'success' | 'error'>('idle');
   const [message, setMessage] = useState('');
   const [copied, setCopied] = useState(false);
@@ -74,6 +76,9 @@ export default function UploadForCustomerModal({ onClose, onDone }: Props) {
 
   const handleSubmit = async () => {
     if (!file) return;
+    // validate before anything is created/uploaded
+    const due = parseDueAt(dueAt ? new Date(dueAt).toISOString() : null);
+    if (!due.ok) { setStatus('error'); setMessage(due.message); return; }
     setStatus('working');
     setMessage('');
 
@@ -138,6 +143,7 @@ export default function UploadForCustomerModal({ onClose, onDone }: Props) {
           pdfId: pdfData.pdfId ?? null,
           pdfPath: pdfData.pdfPath ?? null,
           rfqNumber,
+          dueAt: due.value,
           userId: customer._id,
         }),
       });
@@ -300,6 +306,19 @@ export default function UploadForCustomerModal({ onClose, onDone }: Props) {
                   <span className="text-sm text-base-content/50">เลือกไฟล์ PDF ใบขอเสนอราคาของลูกค้า</span>
                 )}
               </button>
+
+              <label className="form-control w-full">
+                <span className="label-text text-sm mb-1">
+                  ลูกค้าต้องการใบเสนอราคาภายใน <span className="text-base-content/40">(ไม่บังคับ)</span>
+                </span>
+                <input
+                  type="datetime-local"
+                  className="input input-bordered input-sm rounded-xl"
+                  min={localInputMin()}
+                  value={dueAt}
+                  onChange={(e) => setDueAt(e.target.value)}
+                />
+              </label>
 
               {status === 'working' && (
                 <div className="flex items-center gap-2 text-sm text-base-content/60">

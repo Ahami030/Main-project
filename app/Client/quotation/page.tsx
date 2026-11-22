@@ -3,6 +3,7 @@ import { JSX, useCallback, useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { upload } from "@vercel/blob/client";
+import { DUE_BADGE, dueInfo, formatDue, isDueOpen, localInputMin, parseDueAt } from "@/lib/dueDate";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 type UploadStatus = "idle" | "uploading" | "success" | "error";
@@ -17,6 +18,7 @@ interface Quotation {
   pdfId:   string | null;
   pdfPath: string | null;
   failReason?: string | null;
+  dueAt?: string | null;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -79,6 +81,7 @@ function QuotationCard({ q, onSpotlightClick, onRetry }: { q: Quotation; onSpotl
   });
 
   const isFailed     = q.status === "failed";
+  const due          = dueInfo(q.dueAt);
   const currentStep  = STEPS.find((s) => s.key === q.status) ?? {
     label: "ประมวลผลเอกสารไม่สำเร็จ",
     sublabel: q.failReason ?? "กรุณาตรวจสอบไฟล์แล้วอัปโหลดใหม่อีกครั้ง",
@@ -104,6 +107,14 @@ function QuotationCard({ q, onSpotlightClick, onRetry }: { q: Quotation; onSpotl
               </p>
               <p className="font-semibold leading-snug truncate max-w-lg">{q.filename}</p>
               <p className="text-xs text-base-content/40 mt-0.5">{date}</p>
+              {q.dueAt && (
+                <p className="text-xs mt-1 flex items-center gap-1.5">
+                  <span className="text-base-content/50">ต้องการภายใน {formatDue(q.dueAt)}</span>
+                  {isDueOpen(q.status) && due && due.tone !== "ghost" && (
+                    <span className={`badge badge-xs ${DUE_BADGE[due.tone]}`}>{due.tone === "error" ? "เลยกำหนด" : "ด่วน"}</span>
+                  )}
+                </p>
+              )}
             </div>
           </div>
           <span className={`badge badge-sm shrink-0 ${badge}`}>{label}</span>
@@ -243,6 +254,7 @@ export default function Page(): JSX.Element {
   const [fileError, setFileError]         = useState<string | null>(null);
   const [uploadStatus, setUploadStatus]   = useState<UploadStatus>("idle");
   const [uploadMessage, setUploadMessage] = useState("");
+  const [dueAt, setDueAt]                 = useState(""); // datetime-local value, "" = no deadline
 
   const [quotations, setQuotations]         = useState<Quotation[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -328,6 +340,9 @@ export default function Page(): JSX.Element {
 
   const handleSend = async () => {
     if (!pdfFile) { setUploadStatus("error"); setUploadMessage("กรุณาเลือกไฟล์ PDF ก่อน"); return; }
+    // check before the upload — once n8n has the file, a rejected quotation would orphan it
+    const due = parseDueAt(dueAt ? new Date(dueAt).toISOString() : null);
+    if (!due.ok) { setUploadStatus("error"); setUploadMessage(due.message); return; }
 
     const uid =
       (session as any)?.id ??
@@ -381,7 +396,7 @@ export default function Page(): JSX.Element {
       const saveRes  = await fetch("/api/quotation", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ filename: pdfFile.name, pdfId: pdfData.pdfId ?? null, pdfPath: pdfData.pdfPath ?? null, rfqNumber }),
+        body: JSON.stringify({ filename: pdfFile.name, pdfId: pdfData.pdfId ?? null, pdfPath: pdfData.pdfPath ?? null, rfqNumber, dueAt: due.value }),
       });
       const saveData = await saveRes.json();
 
@@ -394,6 +409,7 @@ export default function Page(): JSX.Element {
       setUploadStatus("success");
       setUploadMessage("ส่งสำเร็จ!");
       resetPdf();
+      setDueAt("");
       switchView("history");
     } catch (err) {
       // ลบไฟล์และ PDF record ออกเพราะส่ง n8n ไม่สำเร็จ
@@ -520,6 +536,20 @@ export default function Page(): JSX.Element {
                 {fileError && (
                   <div className="alert alert-error py-2.5 text-sm">{fileError}</div>
                 )}
+
+                {/* Optional deadline — rush jobs float to the top of the staff queue */}
+                <label className="form-control w-full sm:max-w-xs">
+                  <span className="label-text text-sm mb-1">
+                    ต้องการใบเสนอราคาภายใน <span className="text-base-content/40">(ไม่บังคับ · กรณีเร่งด่วน)</span>
+                  </span>
+                  <input
+                    type="datetime-local"
+                    className="input input-bordered input-sm"
+                    min={localInputMin()}
+                    value={dueAt}
+                    onChange={(e) => setDueAt(e.target.value)}
+                  />
+                </label>
 
                 <div className="divider my-0" />
 

@@ -3,6 +3,7 @@ import { JSX, useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import InlineChatPanel from '@/components/admin/InlineChatPanel';
+import { DUE_BADGE, byDue, dueInfo, isDueOpen } from '@/lib/dueDate';
 
 type QuotationStatus = 'processing' | 'sent' | 'reviewing' | 'completed' | 'bargaining' | 'confirmed' | 'failed';
 
@@ -12,6 +13,7 @@ interface Quotation {
   filename: string;
   status: QuotationStatus;
   createdAt: string;
+  dueAt?: string | null;
 }
 
 interface ToastNotification {
@@ -501,14 +503,17 @@ export default function AdminPage() {
                           <th>ชื่อไฟล์</th>
                           <th>ผู้ส่ง (userId)</th>
                           <th>วันที่ส่ง</th>
+                          <th>กำหนด</th>
                           <th>สถานะ</th>
                           <th>อัปเดต</th>
                           <th>รีเซ็ต</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {quotations.map((q) => {
+                        {/* rush jobs (customer deadline) first, soonest on top */}
+                        {[...quotations].sort(byDue).map((q) => {
                           const next = NEXT_STATUS[q.status];
+                          const due = isDueOpen(q.status) ? dueInfo(q.dueAt) : null;
                           const date = new Date(q.createdAt).toLocaleDateString('th-TH', {
                             year: 'numeric', month: 'short', day: 'numeric',
                             hour: '2-digit', minute: '2-digit',
@@ -518,6 +523,11 @@ export default function AdminPage() {
                               <td className="max-w-48 truncate font-medium text-sm">{q.filename}</td>
                               <td className="font-mono text-[11px] text-base-content/50">{q.userId}</td>
                               <td className="text-xs text-base-content/60">{date}</td>
+                              <td>
+                                {due
+                                  ? <span className={`badge badge-sm whitespace-nowrap ${DUE_BADGE[due.tone]}`}>{due.label}</span>
+                                  : <span className="text-base-content/25">—</span>}
+                              </td>
                               <td>
                                 <span className={`badge ${STATUS_BADGE[q.status]} badge-sm`}>
                                   {STATUS_LABELS[q.status]}

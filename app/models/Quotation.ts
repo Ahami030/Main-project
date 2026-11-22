@@ -14,6 +14,8 @@ const QuotationSchema = new mongoose.Schema(
     // processing quotation of the user
     rfqNumber:  { type: String, default: null },
     failReason: { type: String, default: null },
+    // customer-requested "want the quotation by" (optional) — see lib/dueDate.ts
+    dueAt: { type: Date, default: null },
     status: {
       type: String,
       enum: ["processing", "sent", "reviewing", "completed", "bargaining", "confirmed", "failed"],

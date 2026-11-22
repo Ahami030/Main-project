@@ -3,6 +3,7 @@
 import { JSX, useCallback, useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import { formatDue } from "@/lib/dueDate";
 import QuotationDocument, { RFQData } from "@/components/QuotationDocument";
 import BillingNoteDocument from "@/components/BillingNoteDocument";
 import PaymentStatusBadge from "@/components/payment/PaymentStatusBadge";
@@ -20,6 +21,7 @@ interface Quotation {
   pdfPath: string | null;
   failReason?: string | null;
   rfqNumber?: string | null;
+  dueAt?: string | null;
 }
 
 // A customer can have several jobs — fetch the RFQ of this quotation, not just the newest.
@@ -921,6 +923,9 @@ export default function Page(): JSX.Element {
                         hour: "2-digit", minute: "2-digit",
                       })}
                     </p>
+                    {latest.dueAt && (
+                      <p className="text-xs text-base-content/50 mt-1">ต้องการภายใน {formatDue(latest.dueAt)}</p>
+                    )}
                   </div>
                 </div>
                 <span className={`badge shrink-0 ${meta.badge}`}>{meta.label}</span>
