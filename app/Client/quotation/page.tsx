@@ -148,7 +148,7 @@ function QuotationCard({ q, onSpotlightClick, onRetry }: { q: Quotation; onSpotl
             )}
             {q.status === "bargaining" && (
               <button
-                onClick={() => router.push("/Client/Bargain")}
+                onClick={() => router.push(`/Client/Bargain?q=${q._id}`)}
                 className="btn btn-accent w-full font-semibold gap-2 shadow-lg shadow-accent/20"
               >
                 ไปยังหน้าต่อรองราคา
@@ -157,7 +157,7 @@ function QuotationCard({ q, onSpotlightClick, onRetry }: { q: Quotation; onSpotl
             )}
             {q.status === "confirmed" && (
               <button
-                onClick={() => router.push("/Client/Bargain")}
+                onClick={() => router.push(`/Client/Bargain?q=${q._id}`)}
                 className="btn btn-success w-full font-semibold gap-2 shadow-lg shadow-success/20"
               >
                 ดูเอกสาร / พิมพ์ / ดาวน์โหลด
@@ -390,7 +390,7 @@ export default function Page(): JSX.Element {
         status: "processing", createdAt: new Date().toISOString(),
         pdfId: null, pdfPath: null,
       };
-      setQuotations([optimistic]);
+      setQuotations((prev) => [optimistic, ...prev]); // keep the other jobs on screen
       setUploadStatus("success");
       setUploadMessage("ส่งสำเร็จ!");
       resetPdf();
@@ -448,7 +448,14 @@ export default function Page(): JSX.Element {
                 {/* Card header */}
                 <div className="flex items-center justify-between">
                   <p className="font-semibold text-base">อัปโหลดเอกสาร</p>
-                  <span className="badge badge-outline badge-sm">PDF only</span>
+                  <div className="flex items-center gap-2">
+                    {quotations.length > 0 && (
+                      <button onClick={() => switchView("history")} className="btn btn-ghost btn-xs">
+                        ← ดูสถานะเอกสาร
+                      </button>
+                    )}
+                    <span className="badge badge-outline badge-sm">PDF only</span>
+                  </div>
                 </div>
 
                 {/* Drop zone or preview */}
@@ -547,6 +554,14 @@ export default function Page(): JSX.Element {
           {/* ── History View ─────────────────────────────────────── */}
           {view === "history" && (
             <div className="space-y-4">
+              {/* jobs run in parallel — a new document doesn't wait for the others to finish */}
+              {quotations.length > 0 && (
+                <div className="flex justify-end">
+                  <button onClick={() => switchView("upload")} className="btn btn-primary btn-sm gap-2">
+                    + ส่งเอกสารใหม่
+                  </button>
+                </div>
+              )}
               {historyLoading ? (
                 <div className="card bg-base-100 border border-base-300">
                   <div className="card-body items-center py-20 gap-3">
@@ -624,7 +639,7 @@ export default function Page(): JSX.Element {
               <div className="modal-action flex-col gap-2 mt-0">
                 {(mq.status === "bargaining" || mq.status === "confirmed") && (
                   <button
-                    onClick={() => { setModalQuotation(null); router.push("/Client/Bargain"); }}
+                    onClick={() => { setModalQuotation(null); router.push(`/Client/Bargain?q=${mq._id}`); }}
                     className="btn btn-primary w-full gap-2"
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

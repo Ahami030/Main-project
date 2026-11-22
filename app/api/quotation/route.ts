@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireSession, getUser } from "@/lib/apiAuth";
 import { connectMongoDB } from "@/lib/mongo";
-import Quotation, { expireStuckQuotations } from "@/app/models/Quotation";
+import Quotation, { expireStuckQuotations, openQuotationLimitMessage } from "@/app/models/Quotation";
 
 export async function POST(req: Request) {
   const sessionOrRes = await requireSession();
@@ -29,6 +29,9 @@ export async function POST(req: Request) {
     }
     userId = targetUserId;
   }
+
+  const limitMsg = await openQuotationLimitMessage(userId);
+  if (limitMsg) return NextResponse.json({ message: limitMsg }, { status: 429 });
 
   // "processing" until n8n's callback (/api/rfq/callback) confirms the RFQ is in the DB —
   // the admin's new-work badge counts "sent", so it only fires when the work actually exists

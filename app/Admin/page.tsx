@@ -219,7 +219,7 @@ export default function AdminPage() {
   };
 
   const deleteQuotation = async (q: Quotation) => {
-    if (!confirm(`ลบถาวรของ ${q.userId}?\n\n⚠️ ต่างจาก Reset: ไม่มีการสำรองข้อมูลใดๆ\nสิ่งที่จะถูกลบทิ้งถาวร:\n• ไฟล์ PDF\n• แชททั้งหมดของผู้ใช้นี้\n• RFQ ทั้งหมดของผู้ใช้นี้\n• รายการใบเสนอราคานี้`)) return;
+    if (!confirm(`ลบถาวร งาน ${q.filename} ของ ${q.userId}?\n\n⚠️ ต่างจาก Reset: ไม่มีการสำรองข้อมูลใดๆ\nสิ่งที่จะถูกลบทิ้งถาวร:\n• ไฟล์ PDF\n• RFQ ของงานนี้\n• รายการใบเสนอราคานี้\n• แชทของลูกค้า (เฉพาะเมื่อเป็นงานสุดท้ายของลูกค้า)`)) return;
     setUpdating(q._id);
     try {
       const res = await fetch(`/api/quotation/${q._id}`, { method: 'DELETE' });
@@ -231,13 +231,13 @@ export default function AdminPage() {
   };
 
   const handleReset = async (q: Quotation) => {
-    if (!confirm(`Reset session ของ ${q.userId}?\n\nสิ่งที่จะเกิดขึ้น:\n• แชทและข้อมูล RFQ จะถูกสำรองไว้ใน archived_chats / archived_rfqs\n• ไฟล์ PDF, quotation, chats, และ RFQ จะถูกลบออก`)) return;
+    if (!confirm(`Reset งาน ${q.filename} ของ ${q.userId}?\n\nสิ่งที่จะเกิดขึ้น:\n• ข้อมูล RFQ ของงานนี้จะถูกสำรองไว้ใน archived_rfqs แล้วลบออก\n• ไฟล์ PDF และ quotation ของงานนี้จะถูกลบ\n• แชทจะถูกสำรองและล้าง เฉพาะเมื่อเป็นงานสุดท้ายของลูกค้า`)) return;
     setResetting(q._id);
     try {
       const res = await fetch('/api/admin/reset', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: q.userId }),
+        body: JSON.stringify({ quotationId: q._id }),
       });
       if (!res.ok) { alert('Reset ล้มเหลว กรุณาลองใหม่'); return; }
       setQuotations((prev) => prev.filter((x) => x._id !== q._id));

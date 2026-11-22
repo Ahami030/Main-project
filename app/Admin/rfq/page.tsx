@@ -32,8 +32,9 @@ export default function RFQListPage() {
   const [chatTimes, setChatTimes] = useState<Record<string, string>>({});
   // userId → ms timestamp ที่ admin เคยกดเข้าไปดูล่าสุด
   const [seenAt, setSeenAt] = useState<Record<string, number>>({});
-  // userId → มี quotation status "sent" ค้างอยู่หรือไม่
-  const [pendingUserIds, setPendingUserIds] = useState<Set<string>>(new Set());
+  // งานที่ quotation ยัง "sent" ค้างอยู่ — key = rfq_number (ลูกค้ามีได้หลายงาน)
+  // หรือ "user:<userId>" สำหรับ quotation เก่าที่ไม่มีเลข RFQ
+  const [pendingKeys, setPendingKeys] = useState<Set<string>>(new Set());
   const router = useRouter();
 
   // โหลด "เคยดูแล้ว" จาก localStorage
@@ -69,9 +70,9 @@ export default function RFQListPage() {
         const pending = new Set<string>(
           (quotations ?? [])
             .filter((q: any) => q.status === "sent")
-            .map((q: any) => q.userId as string)
+            .map((q: any) => (q.rfqNumber ? q.rfqNumber : `user:${q.userId}`) as string)
         );
-        setPendingUserIds(pending);
+        setPendingKeys(pending);
       }
       try {
         const folderRes = await fetch("/api/rfq-folders", { cache: "no-store" });
@@ -115,7 +116,8 @@ export default function RFQListPage() {
     try { localStorage.setItem("admin_seen_chats", JSON.stringify(updated)); } catch {}
   };
 
-  const isPending = (userId: string) => pendingUserIds.has(userId);
+  const isPending = (item: { rfq_number?: string; USER_ID?: string }) =>
+    (!!item.rfq_number && pendingKeys.has(item.rfq_number)) || pendingKeys.has(`user:${item.USER_ID}`);
 
   // hold-to-peek: hover a row for 1.5s → tooltip with customer email + submitted date
   const startHover = (id: string, x: number, y: number) => {
@@ -127,12 +129,12 @@ export default function RFQListPage() {
     setHoverTip(null);
   };
 
-  const pendingCount = data.filter((item) => isPending(item.USER_ID)).length;
+  const pendingCount = data.filter((item) => isPending(item)).length;
 
   const searchQuery = search.trim().toLowerCase();
 
   const filtered = data.filter((item) => {
-    if (activeFilter === "pending" && !isPending(item.USER_ID)) return false;
+    if (activeFilter === "pending" && !isPending(item)) return false;
     // searching looks across every folder; otherwise show only this folder's contents
     if (!searchQuery) return (item.folderId ?? null) === currentFolderId;
     return (
@@ -631,7 +633,7 @@ export default function RFQListPage() {
                   {filtered.map((item, idx) => {
                     const total = grandTotal(item);
                     const itemCount = item.line_items?.length || 0;
-                    const pending = isPending(item.USER_ID);
+                    const pending = isPending(item);
                     return (
                       <tr
                         key={item._id}
@@ -743,7 +745,7 @@ export default function RFQListPage() {
               {filtered.map((item) => {
                 const total = grandTotal(item);
                 const itemCount = item.line_items?.length || 0;
-                const pending = isPending(item.USER_ID);
+                const pending = isPending(item);
                 return (
                   <div
                     key={item._id}

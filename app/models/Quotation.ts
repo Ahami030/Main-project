@@ -26,6 +26,29 @@ const QuotationSchema = new mongoose.Schema(
 const Quotation = mongoose.models.Quotation || mongoose.model("Quotation", QuotationSchema);
 export default Quotation;
 
+// A customer can have several quotations at once, so "the quotation of this RFQ" is the
+// one with the same RFQ number. Quotations made before rfqNumber existed fall back to the
+// customer's latest one without a number (the old one-job-per-customer behaviour).
+export async function findQuotationForRfq(rfq: { rfq_number?: string | null; USER_ID?: string | null }) {
+  if (rfq.rfq_number) {
+    const exact = await Quotation.findOne({ rfqNumber: rfq.rfq_number });
+    if (exact) return exact;
+  }
+  if (!rfq.USER_ID) return null;
+  return Quotation.findOne({ userId: rfq.USER_ID, rfqNumber: null }).sort({ createdAt: -1 });
+}
+
+// Several jobs at once are fine, but cap the unfinished ones so a customer can't flood the
+// staff queue by mashing upload. Checked in /api/rfq/upload (before n8n sees the file) and
+// again in POST /api/quotation. Returns the Thai error message, or null when under the cap.
+const MAX_OPEN_QUOTATIONS = 5;
+export async function openQuotationLimitMessage(userId: string) {
+  const open = await Quotation.countDocuments({ userId, status: { $in: ["processing", "sent", "reviewing"] } });
+  return open >= MAX_OPEN_QUOTATIONS
+    ? `มีเอกสารที่รอดำเนินการอยู่ ${open} รายการ (สูงสุด ${MAX_OPEN_QUOTATIONS}) กรุณารอให้ทีมงานดำเนินการก่อน`
+    : null;
+}
+
 // Safety net for when n8n dies without calling back (ngrok down, container stopped).
 // ponytail: runs lazily on list reads, no cron — a quotation nobody looks at stays
 // "processing" until someone opens a page; add a cron if that ever matters.

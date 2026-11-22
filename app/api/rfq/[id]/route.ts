@@ -1,6 +1,6 @@
 import { connectMongoDB } from "@/lib/mongo";
 import RFQ from "@/app/models/RFQ";
-import Quotation from "@/app/models/Quotation";
+import { findQuotationForRfq } from "@/app/models/Quotation";
 import { NextResponse } from "next/server";
 
 type ChangeLogEntry = {
@@ -78,11 +78,10 @@ export async function PUT(req: Request, { params }: any) {
       );
     }
 
-    if (updated.USER_ID) {
-      await Quotation.findOneAndUpdate(
-        { userId: updated.USER_ID },
-        { status: "bargaining" }
-      );
+    const quotation = await findQuotationForRfq(updated);
+    if (quotation) {
+      quotation.status = "bargaining";
+      await quotation.save();
     }
 
     return NextResponse.json(updated, {

@@ -37,6 +37,8 @@ export default function DocumentChatPage() {
   const [rfqLoading, setRfqLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"doc" | "chat">("doc");
   const [quotationId, setQuotationId] = useState<string | null>(null);
+  // undefined = job not picked yet; null = legacy quotation without an RFQ number
+  const [rfqNumber, setRfqNumber] = useState<string | null | undefined>(undefined);
   const [isConfirmed, setIsConfirmed] = useState(false);
   const [confirmLoading, setConfirmLoading] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
@@ -63,21 +65,26 @@ export default function DocumentChatPage() {
     fetch("/api/quotation")
       .then((r) => r.json())
       .then((data) => {
-        const list: { _id: string; status: string }[] = data.quotations ?? [];
-        const active = list.find((q) => q.status === "bargaining" || q.status === "confirmed");
+        const list: { _id: string; status: string; rfqNumber?: string | null }[] = data.quotations ?? [];
+        const ready = (q: { status: string }) => q.status === "bargaining" || q.status === "confirmed";
+        // ?q=<quotationId> picks one job (a customer can have several); without it, the first ready one
+        const wanted = new URLSearchParams(window.location.search).get("q");
+        const active = list.find((q) => q._id === wanted && ready(q)) ?? list.find(ready);
         if (!active) router.replace("/Client/quotation");
         else {
           setQuotationId(active._id);
           setIsConfirmed(active.status === "confirmed");
+          setRfqNumber(active.rfqNumber ?? null);
         }
       });
   }, [USER_ID, router]);
 
-  // ── โหลด RFQ ล่าสุดของ user (poll 10s เพื่อรับ version ใหม่) ──
+  // ── โหลด RFQ ของงานนี้ (poll 10s เพื่อรับ version ใหม่) ──
   useEffect(() => {
-    if (!USER_ID) return;
+    if (!USER_ID || rfqNumber === undefined) return; // wait for the guard to pick the job
+    const url = `/api/rfq?userId=${USER_ID}` + (rfqNumber ? `&rfqNumber=${encodeURIComponent(rfqNumber)}` : "");
     const load = () =>
-      fetch(`/api/rfq?userId=${USER_ID}`, { cache: "no-store" })
+      fetch(url, { cache: "no-store" })
         .then((r) => r.json())
         .then((data: RFQData[]) => {
           if (Array.isArray(data) && data.length > 0) setRfq(data[0]);
@@ -86,7 +93,7 @@ export default function DocumentChatPage() {
     load();
     const iv = setInterval(load, 10000);
     return () => clearInterval(iv);
-  }, [USER_ID]);
+  }, [USER_ID, rfqNumber]);
 
   // ── Chat ────────────────────────────────────────────────────
   const loadChats = async () => {

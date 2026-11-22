@@ -306,7 +306,12 @@ export default function EditPage() {
           try {
             const qRes = await fetch("/api/quotation/all");
             const qData = await qRes.json();
-            const found = (qData.quotations ?? []).find((q: any) => q.userId === data.USER_ID);
+            // same RFQ number = same job (a customer can have several); pre-rfqNumber
+            // quotations fall back to matching the customer
+            const list: any[] = qData.quotations ?? [];
+            const found =
+              (data.rfq_number && list.find((q) => q.rfqNumber === data.rfq_number)) ||
+              list.find((q) => q.userId === data.USER_ID && !q.rfqNumber);
             if (found) setQuotationDebug({ id: found._id, status: found.status });
           } catch {}
         }

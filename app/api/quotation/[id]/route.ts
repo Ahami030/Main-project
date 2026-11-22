@@ -7,8 +7,8 @@ import Chat from "@/models/Chat";
 import RFQ from "@/app/models/RFQ";
 import PDF from "@/app/models/PDF";
 
-// Hard delete: wipes the user's whole session (PDF file, chats, RFQs, quotation)
-// like /api/admin/reset but with NO archiving — gone for good.
+// Hard delete of one job (PDF file, its RFQ, quotation) like /api/admin/reset but with
+// NO archiving — gone for good.
 export async function DELETE(
   _req: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -32,8 +32,13 @@ export async function DELETE(
   if (quotation.pdfId) {
     await PDF.findByIdAndDelete(quotation.pdfId);
   }
-  const chats = await Chat.deleteMany({ userId });
-  const rfqs = await RFQ.deleteMany({ USER_ID: userId });
+  // one job only — the customer's other jobs keep their RFQs; the shared chat thread
+  // goes only with the customer's last job
+  const otherJobs = await Quotation.countDocuments({ userId, _id: { $ne: quotation._id } });
+  const chats = otherJobs === 0 ? await Chat.deleteMany({ userId }) : { deletedCount: 0 };
+  const rfqs = quotation.rfqNumber
+    ? await RFQ.deleteMany({ rfq_number: quotation.rfqNumber })
+    : await RFQ.deleteMany({ USER_ID: userId }); // pre-rfqNumber quotation: old behaviour
   await Quotation.findByIdAndDelete(id);
 
   return NextResponse.json({

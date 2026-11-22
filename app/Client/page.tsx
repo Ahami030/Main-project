@@ -19,7 +19,13 @@ interface Quotation {
   pdfId:   string | null;
   pdfPath: string | null;
   failReason?: string | null;
+  rfqNumber?: string | null;
 }
+
+// A customer can have several jobs — fetch the RFQ of this quotation, not just the newest.
+// Pre-rfqNumber quotations fall back to the customer's newest RFQ (old behaviour).
+const rfqUrlFor = (q: Quotation, userId: string) =>
+  `/api/rfq?userId=${userId}` + (q.rfqNumber ? `&rfqNumber=${encodeURIComponent(q.rfqNumber)}` : "");
 
 type POStatus = "pending" | "accepted" | "billed";
 
@@ -357,7 +363,7 @@ export default function Page(): JSX.Element {
     if (!modalQuotation || !userId || userId === "ไม่พบข้อมูล") return;
     setRfqForModal(null);
     setRfqForModalLoading(true);
-    fetch(`/api/rfq?userId=${userId}`, { cache: "no-store" })
+    fetch(rfqUrlFor(modalQuotation, userId), { cache: "no-store" })
       .then((r) => r.json())
       .then((data: RFQData[]) => {
         if (Array.isArray(data) && data.length > 0) setRfqForModal(data[0]);
@@ -477,7 +483,7 @@ export default function Page(): JSX.Element {
   const handleDirectPrint = async () => {
     if (!userId || userId === "ไม่พบข้อมูล" || !latest) return;
     try {
-      const res  = await fetch(`/api/rfq?userId=${userId}`, { cache: "no-store" });
+      const res  = await fetch(rfqUrlFor(latest, userId), { cache: "no-store" });
       const data: RFQData[] = await res.json();
       if (!Array.isArray(data) || data.length === 0) return;
       setRfqForModal(data[0]);
@@ -495,7 +501,7 @@ export default function Page(): JSX.Element {
   const handleDirectDownload = async () => {
     if (!userId || userId === "ไม่พบข้อมูล" || !latest) return;
     try {
-      const res  = await fetch(`/api/rfq?userId=${userId}`, { cache: "no-store" });
+      const res  = await fetch(rfqUrlFor(latest, userId), { cache: "no-store" });
       const data: RFQData[] = await res.json();
       if (!Array.isArray(data) || data.length === 0) return;
       setRfqForModal(data[0]);
@@ -972,7 +978,7 @@ export default function Page(): JSX.Element {
                   )}
                   {latest.status === "bargaining" && (
                     <button
-                      onClick={() => router.push("/Client/Bargain")}
+                      onClick={() => router.push(`/Client/Bargain?q=${latest._id}`)}
                       className="btn btn-accent w-full font-semibold gap-2 shadow-lg shadow-accent/20"
                     >
                       ไปยังหน้าต่อรองราคา

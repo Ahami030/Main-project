@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireSession } from "@/lib/apiAuth";
+import { connectMongoDB } from "@/lib/mongo";
+import { openQuotationLimitMessage } from "@/app/models/Quotation";
 
 // Bridge between the browser and the n8n webhook. The browser sends only a small
 // JSON payload (the file is already in Vercel Blob — direct client upload, since
@@ -26,6 +28,10 @@ export async function POST(req: NextRequest) {
   if (!body?.userId || !body.fileUrl) {
     return NextResponse.json({ message: "userId and fileUrl required" }, { status: 400 });
   }
+
+  await connectMongoDB();
+  const limitMsg = await openQuotationLimitMessage(body.userId);
+  if (limitMsg) return NextResponse.json({ message: limitMsg }, { status: 429 });
 
   // Bearer token required for private blobs; harmless for public ones
   const fileRes = await fetch(body.fileUrl, {
