@@ -6,6 +6,7 @@ import { useSession } from "next-auth/react";
 import UploadForCustomerModal from "@/components/admin/UploadForCustomerModal";
 import CustomerListModal from "@/components/admin/CustomerListModal";
 import { DUE_BADGE, byDue, dueInfo, isDueOpen } from "@/lib/dueDate";
+import { PRESENCE_HEARTBEAT_MS, activeEditors } from "@/lib/presence";
 
 type FilterTab = "all" | "pending";
 type Folder = { _id: string; name: string; parentId: string | null };
@@ -105,6 +106,11 @@ export default function RFQListPage() {
   }, []);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+  // silent refresh so "👤 … กำลังทำ" and new jobs show up without a reload
+  useEffect(() => {
+    const iv = setInterval(() => fetchData(true), PRESENCE_HEARTBEAT_MS);
+    return () => clearInterval(iv);
+  }, [fetchData]);
 
   const sessionUser = session?.user as { role?: string; permissions?: string[] } | undefined;
   const canUploadForCustomer =
@@ -650,6 +656,7 @@ export default function RFQListPage() {
                     const itemCount = item.line_items?.length || 0;
                     const pending = isPending(item);
                     const due = dueOf(item);
+                    const working = activeEditors(item.editors);
                     return (
                       <tr
                         key={item._id}
@@ -692,6 +699,11 @@ export default function RFQListPage() {
                             )}
                             {due && (
                               <span className={`badge badge-sm text-[10px] whitespace-nowrap ${DUE_BADGE[due.tone]}`}>{due.label}</span>
+                            )}
+                            {working.length > 0 && (
+                              <span className="badge badge-info badge-sm text-[10px] whitespace-nowrap">
+                                👤 {working.map((e) => e.name || "พนักงาน").join(", ")} กำลังทำ
+                              </span>
                             )}
                             {hasNewChat(item.USER_ID) && (
                               <span className="flex items-center gap-1 px-1.5 py-0.5 bg-primary/10 rounded-md">
@@ -766,6 +778,7 @@ export default function RFQListPage() {
                 const itemCount = item.line_items?.length || 0;
                 const pending = isPending(item);
                 const due = dueOf(item);
+                const working = activeEditors(item.editors);
                 return (
                   <div
                     key={item._id}
@@ -799,6 +812,11 @@ export default function RFQListPage() {
                         {pending && <span className="badge badge-error badge-xs text-[9px] shrink-0">ค้าง</span>}
                         {due && (
                           <span className={`badge badge-xs text-[9px] shrink-0 whitespace-nowrap ${DUE_BADGE[due.tone]}`}>{due.label}</span>
+                        )}
+                        {working.length > 0 && (
+                          <span className="badge badge-info badge-xs text-[9px] shrink-0 whitespace-nowrap">
+                            👤 {working.map((e) => e.name || "พนักงาน").join(", ")}
+                          </span>
                         )}
                         {hasNewChat(item.USER_ID) && (
                           <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse shrink-0" />

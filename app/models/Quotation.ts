@@ -16,6 +16,12 @@ const QuotationSchema = new mongoose.Schema(
     failReason: { type: String, default: null },
     // customer-requested "want the quotation by" (optional) — see lib/dueDate.ts
     dueAt: { type: Date, default: null },
+    // staff member who first sent this quotation to the customer (staff work stats)
+    handledBy: {
+      type: new mongoose.Schema({ id: String, name: String }, { _id: false }),
+      default: null,
+    },
+    handledAt: { type: Date, default: null },
     status: {
       type: String,
       enum: ["processing", "sent", "reviewing", "completed", "bargaining", "confirmed", "failed"],

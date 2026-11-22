@@ -34,6 +34,12 @@ const RFQSchema = new mongoose.Schema({
     type: [ChangeLogEntrySchema],
     default: [],
   },
+  // staff currently on the edit page (heartbeat via /api/rfq/[id]/presence) — an entry
+  // older than PRESENCE_TTL_MS means that tab is gone. Warning only, never a lock.
+  editors: {
+    type: [new mongoose.Schema({ id: String, name: String, at: Date }, { _id: false })],
+    default: [],
+  },
 }, {
   collection: "Test_insert",
   timestamps: true

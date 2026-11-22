@@ -3,6 +3,7 @@ import { JSX, useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import InlineChatPanel from '@/components/admin/InlineChatPanel';
+import StaffStatsCard from '@/components/admin/StaffStatsCard';
 import { DUE_BADGE, byDue, dueInfo, isDueOpen } from '@/lib/dueDate';
 
 type QuotationStatus = 'processing' | 'sent' | 'reviewing' | 'completed' | 'bargaining' | 'confirmed' | 'failed';
@@ -391,6 +392,9 @@ export default function AdminPage() {
 
             </div>
           </section>
+
+          {/* ── Staff performance (admin: everyone, employee: own row) ──── */}
+          {(role === 'admin' || role === 'employee') && <StaffStatsCard />}
 
           {/* ── Archive section (admin only) ─────────────────────────────── */}
           {role === 'admin' && (

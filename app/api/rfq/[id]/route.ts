@@ -2,6 +2,7 @@ import { connectMongoDB } from "@/lib/mongo";
 import RFQ from "@/app/models/RFQ";
 import { findQuotationForRfq } from "@/app/models/Quotation";
 import { NextResponse } from "next/server";
+import { requireEmployee, getUser } from "@/lib/apiAuth";
 
 type ChangeLogEntry = {
   index: number;
@@ -52,12 +53,18 @@ export async function GET(req: Request, { params }: any) {
 }
 
 export async function PUT(req: Request, { params }: any) {
+  // staff only — and the session says who did the work (staff stats)
+  const sessionOrRes = await requireEmployee("quotation");
+  if (sessionOrRes instanceof NextResponse) return sessionOrRes;
+  const staff = getUser(sessionOrRes);
+
   try {
     const { id } = await params;
     const body = await req.json();
     await connectMongoDB();
 
-    const { version: _v, _id: _id_, __v, createdAt, updatedAt, ...rfqData } = body;
+    // editors = live presence list owned by /presence — never overwrite it from a stale form
+    const { version: _v, _id: _id_, __v, createdAt, updatedAt, editors: _editors, ...rfqData } = body;
 
     const existing = await RFQ.findById(id).lean();
     let changeLog: ChangeLogEntry[] = [];
@@ -81,6 +88,12 @@ export async function PUT(req: Request, { params }: any) {
     const quotation = await findQuotationForRfq(updated);
     if (quotation) {
       quotation.status = "bargaining";
+      // credit the staff member who first sent this quotation to the customer — re-saves
+      // during bargaining don't count again (one job = one point)
+      if (!quotation.handledBy?.id && staff.id) {
+        quotation.handledBy = { id: staff.id, name: staff.name ?? "" };
+        quotation.handledAt = new Date();
+      }
       await quotation.save();
     }
 

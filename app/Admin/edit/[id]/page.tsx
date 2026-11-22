@@ -4,6 +4,7 @@ import { useParams, useRouter } from "next/navigation";
 import { memo, useEffect, useRef, useState } from "react";
 import ChatFileAttachment from "@/components/chat/ChatFileAttachment";
 import QuotationPreviewModal from "@/components/QuotationPreviewModal";
+import { PRESENCE_HEARTBEAT_MS, type Editor } from "@/lib/presence";
 
 // memo wrapper — ป้องกัน iframe reload ตอน chat polling trigger parent re-render
 const StableIframe = memo(({ src }: { src: string }) => (
@@ -290,6 +291,24 @@ export default function EditPage() {
   // Refs avoid stale-closure bugs inside interval callbacks
   const shouldAutoScrollRef = useRef(true);
   const prevChatsLengthRef = useRef(0);
+
+  // ── Presence: tell others I'm on this RFQ, learn who else is (warning only) ──
+  const [otherEditors, setOtherEditors] = useState<Editor[]>([]);
+  useEffect(() => {
+    if (!id) return;
+    const url = `/api/rfq/${id}/presence`;
+    const beat = () =>
+      fetch(url, { method: "POST" })
+        .then((r) => (r.ok ? r.json() : { others: [] }))
+        .then((d) => setOtherEditors(d.others ?? []))
+        .catch(() => {});
+    // keepalive lets the DELETE survive the tab closing; if it's lost the entry expires anyway
+    const leave = () => { fetch(url, { method: "DELETE", keepalive: true }).catch(() => {}); };
+    beat();
+    const iv = setInterval(beat, PRESENCE_HEARTBEAT_MS);
+    window.addEventListener("pagehide", leave);
+    return () => { clearInterval(iv); window.removeEventListener("pagehide", leave); leave(); };
+  }, [id]);
 
   // ── Fetch RFQ ──────────────────────────────────────────────
   useEffect(() => {
@@ -688,6 +707,13 @@ export default function EditPage() {
   // ── UI ─────────────────────────────────────────────────────
   return (
     <>
+      {otherEditors.length > 0 && (
+        <div className="toast toast-top toast-center z-50 mt-16">
+          <div role="status" className="alert alert-warning py-2 text-sm shadow-lg">
+            ⚠️ {otherEditors.map((e) => e.name || "พนักงานอีกคน").join(", ")} กำลังแก้ไขเอกสารนี้อยู่ — ระวังทำงานซ้ำกัน
+          </div>
+        </div>
+      )}
       {/* ─── MOBILE (< lg) ─── */}
       <div className="lg:hidden flex flex-col h-[calc(100dvh-4rem)] bg-base-200 overflow-hidden">
         <div className="flex items-center justify-between px-3 py-2.5 bg-base-100 border-b border-base-300 shrink-0">
