@@ -137,6 +137,7 @@ export default function UploadForCustomerModal({ onClose, onDone }: Props) {
           filename: file.name,
           pdfId: pdfData.pdfId ?? null,
           pdfPath: pdfData.pdfPath ?? null,
+          rfqNumber,
           userId: customer._id,
         }),
       });
