@@ -928,7 +928,24 @@ export default function Page(): JSX.Element {
                     )}
                   </div>
                 </div>
-                <span className={`badge shrink-0 ${meta.badge}`}>{meta.label}</span>
+                <div className="flex flex-col items-end gap-2 shrink-0">
+                  <span className={`badge ${meta.badge}`}>{meta.label}</span>
+                  {/* jobs run in parallel — a new document doesn't wait for this one */}
+                  <button
+                    onClick={() => router.push("/Client/quotation?upload=1")}
+                    className="btn btn-primary btn-xs gap-1"
+                  >
+                    + ส่งเอกสารใหม่
+                  </button>
+                  {quotations.length > 1 && (
+                    <button
+                      onClick={() => router.push("/Client/quotation")}
+                      className="btn btn-ghost btn-xs"
+                    >
+                      ดูทั้งหมด ({quotations.length} งาน)
+                    </button>
+                  )}
+                </div>
               </div>
 
               <div className="divider my-0" />
