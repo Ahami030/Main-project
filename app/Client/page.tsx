@@ -8,7 +8,6 @@ import QuotationDocument, { RFQData } from "@/components/QuotationDocument";
 import BillingNoteDocument from "@/components/BillingNoteDocument";
 import PaymentStatusBadge from "@/components/payment/PaymentStatusBadge";
 import PaymentHistoryModal from "@/components/payment/PaymentHistoryModal";
-import RfqGridSection from "@/components/RfqGridSection";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type QuotationStatus = "processing" | "sent" | "reviewing" | "completed" | "bargaining" | "confirmed" | "failed";
@@ -69,9 +68,30 @@ interface ModalBillingData {
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-// step number shown on the RFQ grid (1–6); failed = 0 → off the timeline, sorted last
-const STATUS_STEP: Record<QuotationStatus, number> = {
-  processing: 1, sent: 2, reviewing: 3, completed: 4, bargaining: 5, confirmed: 6, failed: 0,
+const STEPS: { key: QuotationStatus; label: string; sublabel: string }[] = [
+  { key: "processing", label: "กำลังประมวลผลเอกสาร", sublabel: "ระบบกำลังอ่านและสกัดข้อมูลจากไฟล์" },
+  { key: "sent",       label: "ส่งไฟล์แล้ว",        sublabel: "ระบบได้รับเอกสารของคุณแล้ว" },
+  { key: "reviewing",  label: "ตรวจสอบ / จัดทำราย", sublabel: "ทีมงานกำลังตรวจสอบเอกสาร" },
+  { key: "completed",  label: "ดำเนินการเสร็จสิ้น",  sublabel: "ใบเสนอราคาพร้อมแล้ว" },
+  { key: "bargaining", label: "พร้อมต่อรองราคา",     sublabel: "เอกสารพร้อมแล้ว กดเพื่อต่อรอง" },
+  { key: "confirmed",  label: "ยืนยันแล้ว",          sublabel: "ลูกค้ายืนยันรับราคาเรียบร้อย" },
+];
+
+const STATUS_ORDER: Record<QuotationStatus, number> = {
+  processing: 0, sent: 1, reviewing: 2, completed: 3, bargaining: 4, confirmed: 5,
+  failed: -1, // off the timeline — no step is done
+};
+
+const STATUS_META: Record<QuotationStatus, {
+  spotlight: string; dot: string; bar: string; badge: string; label: string;
+}> = {
+  processing: { spotlight: "border-info/25 bg-info/5",        dot: "bg-info",    bar: "from-info to-info/30",         badge: "badge-info",    label: "กำลังประมวลผล" },
+  sent:       { spotlight: "border-success/25 bg-success/5",  dot: "bg-success", bar: "from-success to-success/30",   badge: "badge-success", label: "ส่งแล้ว" },
+  reviewing:  { spotlight: "border-warning/25 bg-warning/5",  dot: "bg-warning", bar: "from-warning to-warning/30",   badge: "badge-warning", label: "กำลังดำเนินการ" },
+  completed:  { spotlight: "border-primary/25 bg-primary/5",  dot: "bg-primary", bar: "from-primary to-primary/30",   badge: "badge-primary", label: "เสร็จสิ้น" },
+  bargaining: { spotlight: "border-accent/25  bg-accent/5",   dot: "bg-accent",  bar: "from-accent  to-accent/30",    badge: "badge-accent",  label: "พร้อมต่อรอง" },
+  confirmed:  { spotlight: "border-success/40 bg-success/10", dot: "bg-success", bar: "from-success to-success/40",   badge: "badge-success", label: "ยืนยันแล้ว" },
+  failed:     { spotlight: "border-error/25 bg-error/5",      dot: "bg-error",   bar: "from-error to-error/30",       badge: "badge-error",   label: "ไม่สำเร็จ" },
 };
 
 const PROCESS_STEPS = [
@@ -462,14 +482,14 @@ export default function Page(): JSX.Element {
     setPrintReady(true);
   };
 
-  const handleDirectPrint = async (q: Quotation) => {
-    if (!userId || userId === "ไม่พบข้อมูล") return;
+  const handleDirectPrint = async () => {
+    if (!userId || userId === "ไม่พบข้อมูล" || !latest) return;
     try {
-      const res  = await fetch(rfqUrlFor(q, userId), { cache: "no-store" });
+      const res  = await fetch(rfqUrlFor(latest, userId), { cache: "no-store" });
       const data: RFQData[] = await res.json();
       if (!Array.isArray(data) || data.length === 0) return;
       setRfqForModal(data[0]);
-      setPrintConfirmed(q.status === "confirmed");
+      setPrintConfirmed(latest.status === "confirmed");
       setPrintReady(true);
     } catch {}
   };
@@ -480,14 +500,14 @@ export default function Page(): JSX.Element {
     setDownloadReady(true);
   };
 
-  const handleDirectDownload = async (q: Quotation) => {
-    if (!userId || userId === "ไม่พบข้อมูล") return;
+  const handleDirectDownload = async () => {
+    if (!userId || userId === "ไม่พบข้อมูล" || !latest) return;
     try {
-      const res  = await fetch(rfqUrlFor(q, userId), { cache: "no-store" });
+      const res  = await fetch(rfqUrlFor(latest, userId), { cache: "no-store" });
       const data: RFQData[] = await res.json();
       if (!Array.isArray(data) || data.length === 0) return;
       setRfqForModal(data[0]);
-      setPrintConfirmed(q.status === "confirmed");
+      setPrintConfirmed(latest.status === "confirmed");
       setDownloadReady(true);
     } catch {}
   };
@@ -540,6 +560,14 @@ export default function Page(): JSX.Element {
   }, [downloadReady, rfqForModal]);
 
   // ── Derived state ─────────────────────────────────────────────────────────
+  const latest      = quotations[0] ?? null;
+  const meta        = latest ? STATUS_META[latest.status] : null;
+  const currentStep = !latest ? null : STEPS.find((s) => s.key === latest.status) ?? {
+    label: "ประมวลผลเอกสารไม่สำเร็จ",
+    sublabel: latest.failReason ?? "กรุณาตรวจสอบไฟล์แล้วอัปโหลดใหม่อีกครั้ง",
+  };
+  const isInProgress = latest?.status === "processing" || latest?.status === "sent" || latest?.status === "reviewing";
+
   const poLatest       = poOrders[0] ?? null;
   const poMeta         = poLatest ? PO_STATUS_META[poLatest.status] : null;
   const poCurrentStep  = poLatest ? PO_STEPS.find((s) => s.key === poLatest.status)! : null;
@@ -869,59 +897,182 @@ export default function Page(): JSX.Element {
             </div>
           </div>
 
-        ) : quotations.length > 0 ? (
+        ) : latest && meta && currentStep ? (
 
-          /* ── RFQ grid (มี quotation อยู่) — งานใกล้เสร็จขึ้นก่อน ── */
-          <RfqGridSection
-            jobs={quotations.map((q) => ({
-              id: q._id,
-              fileName: q.filename,
-              submittedAt: new Date(q.createdAt).toLocaleDateString("th-TH", {
-                year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
-              }),
-              currentStep: STATUS_STEP[q.status],
-              due: q.dueAt ? formatDue(q.dueAt) : undefined,
-            }))}
-            newHref="/Client/quotation?upload=1"
-            allHref="/Client/quotation"
-            actions={(id) => {
-              const q = quotations.find((x) => x._id === id);
-              if (!q) return null;
-              if (q.status === "failed") return (
-                <div className="mt-5 flex flex-col gap-3 rounded-2xl border border-error/25 bg-error/5 p-4 sm:flex-row sm:items-center">
-                  <p className="flex-1 text-sm text-error">
-                    ประมวลผลเอกสารไม่สำเร็จ · {q.failReason ?? "กรุณาตรวจสอบไฟล์แล้วอัปโหลดใหม่อีกครั้ง"}
-                  </p>
-                  <button onClick={() => router.push("/Client/quotation?upload=1")} className="btn btn-primary btn-sm gap-2">
-                    อัปโหลดเอกสารใหม่ <IconArrow />
-                  </button>
+          /* ── Status Card (มี quotation อยู่) ── */
+          <div className="card bg-base-100 border border-base-300/70 rounded-[2.5rem] shadow-mc transition-shadow duration-300 hover:shadow-mc-lg overflow-hidden">
+            <div className="card-body gap-5 pt-7 px-7 md:px-9">
+
+              {/* File header */}
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex items-start gap-3">
+                  <div className="w-12 h-12 rounded-full bg-base-200 flex items-center justify-center shrink-0 text-base-content/40">
+                    <IconDoc />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="inline-flex items-center gap-2 text-xs tracking-[0.16em] uppercase text-base-content/55 font-bold mb-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-accent" />
+                      Quotation Request
+                    </p>
+                    <p className="font-medium text-xl tracking-mc leading-snug truncate max-w-lg">
+                      {latest.filename}
+                    </p>
+                    <p className="text-xs text-base-content/40 mt-0.5">
+                      {new Date(latest.createdAt).toLocaleDateString("th-TH", {
+                        year: "numeric", month: "short", day: "numeric",
+                        hour: "2-digit", minute: "2-digit",
+                      })}
+                    </p>
+                    {latest.dueAt && (
+                      <p className="text-xs text-base-content/50 mt-1">ต้องการภายใน {formatDue(latest.dueAt)}</p>
+                    )}
+                  </div>
                 </div>
-              );
-              if (q.status === "bargaining") return (
-                <div className="mt-5 flex flex-col gap-2 sm:flex-row">
-                  <button onClick={() => setModalQuotation(q)} className="btn btn-outline flex-1">ดูใบเสนอราคา</button>
+                <div className="flex flex-col items-end gap-2 shrink-0">
+                  <span className={`badge ${meta.badge}`}>{meta.label}</span>
+                  {/* jobs run in parallel — a new document doesn't wait for this one */}
                   <button
-                    onClick={() => router.push(`/Client/Bargain?q=${q._id}`)}
-                    className="btn btn-accent flex-1 gap-2 font-semibold shadow-lg shadow-accent/20"
+                    onClick={() => router.push("/Client/quotation?upload=1")}
+                    className="btn btn-primary btn-xs gap-1"
                   >
-                    ไปยังหน้าต่อรองราคา <IconArrow />
+                    + ส่งเอกสารใหม่
                   </button>
+                  {quotations.length > 1 && (
+                    <button
+                      onClick={() => router.push("/Client/quotation")}
+                      className="btn btn-ghost btn-xs"
+                    >
+                      ดูทั้งหมด ({quotations.length} งาน)
+                    </button>
+                  )}
                 </div>
-              );
-              if (q.status === "confirmed") return (
-                <div className="mt-5 flex flex-col gap-2 sm:flex-row">
-                  <button onClick={() => setModalQuotation(q)} className="btn btn-outline flex-1">ดูใบเสนอราคา</button>
-                  <button onClick={() => handleDirectPrint(q)} disabled={printReady} className="btn btn-success flex-1 font-semibold">
-                    {printReady ? <span className="loading loading-spinner loading-sm" /> : "พิมพ์"}
-                  </button>
-                  <button onClick={() => handleDirectDownload(q)} disabled={downloadReady} className="btn btn-outline btn-success flex-1 font-semibold">
-                    {downloadReady ? <span className="loading loading-spinner loading-sm" /> : "ดาวน์โหลด"}
-                  </button>
+              </div>
+
+              <div className="divider my-0" />
+
+              <div className="flex flex-col md:flex-row gap-6">
+
+                {/* Left: spotlight + CTA */}
+                <div className="flex-1 flex flex-col gap-4">
+                  <div
+                    onClick={
+                      latest.status === "bargaining" || latest.status === "confirmed"
+                        ? () => setModalQuotation(latest)
+                        : undefined
+                    }
+                    className={`rounded-[1.75rem] border px-6 py-5 flex items-center gap-4 ${meta.spotlight} ${
+                      latest.status === "bargaining" || latest.status === "confirmed"
+                        ? "cursor-pointer hover:opacity-90 transition-opacity"
+                        : ""
+                    }`}
+                  >
+                    <span className={`w-3 h-3 rounded-full shrink-0 ${meta.dot} ${isInProgress ? "animate-pulse" : ""}`} />
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold">{currentStep.label}</p>
+                      <p className="text-sm text-base-content/50 mt-0.5">{currentStep.sublabel}</p>
+                    </div>
+                    {isInProgress && <span className="loading loading-dots loading-sm opacity-30" />}
+                    {(latest.status === "bargaining" || latest.status === "confirmed") && (
+                      <svg className="w-4 h-4 text-base-content/30 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                    )}
+                  </div>
+
+                  {/* Next step hint */}
+                  {latest.status === "failed" && (
+                    <button
+                      onClick={() => router.push("/Client/quotation?upload=1")}
+                      className="btn btn-primary w-full font-semibold gap-2 shadow-lg shadow-primary/20"
+                    >
+                      อัปโหลดเอกสารใหม่
+                      <IconArrow />
+                    </button>
+                  )}
+                  {latest.status !== "bargaining" && latest.status !== "confirmed" && latest.status !== "failed" && (
+                    STEPS[STATUS_ORDER[latest.status] + 1] ? (
+                      <div className="flex items-center gap-3 text-xs text-base-content/30">
+                        <div className="flex-1 h-px bg-base-300" />
+                        <span>ขั้นถัดไป · {STEPS[STATUS_ORDER[latest.status] + 1].label}</span>
+                        <div className="flex-1 h-px bg-base-300" />
+                      </div>
+                    ) : null
+                  )}
+                  {latest.status === "bargaining" && (
+                    <button
+                      onClick={() => router.push(`/Client/Bargain?q=${latest._id}`)}
+                      className="btn btn-accent w-full font-semibold gap-2 shadow-lg shadow-accent/20"
+                    >
+                      ไปยังหน้าต่อรองราคา
+                      <IconArrow />
+                    </button>
+                  )}
+                  {latest.status === "confirmed" && (
+                    <div className="flex gap-2">
+                      <button
+                        onClick={handleDirectPrint}
+                        disabled={printReady}
+                        className="btn btn-success flex-1 font-semibold gap-2 shadow-lg shadow-success/20"
+                      >
+                        {printReady ? (
+                          <span className="loading loading-spinner loading-sm" />
+                        ) : (
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                          </svg>
+                        )}
+                        พิมพ์
+                      </button>
+                      <button
+                        onClick={handleDirectDownload}
+                        disabled={downloadReady}
+                        className="btn btn-outline btn-success flex-1 font-semibold gap-2"
+                      >
+                        {downloadReady ? (
+                          <span className="loading loading-spinner loading-sm" />
+                        ) : (
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                          </svg>
+                        )}
+                        ดาวน์โหลด
+                      </button>
+                    </div>
+                  )}
                 </div>
-              );
-              return null;
-            }}
-          />
+
+                {/* Right: steps timeline */}
+                <div className="md:w-64 shrink-0 flex flex-col gap-0">
+                  {STEPS.map((step, i) => {
+                    const done    = i <= STATUS_ORDER[latest.status];
+                    const current = i === STATUS_ORDER[latest.status];
+                    return (
+                      <div key={step.key} className="flex gap-3">
+                        <div className="flex flex-col items-center">
+                          <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 transition-colors
+                            ${done ? "bg-primary text-primary-content" : "bg-base-200 text-base-content/30"}`}>
+                            {done ? "✓" : i + 1}
+                          </div>
+                          {i < STEPS.length - 1 && (
+                            <div className={`w-px flex-1 my-1 ${done ? "bg-primary/40" : "bg-base-300"}`} />
+                          )}
+                        </div>
+                        <div className="pb-4 pt-1 min-w-0">
+                          <p className={`text-sm font-medium leading-tight ${current ? "text-base-content" : done ? "text-base-content/70" : "text-base-content/30"}`}>
+                            {step.label}
+                          </p>
+                          {current && (
+                            <p className="text-xs text-base-content/45 mt-0.5">{step.sublabel}</p>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+              </div>
+            </div>
+          </div>
 
         ) : (
 
