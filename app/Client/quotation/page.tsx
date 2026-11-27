@@ -3,6 +3,7 @@ import { JSX, useCallback, useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { upload } from "@vercel/blob/client";
+import { takePendingUpload } from "@/lib/pendingUpload";
 import { DUE_BADGE, dueInfo, formatDue, isDueOpen, localInputMin, parseDueAt } from "@/lib/dueDate";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -302,6 +303,13 @@ export default function Page(): JSX.Element {
     setUploadStatus("idle");
     setUploadMessage("");
   };
+
+  // file picked/dropped on the dashboard "+" card → same checks + preview as picking it here
+  useEffect(() => {
+    const f = takePendingUpload();
+    if (f) handlePdfFile(f);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once, on arrival
+  }, []);
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();

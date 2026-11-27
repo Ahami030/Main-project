@@ -1,9 +1,10 @@
 "use client";
 
-import { JSX, useCallback, useEffect, useState } from "react";
+import { JSX, useCallback, useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { formatDue } from "@/lib/dueDate";
+import { setPendingUpload } from "@/lib/pendingUpload";
 import QuotationDocument, { RFQData } from "@/components/QuotationDocument";
 import BillingNoteDocument from "@/components/BillingNoteDocument";
 import PaymentStatusBadge from "@/components/payment/PaymentStatusBadge";
@@ -81,6 +82,10 @@ const STATUS_ORDER: Record<QuotationStatus, number> = {
   processing: 0, sent: 1, reviewing: 2, completed: 3, bargaining: 4, confirmed: 5,
   failed: -1, // off the timeline — no step is done
 };
+
+// Quotation grid: job cards shown before / after "แสดงเพิ่ม" (the "+" card is extra)
+const Q_COLLAPSED = 2;
+const Q_EXPANDED  = 5;
 
 const STATUS_META: Record<QuotationStatus, {
   spotlight: string; dot: string; bar: string; badge: string; label: string;
@@ -209,6 +214,11 @@ export default function Page(): JSX.Element {
   const [pageVisible, setPageVisible] = useState(false);
   const [learnMore, setLearnMore]   = useState(false);
   const [modalQuotation, setModalQuotation] = useState<Quotation | null>(null);
+  // Quotation grid: which job the detail panel shows, show-more state, "+" card drag state
+  const [selectedQid, setSelectedQid] = useState<string | null>(null);
+  const [qExpanded, setQExpanded]     = useState(false);
+  const [qDragging, setQDragging]     = useState(false);
+  const qGridRef = useRef<HTMLDivElement>(null);
   const [rfqForModal, setRfqForModal]             = useState<RFQData | null>(null);
   const [rfqForModalLoading, setRfqForModalLoading] = useState(false);
 
@@ -560,13 +570,31 @@ export default function Page(): JSX.Element {
   }, [downloadReady, rfqForModal]);
 
   // ── Derived state ─────────────────────────────────────────────────────────
-  const latest      = quotations[0] ?? null;
+  // the job in the detail panel: the one the customer clicked in the grid, else the newest
+  const latest      = quotations.find((q) => q._id === selectedQid) ?? quotations[0] ?? null;
   const meta        = latest ? STATUS_META[latest.status] : null;
   const currentStep = !latest ? null : STEPS.find((s) => s.key === latest.status) ?? {
     label: "ประมวลผลเอกสารไม่สำเร็จ",
     sublabel: latest.failReason ?? "กรุณาตรวจสอบไฟล์แล้วอัปโหลดใหม่อีกครั้ง",
   };
   const isInProgress = latest?.status === "processing" || latest?.status === "sent" || latest?.status === "reviewing";
+
+  // "+" card: hand the file to the upload form, which checks it (PDF, 10 MB) and asks for
+  // the optional deadline before sending — one upload flow, not two
+  const startNewUpload = (files: FileList) => {
+    const file = files[0]; // the system takes one document per job
+    if (!file) return;
+    setPendingUpload(file);
+    router.push("/Client/quotation?upload=1");
+  };
+
+  const collapseQuotations = () => {
+    setQExpanded(false);
+    // the selected job may now be hidden → back to the newest
+    if (quotations.findIndex((q) => q._id === selectedQid) >= Q_COLLAPSED) setSelectedQid(null);
+    const top = qGridRef.current?.getBoundingClientRect().top ?? 0;
+    if (top < 80) qGridRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
 
   const poLatest       = poOrders[0] ?? null;
   const poMeta         = poLatest ? PO_STATUS_META[poLatest.status] : null;
@@ -899,178 +927,289 @@ export default function Page(): JSX.Element {
 
         ) : latest && meta && currentStep ? (
 
-          /* ── Status Card (มี quotation อยู่) ── */
+          /* ── Quotation grid (RfqGridSection design) ── every job as a card + "+" card;
+                the detail panel below holds everything the old single-job card had,
+                for the job the customer selected ── */
           <div className="card bg-base-100 border border-base-300/70 rounded-[2.5rem] shadow-mc transition-shadow duration-300 hover:shadow-mc-lg overflow-hidden">
-            <div className="card-body gap-5 pt-7 px-7 md:px-9">
+            <div className="card-body gap-0 pt-7 px-5 sm:px-7 md:px-9">
 
-              {/* File header */}
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex items-start gap-3">
-                  <div className="w-12 h-12 rounded-full bg-base-200 flex items-center justify-center shrink-0 text-base-content/40">
-                    <IconDoc />
-                  </div>
+              {/* Header */}
+              <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+                <div>
+                  <p className="inline-flex items-center gap-2 text-xs tracking-[0.16em] uppercase text-base-content/55 font-bold mb-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-accent" />
+                    Quotation Request
+                  </p>
+                  <h2 className="font-medium text-xl tracking-mc">
+                    ใบขอราคาของคุณ
+                    <span className="ml-1.5 text-sm font-normal text-base-content/50">· {quotations.length} งาน</span>
+                  </h2>
+                </div>
+                {quotations.length > 1 && (
+                  <button onClick={() => router.push("/Client/quotation")} className="btn btn-ghost btn-xs">
+                    ดูทั้งหมด ({quotations.length} งาน)
+                  </button>
+                )}
+              </div>
+
+              {/* Grid: phone 1 col / tablet 2 / desktop 3 */}
+              <div ref={qGridRef} className="grid scroll-mt-20 grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+
+                {/* "+" card — click or drop a file; it opens on the upload form (PDF check + deadline) */}
+                <label
+                  onDragOver={(e) => { e.preventDefault(); setQDragging(true); }}
+                  onDragLeave={() => setQDragging(false)}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setQDragging(false);
+                    if (e.dataTransfer.files.length) startNewUpload(e.dataTransfer.files);
+                  }}
+                  className={`group order-first sm:order-last flex min-h-42 cursor-pointer flex-col items-center justify-center rounded-[1.75rem] border-2 border-dashed p-5 text-center transition focus-within:ring-2 focus-within:ring-accent ${
+                    qDragging
+                      ? "border-accent bg-accent/15"
+                      : "border-accent/40 bg-accent/5 hover:border-accent hover:bg-accent/10"
+                  }`}
+                >
+                  <input
+                    type="file"
+                    accept="application/pdf,.pdf"
+                    className="sr-only"
+                    onChange={(e) => {
+                      if (e.target.files?.length) startNewUpload(e.target.files);
+                      e.target.value = ""; // allow picking the same file again
+                    }}
+                  />
+                  <span className="flex h-12 w-12 items-center justify-center rounded-full bg-accent text-accent-content shadow-md shadow-accent/20 transition group-hover:scale-110">
+                    <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={2.2}>
+                      <path d="M12 5v14M5 12h14" strokeLinecap="round" />
+                    </svg>
+                  </span>
+                  <span className="mt-3 text-sm font-medium">
+                    {qDragging ? "ปล่อยไฟล์ตรงนี้ได้เลย" : "ส่งเอกสารใหม่"}
+                  </span>
+                  <span className="mt-0.5 text-xs text-base-content/55">คลิกเพื่อเลือก หรือลากไฟล์มาวาง</span>
+                  <span className="mt-1 text-[11px] text-base-content/40">PDF · สูงสุด 10 MB</span>
+                </label>
+
+                {/* One card per job */}
+                {quotations.slice(0, qExpanded ? Q_EXPANDED : Q_COLLAPSED).map((q) => {
+                  const step   = STATUS_ORDER[q.status] + 1; // failed → 0
+                  const qm     = STATUS_META[q.status];
+                  const active = q._id === latest?._id;
+                  const busy   = q.status === "processing" || q.status === "sent" || q.status === "reviewing";
+                  return (
+                    <button
+                      key={q._id}
+                      type="button"
+                      onClick={() => setSelectedQid(q._id)}
+                      aria-pressed={active}
+                      className={`flex min-h-42 flex-col rounded-[1.75rem] border bg-base-100 p-5 text-left transition hover:-translate-y-0.5 hover:shadow-mc-sm ${
+                        active ? "border-base-content ring-1 ring-base-content" : "border-base-300"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-error/10 text-error text-[10px] font-semibold tracking-wide">
+                          PDF
+                        </span>
+                        <span className={`badge badge-sm gap-1 ${qm.badge}`}>
+                          {busy && <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" />}
+                          {qm.label}
+                        </span>
+                      </div>
+                      <p className="mt-3 truncate text-sm font-medium" title={q.filename}>{q.filename}</p>
+                      <p className="text-xs text-base-content/40">
+                        {new Date(q.createdAt).toLocaleDateString("th-TH", {
+                          year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
+                        })}
+                      </p>
+                      {q.dueAt && (
+                        <p className="text-[11px] text-base-content/50 mt-0.5">ต้องการภายใน {formatDue(q.dueAt)}</p>
+                      )}
+                      {/* progress pinned to the bottom so every card is the same height */}
+                      <div className="mt-auto pt-4">
+                        <div className="h-1.5 w-full overflow-hidden rounded-full bg-base-200">
+                          <div
+                            className={`h-full rounded-full transition-all duration-500 ${q.status === "failed" ? "bg-error" : "bg-accent"}`}
+                            style={{ width: `${q.status === "failed" ? 100 : Math.round((step / STEPS.length) * 100)}%` }}
+                          />
+                        </div>
+                        <p className="mt-1.5 text-[11px] text-base-content/50">
+                          {q.status === "failed" ? "ไม่สำเร็จ · กดเพื่อดูสาเหตุ" : `ขั้นที่ ${step} จาก ${STEPS.length}`}
+                        </p>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Show more / less / all (only when there are more jobs than the collapsed view shows) */}
+              {quotations.length > Q_COLLAPSED && (
+                <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+                  {!qExpanded ? (
+                    <button type="button" onClick={() => setQExpanded(true)} aria-expanded={false} className="btn btn-outline btn-sm rounded-full gap-1.5">
+                      แสดงเพิ่มอีก {Math.min(quotations.length, Q_EXPANDED) - Q_COLLAPSED} งาน
+                      <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2}><path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                    </button>
+                  ) : (
+                    <>
+                      <button type="button" onClick={collapseQuotations} aria-expanded={true} className="btn btn-outline btn-sm rounded-full gap-1.5">
+                        ย่อลง
+                        <svg viewBox="0 0 24 24" className="h-4 w-4 rotate-180" fill="none" stroke="currentColor" strokeWidth={2}><path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                      </button>
+                      {quotations.length > Q_EXPANDED && (
+                        <button type="button" onClick={() => router.push("/Client/quotation")} className="btn btn-primary btn-sm rounded-full gap-1.5">
+                          ดูรายละเอียดทั้งหมด ({quotations.length} งาน)
+                          <IconArrow />
+                        </button>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
+
+              {/* ── Detail panel: the selected job (everything the old card had) ── */}
+              <div className="mt-6 rounded-[1.75rem] bg-base-200/60 p-5 sm:p-6 flex flex-col gap-5">
+
+                <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="inline-flex items-center gap-2 text-xs tracking-[0.16em] uppercase text-base-content/55 font-bold mb-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-accent" />
-                      Quotation Request
-                    </p>
-                    <p className="font-medium text-xl tracking-mc leading-snug truncate max-w-lg">
-                      {latest.filename}
+                    <p className="text-sm text-base-content/55">
+                      สถานะของ <span className="font-medium text-base-content">{latest.filename}</span>
                     </p>
                     <p className="text-xs text-base-content/40 mt-0.5">
                       {new Date(latest.createdAt).toLocaleDateString("th-TH", {
-                        year: "numeric", month: "short", day: "numeric",
-                        hour: "2-digit", minute: "2-digit",
+                        year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
                       })}
+                      {latest.dueAt && <> · ต้องการภายใน {formatDue(latest.dueAt)}</>}
                     </p>
-                    {latest.dueAt && (
-                      <p className="text-xs text-base-content/50 mt-1">ต้องการภายใน {formatDue(latest.dueAt)}</p>
-                    )}
+                  </div>
+                  <div className="flex items-center gap-3 shrink-0">
+                    <span className={`badge ${meta.badge}`}>{meta.label}</span>
+                    <button onClick={() => router.push("/Client/quotation")} className="text-sm font-medium text-accent hover:underline">
+                      ดูรายละเอียด →
+                    </button>
                   </div>
                 </div>
-                <div className="flex flex-col items-end gap-2 shrink-0">
-                  <span className={`badge ${meta.badge}`}>{meta.label}</span>
-                  {/* jobs run in parallel — a new document doesn't wait for this one */}
+
+                {/* Spotlight — opens the document for bargaining / confirmed jobs */}
+                <div
+                  onClick={
+                    latest.status === "bargaining" || latest.status === "confirmed"
+                      ? () => setModalQuotation(latest)
+                      : undefined
+                  }
+                  className={`rounded-[1.75rem] border px-6 py-5 flex items-center gap-4 bg-base-100 ${meta.spotlight} ${
+                    latest.status === "bargaining" || latest.status === "confirmed"
+                      ? "cursor-pointer hover:opacity-90 transition-opacity"
+                      : ""
+                  }`}
+                >
+                  <span className={`w-3 h-3 rounded-full shrink-0 ${meta.dot} ${isInProgress ? "animate-pulse" : ""}`} />
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold">{currentStep.label}</p>
+                    <p className="text-sm text-base-content/50 mt-0.5">{currentStep.sublabel}</p>
+                  </div>
+                  {isInProgress && <span className="loading loading-dots loading-sm opacity-30" />}
+                  {(latest.status === "bargaining" || latest.status === "confirmed") && (
+                    <svg className="w-4 h-4 text-base-content/30 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  )}
+                </div>
+
+                {/* Next step / actions */}
+                {latest.status === "failed" && (
                   <button
                     onClick={() => router.push("/Client/quotation?upload=1")}
-                    className="btn btn-primary btn-xs gap-1"
+                    className="btn btn-primary w-full font-semibold gap-2 shadow-lg shadow-primary/20"
                   >
-                    + ส่งเอกสารใหม่
+                    อัปโหลดเอกสารใหม่
+                    <IconArrow />
                   </button>
-                  {quotations.length > 1 && (
-                    <button
-                      onClick={() => router.push("/Client/quotation")}
-                      className="btn btn-ghost btn-xs"
-                    >
-                      ดูทั้งหมด ({quotations.length} งาน)
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              <div className="divider my-0" />
-
-              <div className="flex flex-col md:flex-row gap-6">
-
-                {/* Left: spotlight + CTA */}
-                <div className="flex-1 flex flex-col gap-4">
-                  <div
-                    onClick={
-                      latest.status === "bargaining" || latest.status === "confirmed"
-                        ? () => setModalQuotation(latest)
-                        : undefined
-                    }
-                    className={`rounded-[1.75rem] border px-6 py-5 flex items-center gap-4 ${meta.spotlight} ${
-                      latest.status === "bargaining" || latest.status === "confirmed"
-                        ? "cursor-pointer hover:opacity-90 transition-opacity"
-                        : ""
-                    }`}
+                )}
+                {latest.status !== "bargaining" && latest.status !== "confirmed" && latest.status !== "failed" && (
+                  STEPS[STATUS_ORDER[latest.status] + 1] ? (
+                    <div className="flex items-center gap-3 text-xs text-base-content/30">
+                      <div className="flex-1 h-px bg-base-300" />
+                      <span>ขั้นถัดไป · {STEPS[STATUS_ORDER[latest.status] + 1].label}</span>
+                      <div className="flex-1 h-px bg-base-300" />
+                    </div>
+                  ) : null
+                )}
+                {latest.status === "bargaining" && (
+                  <button
+                    onClick={() => router.push(`/Client/Bargain?q=${latest._id}`)}
+                    className="btn btn-accent w-full font-semibold gap-2 shadow-lg shadow-accent/20"
                   >
-                    <span className={`w-3 h-3 rounded-full shrink-0 ${meta.dot} ${isInProgress ? "animate-pulse" : ""}`} />
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold">{currentStep.label}</p>
-                      <p className="text-sm text-base-content/50 mt-0.5">{currentStep.sublabel}</p>
-                    </div>
-                    {isInProgress && <span className="loading loading-dots loading-sm opacity-30" />}
-                    {(latest.status === "bargaining" || latest.status === "confirmed") && (
-                      <svg className="w-4 h-4 text-base-content/30 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                      </svg>
-                    )}
+                    ไปยังหน้าต่อรองราคา
+                    <IconArrow />
+                  </button>
+                )}
+                {latest.status === "confirmed" && (
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleDirectPrint}
+                      disabled={printReady}
+                      className="btn btn-success flex-1 font-semibold gap-2 shadow-lg shadow-success/20"
+                    >
+                      {printReady ? (
+                        <span className="loading loading-spinner loading-sm" />
+                      ) : (
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                        </svg>
+                      )}
+                      พิมพ์
+                    </button>
+                    <button
+                      onClick={handleDirectDownload}
+                      disabled={downloadReady}
+                      className="btn btn-outline btn-success flex-1 font-semibold gap-2"
+                    >
+                      {downloadReady ? (
+                        <span className="loading loading-spinner loading-sm" />
+                      ) : (
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                        </svg>
+                      )}
+                      ดาวน์โหลด
+                    </button>
                   </div>
+                )}
 
-                  {/* Next step hint */}
-                  {latest.status === "failed" && (
-                    <button
-                      onClick={() => router.push("/Client/quotation?upload=1")}
-                      className="btn btn-primary w-full font-semibold gap-2 shadow-lg shadow-primary/20"
-                    >
-                      อัปโหลดเอกสารใหม่
-                      <IconArrow />
-                    </button>
-                  )}
-                  {latest.status !== "bargaining" && latest.status !== "confirmed" && latest.status !== "failed" && (
-                    STEPS[STATUS_ORDER[latest.status] + 1] ? (
-                      <div className="flex items-center gap-3 text-xs text-base-content/30">
-                        <div className="flex-1 h-px bg-base-300" />
-                        <span>ขั้นถัดไป · {STEPS[STATUS_ORDER[latest.status] + 1].label}</span>
-                        <div className="flex-1 h-px bg-base-300" />
-                      </div>
-                    ) : null
-                  )}
-                  {latest.status === "bargaining" && (
-                    <button
-                      onClick={() => router.push(`/Client/Bargain?q=${latest._id}`)}
-                      className="btn btn-accent w-full font-semibold gap-2 shadow-lg shadow-accent/20"
-                    >
-                      ไปยังหน้าต่อรองราคา
-                      <IconArrow />
-                    </button>
-                  )}
-                  {latest.status === "confirmed" && (
-                    <div className="flex gap-2">
-                      <button
-                        onClick={handleDirectPrint}
-                        disabled={printReady}
-                        className="btn btn-success flex-1 font-semibold gap-2 shadow-lg shadow-success/20"
-                      >
-                        {printReady ? (
-                          <span className="loading loading-spinner loading-sm" />
-                        ) : (
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-                          </svg>
-                        )}
-                        พิมพ์
-                      </button>
-                      <button
-                        onClick={handleDirectDownload}
-                        disabled={downloadReady}
-                        className="btn btn-outline btn-success flex-1 font-semibold gap-2"
-                      >
-                        {downloadReady ? (
-                          <span className="loading loading-spinner loading-sm" />
-                        ) : (
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                          </svg>
-                        )}
-                        ดาวน์โหลด
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                {/* Right: steps timeline */}
-                <div className="md:w-64 shrink-0 flex flex-col gap-0">
+                {/* Timeline — horizontal on desktop, vertical on phone */}
+                <ol className="grid gap-3 md:grid-cols-6 md:gap-2">
                   {STEPS.map((step, i) => {
                     const done    = i <= STATUS_ORDER[latest.status];
                     const current = i === STATUS_ORDER[latest.status];
                     return (
-                      <div key={step.key} className="flex gap-3">
-                        <div className="flex flex-col items-center">
-                          <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 transition-colors
-                            ${done ? "bg-primary text-primary-content" : "bg-base-200 text-base-content/30"}`}>
-                            {done ? "✓" : i + 1}
-                          </div>
-                          {i < STEPS.length - 1 && (
-                            <div className={`w-px flex-1 my-1 ${done ? "bg-primary/40" : "bg-base-300"}`} />
-                          )}
-                        </div>
-                        <div className="pb-4 pt-1 min-w-0">
+                      <li key={step.key} className="relative flex items-start gap-3 md:flex-col md:items-center md:text-center">
+                        {i < STEPS.length - 1 && (
+                          <span
+                            className={`absolute left-[calc(50%+14px)] top-3.5 hidden h-px w-[calc(100%-20px)] md:block ${
+                              i < STATUS_ORDER[latest.status] ? "bg-primary/40" : "bg-base-300"
+                            }`}
+                          />
+                        )}
+                        <span
+                          className={`relative z-10 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold transition-colors ${
+                            done ? "bg-primary text-primary-content" : "bg-base-100 border border-base-300 text-base-content/30"
+                          }`}
+                        >
+                          {done ? "✓" : i + 1}
+                        </span>
+                        <div className="md:mt-2 min-w-0">
                           <p className={`text-sm font-medium leading-tight ${current ? "text-base-content" : done ? "text-base-content/70" : "text-base-content/30"}`}>
                             {step.label}
                           </p>
-                          {current && (
-                            <p className="text-xs text-base-content/45 mt-0.5">{step.sublabel}</p>
-                          )}
+                          {current && <p className="text-xs text-base-content/45 mt-0.5">{step.sublabel}</p>}
                         </div>
-                      </div>
+                      </li>
                     );
                   })}
-                </div>
-
+                </ol>
               </div>
+
             </div>
           </div>
 
