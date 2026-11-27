@@ -39,10 +39,10 @@ const STATUS_ORDER: Record<QuotationStatus, number> = {
 
 const STATUS_STYLE: Record<QuotationStatus, { spotlight: string; dot: string; bar: string; badge: string; label: string }> = {
   processing: { spotlight: "border-info/25 bg-info/5",        dot: "bg-info",    bar: "from-info to-info/30",       badge: "badge-info",    label: "กำลังประมวลผล" },
-  sent:       { spotlight: "border-success/25 bg-success/5",  dot: "bg-success", bar: "from-success to-success/30", badge: "badge-success", label: "ส่งแล้ว" },
+  sent:       { spotlight: "border-warning/25 bg-warning/5",  dot: "bg-warning", bar: "from-warning to-warning/30", badge: "badge-warning", label: "ส่งแล้ว" },
   reviewing:  { spotlight: "border-warning/25 bg-warning/5",  dot: "bg-warning", bar: "from-warning to-warning/30", badge: "badge-warning", label: "กำลังดำเนินการ" },
   completed:  { spotlight: "border-primary/25 bg-primary/5",  dot: "bg-primary", bar: "from-primary to-primary/30", badge: "badge-primary", label: "เสร็จสิ้น" },
-  bargaining: { spotlight: "border-accent/25  bg-accent/5",   dot: "bg-accent",  bar: "from-accent  to-accent/30",  badge: "badge-accent",  label: "พร้อมต่อรอง" },
+  bargaining: { spotlight: "border-success/25 bg-success/5",   dot: "bg-success",  bar: "from-success to-success/30",  badge: "badge-success",  label: "พร้อมต่อรอง" },
   confirmed:  { spotlight: "border-success/40 bg-success/10", dot: "bg-success", bar: "from-success to-success/40", badge: "badge-success", label: "ยืนยันแล้ว" },
   failed:     { spotlight: "border-error/25 bg-error/5",      dot: "bg-error",   bar: "from-error to-error/30",     badge: "badge-error",   label: "ไม่สำเร็จ" },
 };

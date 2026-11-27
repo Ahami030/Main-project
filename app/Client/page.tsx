@@ -91,10 +91,10 @@ const STATUS_META: Record<QuotationStatus, {
   spotlight: string; dot: string; bar: string; badge: string; label: string;
 }> = {
   processing: { spotlight: "border-info/25 bg-info/5",        dot: "bg-info",    bar: "from-info to-info/30",         badge: "badge-info",    label: "กำลังประมวลผล" },
-  sent:       { spotlight: "border-success/25 bg-success/5",  dot: "bg-success", bar: "from-success to-success/30",   badge: "badge-success", label: "ส่งแล้ว" },
+  sent:       { spotlight: "border-warning/25 bg-warning/5",  dot: "bg-warning", bar: "from-warning to-warning/30",   badge: "badge-warning", label: "ส่งแล้ว" },
   reviewing:  { spotlight: "border-warning/25 bg-warning/5",  dot: "bg-warning", bar: "from-warning to-warning/30",   badge: "badge-warning", label: "กำลังดำเนินการ" },
   completed:  { spotlight: "border-primary/25 bg-primary/5",  dot: "bg-primary", bar: "from-primary to-primary/30",   badge: "badge-primary", label: "เสร็จสิ้น" },
-  bargaining: { spotlight: "border-accent/25  bg-accent/5",   dot: "bg-accent",  bar: "from-accent  to-accent/30",    badge: "badge-accent",  label: "พร้อมต่อรอง" },
+  bargaining: { spotlight: "border-success/25 bg-success/5",   dot: "bg-success",  bar: "from-success to-success/30",    badge: "badge-success",  label: "พร้อมต่อรอง" },
   confirmed:  { spotlight: "border-success/40 bg-success/10", dot: "bg-success", bar: "from-success to-success/40",   badge: "badge-success", label: "ยืนยันแล้ว" },
   failed:     { spotlight: "border-error/25 bg-error/5",      dot: "bg-error",   bar: "from-error to-error/30",       badge: "badge-error",   label: "ไม่สำเร็จ" },
 };
@@ -596,6 +596,61 @@ export default function Page(): JSX.Element {
     if (top < 80) qGridRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
+  // one job card — used by the first row and by the peek/expand section
+  const renderQCard = (q: Quotation) => {
+    const step   = STATUS_ORDER[q.status] + 1; // failed → 0
+    const qm     = STATUS_META[q.status];
+    const active = q._id === latest?._id;
+    const busy   = q.status === "processing" || q.status === "sent" || q.status === "reviewing";
+    return (
+      <button
+        key={q._id}
+        type="button"
+        // ready to bargain → straight to the Bargain page; otherwise show it below
+        onClick={() => (q.status === "bargaining" ? router.push(`/Client/Bargain?q=${q._id}`) : setSelectedQid(q._id))}
+        aria-pressed={active}
+        className={`flex min-h-42 flex-col rounded-[1.75rem] border bg-base-100 p-5 text-left transition hover:-translate-y-0.5 hover:shadow-mc-sm ${
+          active ? "border-base-content ring-1 ring-base-content" : "border-base-300"
+        }`}
+      >
+        <div className="flex items-start justify-between gap-2">
+          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-error/10 text-error text-[10px] font-semibold tracking-wide">
+            PDF
+          </span>
+          <span className={`badge badge-sm gap-1 ${qm.badge}`}>
+            {busy && <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" />}
+            {qm.label}
+          </span>
+        </div>
+        <p className="mt-3 truncate text-sm font-medium" title={q.filename}>{q.filename}</p>
+        <p className="text-xs text-base-content/40">
+          {new Date(q.createdAt).toLocaleDateString("th-TH", {
+            year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
+          })}
+        </p>
+        {q.dueAt && (
+          <p className="text-[11px] text-base-content/50 mt-0.5">ต้องการภายใน {formatDue(q.dueAt)}</p>
+        )}
+        {/* progress pinned to the bottom so every card is the same height */}
+        <div className="mt-auto pt-4">
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-base-200">
+            <div
+              className={`h-full rounded-full transition-all duration-500 ${q.status === "failed" ? "bg-error" : q.status === "bargaining" || q.status === "confirmed" ? "bg-success" : "bg-accent"}`}
+              style={{ width: `${q.status === "failed" ? 100 : Math.round((step / STEPS.length) * 100)}%` }}
+            />
+          </div>
+          <p className="mt-1.5 text-[11px] text-base-content/50">
+            {q.status === "failed"
+              ? "ไม่สำเร็จ · กดเพื่อดูสาเหตุ"
+              : q.status === "bargaining"
+                ? <span className="font-medium text-success">กดเพื่อต่อรองราคา →</span>
+                : `ขั้นที่ ${step} จาก ${STEPS.length}`}
+          </p>
+        </div>
+      </button>
+    );
+  };
+
   const poLatest       = poOrders[0] ?? null;
   const poMeta         = poLatest ? PO_STATUS_META[poLatest.status] : null;
   const poCurrentStep  = poLatest ? PO_STEPS.find((s) => s.key === poLatest.status)! : null;
@@ -991,61 +1046,34 @@ export default function Page(): JSX.Element {
                   <span className="mt-1 text-[11px] text-base-content/40">PDF · สูงสุด 10 MB</span>
                 </label>
 
-                {/* One card per job */}
-                {quotations.slice(0, qExpanded ? Q_EXPANDED : Q_COLLAPSED).map((q) => {
-                  const step   = STATUS_ORDER[q.status] + 1; // failed → 0
-                  const qm     = STATUS_META[q.status];
-                  const active = q._id === latest?._id;
-                  const busy   = q.status === "processing" || q.status === "sent" || q.status === "reviewing";
-                  return (
-                    <button
-                      key={q._id}
-                      type="button"
-                      // ready to bargain → straight to the Bargain page; otherwise show it below
-                      onClick={() => (q.status === "bargaining" ? router.push(`/Client/Bargain?q=${q._id}`) : setSelectedQid(q._id))}
-                      aria-pressed={active}
-                      className={`flex min-h-42 flex-col rounded-[1.75rem] border bg-base-100 p-5 text-left transition hover:-translate-y-0.5 hover:shadow-mc-sm ${
-                        active ? "border-base-content ring-1 ring-base-content" : "border-base-300"
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-error/10 text-error text-[10px] font-semibold tracking-wide">
-                          PDF
-                        </span>
-                        <span className={`badge badge-sm gap-1 ${qm.badge}`}>
-                          {busy && <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" />}
-                          {qm.label}
-                        </span>
-                      </div>
-                      <p className="mt-3 truncate text-sm font-medium" title={q.filename}>{q.filename}</p>
-                      <p className="text-xs text-base-content/40">
-                        {new Date(q.createdAt).toLocaleDateString("th-TH", {
-                          year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
-                        })}
-                      </p>
-                      {q.dueAt && (
-                        <p className="text-[11px] text-base-content/50 mt-0.5">ต้องการภายใน {formatDue(q.dueAt)}</p>
-                      )}
-                      {/* progress pinned to the bottom so every card is the same height */}
-                      <div className="mt-auto pt-4">
-                        <div className="h-1.5 w-full overflow-hidden rounded-full bg-base-200">
-                          <div
-                            className={`h-full rounded-full transition-all duration-500 ${q.status === "failed" ? "bg-error" : "bg-accent"}`}
-                            style={{ width: `${q.status === "failed" ? 100 : Math.round((step / STEPS.length) * 100)}%` }}
-                          />
-                        </div>
-                        <p className="mt-1.5 text-[11px] text-base-content/50">
-                          {q.status === "failed"
-                            ? "ไม่สำเร็จ · กดเพื่อดูสาเหตุ"
-                            : q.status === "bargaining"
-                              ? <span className="font-medium text-accent">กดเพื่อต่อรองราคา →</span>
-                              : `ขั้นที่ ${step} จาก ${STEPS.length}`}
-                        </p>
-                      </div>
-                    </button>
-                  );
-                })}
+                {/* First row: newest jobs (the "+" card above sits next to them) */}
+                {quotations.slice(0, Q_COLLAPSED).map(renderQCard)}
               </div>
+
+              {/* Peek + expand: the hidden jobs show a faded strip; "แสดงเพิ่ม" (or a click on
+                  the strip) slides them open. grid-rows 0fr→1fr animates to the content's real
+                  height; min-h-16 on the clip keeps the peek strip visible while collapsed. */}
+              {quotations.length > Q_COLLAPSED && (
+                <div
+                  className={`grid transition-[grid-template-rows] duration-500 ease-out ${qExpanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}
+                  onClick={qExpanded ? undefined : () => setQExpanded(true)}
+                >
+                  <div
+                    className={`min-h-16 overflow-hidden transition-opacity duration-500 ${
+                      qExpanded ? "opacity-100" : "cursor-pointer opacity-60 [mask-image:linear-gradient(to_bottom,black,transparent)]"
+                    }`}
+                  >
+                    {/* inert + pointer-events-none while collapsed: peeked cards can't be clicked or
+                        tabbed to — a click falls through to the wrapper and expands instead */}
+                    <div
+                      inert={!qExpanded}
+                      className={`grid grid-cols-1 gap-4 pt-4 sm:grid-cols-2 lg:grid-cols-3 ${qExpanded ? "" : "pointer-events-none"}`}
+                    >
+                      {quotations.slice(Q_COLLAPSED, Q_EXPANDED).map(renderQCard)}
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Show more / less / all (only when there are more jobs than the collapsed view shows) */}
               {quotations.length > Q_COLLAPSED && (
