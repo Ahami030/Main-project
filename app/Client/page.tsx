@@ -93,25 +93,35 @@ const JOB_PRIORITY: Record<QuotationStatus, number> = {
   processing: 2, sent: 2, reviewing: 2, completed: 2,
   confirmed: 3,
 };
-// Summary chips / filter over those priority groups (a group with 0 jobs gets no chip)
-const JOB_GROUPS: { key: number; label: string; dot?: string }[] = [
-  { key: 0, label: "รอต่อรอง",  dot: "bg-success" },
-  { key: 1, label: "ไม่สำเร็จ", dot: "bg-error" },
-  { key: 2, label: "รอทีมงาน",  dot: "bg-warning" },
-  { key: 3, label: "เสร็จแล้ว" }, // ✓ instead of a dot — green is already "รอต่อรอง"
+// Filter tabs + card badges over those priority groups (index === key).
+// Colours: orange = the customer must act, grey = waiting on staff, green = done, red = failed.
+const JOB_GROUPS: { key: number; tab: string; label: string; badge: string; dot: string }[] = [
+  { key: 0, tab: "รอต่อรอง",  label: "รอคุณต่อรอง", badge: "bg-accent/10 text-accent",          dot: "bg-accent" },
+  { key: 1, tab: "ไม่สำเร็จ", label: "ไม่สำเร็จ",    badge: "bg-error/10 text-error",            dot: "bg-error" },
+  { key: 2, tab: "รอทีมงาน",  label: "รอทีมงาน",    badge: "bg-base-200 text-base-content/60",  dot: "bg-base-content/40" },
+  { key: 3, tab: "เสร็จแล้ว", label: "เสร็จแล้ว",    badge: "bg-success/10 text-success",        dot: "bg-success" },
 ];
 
-const STATUS_META: Record<QuotationStatus, {
-  spotlight: string; dot: string; bar: string; badge: string; label: string;
-}> = {
-  processing: { spotlight: "border-info/25 bg-info/5",        dot: "bg-info",    bar: "from-info to-info/30",         badge: "badge-info",    label: "กำลังประมวลผล" },
-  sent:       { spotlight: "border-warning/25 bg-warning/5",  dot: "bg-warning", bar: "from-warning to-warning/30",   badge: "badge-warning", label: "ส่งแล้ว" },
-  reviewing:  { spotlight: "border-warning/25 bg-warning/5",  dot: "bg-warning", bar: "from-warning to-warning/30",   badge: "badge-warning", label: "กำลังดำเนินการ" },
-  completed:  { spotlight: "border-primary/25 bg-primary/5",  dot: "bg-primary", bar: "from-primary to-primary/30",   badge: "badge-primary", label: "เสร็จสิ้น" },
-  bargaining: { spotlight: "border-success/25 bg-success/5",   dot: "bg-success",  bar: "from-success to-success/30",    badge: "badge-success",  label: "พร้อมต่อรอง" },
-  confirmed:  { spotlight: "border-success/40 bg-success/10", dot: "bg-success", bar: "from-success to-success/40",   badge: "badge-success", label: "ยืนยันแล้ว" },
-  failed:     { spotlight: "border-error/25 bg-error/5",      dot: "bg-error",   bar: "from-error to-error/30",       badge: "badge-error",   label: "ไม่สำเร็จ" },
-};
+// pill buttons of the quotation section
+const QBTN       = "inline-flex h-10 items-center justify-center gap-1.5 rounded-full px-4 text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-60";
+const QBTN_ACCENT = `${QBTN} bg-accent font-medium text-accent-content hover:bg-accent/90`;
+const QBTN_INK    = `${QBTN} bg-primary font-medium text-primary-content hover:bg-primary/85`;
+const QBTN_GHOST  = `${QBTN} border border-base-300 text-base-content/80 hover:bg-base-200`;
+
+const fmtDateTime = (d: string) =>
+  new Date(d).toLocaleDateString("th-TH", { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+
+const IconCheckSm = () => (
+  <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round"><path d="M5 12l5 5L20 7" /></svg>
+);
+const IconChevron = ({ up = false }: { up?: boolean }) => (
+  <svg viewBox="0 0 24 24" className={`h-4 w-4 ${up ? "rotate-180" : ""}`} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M6 9l6 6 6-6" /></svg>
+);
+const IconEye = () => (
+  <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round">
+    <path d="M2.25 12s3.75-7.5 9.75-7.5 9.75 7.5 9.75 7.5-3.75 7.5-9.75 7.5S2.25 12 2.25 12z" /><circle cx="12" cy="12" r="3" />
+  </svg>
+);
 
 const PROCESS_STEPS = [
   { step: "01", title: "อัปโหลดเอกสาร",  desc: "แนบไฟล์ PDF รายการสินค้า ใบสั่งซื้อ หรือ BOQ" },
@@ -593,7 +603,6 @@ export default function Page(): JSX.Element {
   const activeFilter = qFilter !== "all" && groupCount(qFilter) > 0 ? qFilter : "all";
   const shownJobs   = activeFilter === "all" ? jobs : jobs.filter((q) => JOB_PRIORITY[q.status] === activeFilter);
   const latest      = shownJobs.find((q) => q._id === selectedQid) ?? shownJobs[0] ?? null;
-  const meta        = latest ? STATUS_META[latest.status] : null;
   const currentStep = !latest ? null : STEPS.find((s) => s.key === latest.status) ?? {
     label: "ประมวลผลเอกสารไม่สำเร็จ",
     sublabel: latest.failReason ?? "กรุณาตรวจสอบไฟล์แล้วอัปโหลดใหม่อีกครั้ง",
@@ -620,55 +629,56 @@ export default function Page(): JSX.Element {
   // one job card — used by the first row and by the peek/expand section
   const renderQCard = (q: Quotation) => {
     const step   = STATUS_ORDER[q.status] + 1; // failed → 0
-    const qm     = STATUS_META[q.status];
+    const g      = JOB_GROUPS[JOB_PRIORITY[q.status]];
     const active = q._id === latest?._id;
-    const busy   = q.status === "processing" || q.status === "sent" || q.status === "reviewing";
+    // ready to bargain → straight to the Bargain page; otherwise show it in the detail below
+    const open   = () => (q.status === "bargaining" ? router.push(`/Client/Bargain?q=${q._id}`) : setSelectedQid(q._id));
     return (
-      <button
+      <div
         key={q._id}
-        type="button"
-        // ready to bargain → straight to the Bargain page; otherwise show it below
-        onClick={() => (q.status === "bargaining" ? router.push(`/Client/Bargain?q=${q._id}`) : setSelectedQid(q._id))}
+        role="button"
+        tabIndex={0}
         aria-pressed={active}
-        className={`flex min-h-42 flex-col rounded-[1.75rem] border bg-base-100 p-5 text-left transition hover:-translate-y-0.5 hover:shadow-mc-sm ${
-          active ? "border-base-content ring-1 ring-base-content" : "border-base-300"
+        onClick={open}
+        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } }}
+        className={`flex min-h-42 cursor-pointer flex-col rounded-2xl border bg-base-100 p-5 text-left transition hover:border-base-content/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
+          active ? "border-base-content ring-1 ring-base-content hover:border-base-content" : "border-base-300"
         }`}
       >
-        <div className="flex items-start justify-between gap-2">
-          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-error/10 text-error text-[10px] font-semibold tracking-wide">
-            PDF
-          </span>
-          <span className={`badge badge-sm gap-1 ${qm.badge}`}>
-            {busy && <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" />}
-            {qm.label}
+        {/* top row: file type + status group */}
+        <div className="flex items-center justify-between gap-2">
+          <span className="rounded-md bg-base-200 px-1.5 py-0.5 text-[11px] font-medium tracking-wide text-base-content/55">PDF</span>
+          <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs ${g.badge}`}>
+            <span className={`h-1.5 w-1.5 rounded-full ${g.dot} ${g.key === 2 ? "animate-pulse" : ""}`} />
+            {g.label}
           </span>
         </div>
+
         <p className="mt-3 truncate text-sm font-medium" title={q.filename}>{q.filename}</p>
-        <p className="text-xs text-base-content/40">
-          {new Date(q.createdAt).toLocaleDateString("th-TH", {
-            year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
-          })}
+        <p className="mt-0.5 truncate text-xs text-base-content/40">
+          {fmtDateTime(q.createdAt)}
+          {q.dueAt && ` · ต้องการภายใน ${formatDue(q.dueAt)}`}
         </p>
-        {q.dueAt && (
-          <p className="text-[11px] text-base-content/50 mt-0.5">ต้องการภายใน {formatDue(q.dueAt)}</p>
-        )}
-        {/* progress pinned to the bottom so every card is the same height */}
+
+        {/* bottom row: customer's turn → button look (the whole card is the click) / else progress */}
         <div className="mt-auto pt-4">
-          <div className="h-1.5 w-full overflow-hidden rounded-full bg-base-200">
-            <div
-              className={`h-full rounded-full transition-all duration-500 ${q.status === "failed" ? "bg-error" : q.status === "bargaining" || q.status === "confirmed" ? "bg-success" : "bg-accent"}`}
-              style={{ width: `${q.status === "failed" ? 100 : Math.round((step / STEPS.length) * 100)}%` }}
-            />
-          </div>
-          <p className="mt-1.5 text-[11px] text-base-content/50">
-            {q.status === "failed"
-              ? "ไม่สำเร็จ · กดเพื่อดูสาเหตุ"
-              : q.status === "bargaining"
-                ? <span className="font-medium text-success">กดเพื่อต่อรองราคา →</span>
-                : `ขั้นที่ ${step} จาก ${STEPS.length}`}
-          </p>
+          {q.status === "bargaining" ? (
+            <span className={`${QBTN_ACCENT} h-9 w-full`}>ต่อรองราคา <IconArrow /></span>
+          ) : q.status === "failed" ? (
+            <p className="truncate text-xs text-error">ประมวลผลไม่สำเร็จ · กดเพื่อดูสาเหตุ</p>
+          ) : (
+            <>
+              <div className="h-1 w-full overflow-hidden rounded-full bg-base-200">
+                <div
+                  className={`h-full rounded-full transition-all duration-500 ${q.status === "confirmed" ? "bg-success" : "bg-base-content/80"}`}
+                  style={{ width: `${Math.round((step / STEPS.length) * 100)}%` }}
+                />
+              </div>
+              <p className="mt-2 truncate text-xs text-base-content/55">{step}/{STEPS.length} · {STEPS[step - 1]?.label}</p>
+            </>
+          )}
         </div>
-      </button>
+      </div>
     );
   };
 
@@ -1001,7 +1011,7 @@ export default function Page(): JSX.Element {
             </div>
           </div>
 
-        ) : latest && meta && currentStep ? (
+        ) : latest && currentStep ? (
 
           /* ── Quotation grid (RfqGridSection design) ── every job as a card + "+" card;
                 the detail panel below holds everything the old single-job card had,
@@ -1010,54 +1020,58 @@ export default function Page(): JSX.Element {
             <div className="card-body gap-0 pt-7 px-5 sm:px-7 md:px-9">
 
               {/* Header */}
-              <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+              <div className="flex flex-wrap items-end justify-between gap-3">
                 <div>
                   <p className="inline-flex items-center gap-2 text-xs tracking-[0.16em] uppercase text-base-content/55 font-bold mb-1">
                     <span className="w-1.5 h-1.5 rounded-full bg-accent" />
                     Quotation Request
                   </p>
-                  <h2 className="font-medium text-xl tracking-mc">
-                    ใบขอราคาของคุณ
-                    <span className="ml-1.5 text-sm font-normal text-base-content/50">· {quotations.length} งาน</span>
-                  </h2>
+                  <h2 className="font-medium text-xl tracking-mc">ใบขอราคาของคุณ</h2>
                 </div>
                 {quotations.length > 1 && (
-                  <button onClick={() => router.push("/Client/quotation")} className="btn btn-ghost btn-xs">
-                    ดูทั้งหมด ({quotations.length} งาน)
+                  <button type="button" onClick={() => router.push("/Client/quotation")} className="inline-flex items-center gap-1 text-sm text-base-content/55 hover:text-base-content">
+                    ดูทั้งหมด <IconArrow />
                   </button>
                 )}
               </div>
 
-              {/* Summary + filter chips: counts per group at a glance, click to show only that group */}
-              {quotations.length > 1 && (
-                <div className="-mt-2 mb-5 flex flex-wrap gap-2" role="group" aria-label="กรองงานตามสถานะ">
-                  {[{ key: "all" as const, label: "ทั้งหมด", count: jobs.length, dot: undefined as string | undefined },
-                    ...JOB_GROUPS.map((g) => ({ ...g, count: groupCount(g.key) })).filter((g) => g.count > 0),
-                  ].map((g) => {
-                    const on = activeFilter === g.key;
-                    return (
-                      <button
-                        key={g.key}
-                        type="button"
-                        aria-pressed={on}
-                        onClick={() => { setQFilter(g.key); setQExpanded(false); setSelectedQid(null); }}
-                        className={`btn btn-sm rounded-full gap-1.5 font-medium ${on ? "btn-primary" : "btn-outline border-base-300 text-base-content/70"}`}
-                      >
-                        {g.key === 3
-                          ? <span className={on ? "" : "text-success"}>✓</span>
-                          : g.dot && <span className={`w-2 h-2 rounded-full ${g.dot}`} />}
-                        {g.label}
-                        <span className={`text-xs tabular-nums ${on ? "opacity-80" : "text-base-content/45"}`}>{g.count}</span>
-                      </button>
-                    );
-                  })}
+              {/* Filter tabs (text + underline) with counts; scrolls sideways on a phone.
+                  An empty group's tab is disabled; "ไม่สำเร็จ" only appears when there is one. */}
+              {jobs.length > Q_COLLAPSED && (
+                <div className="-mx-1 mt-4 overflow-x-auto">
+                  <div role="tablist" aria-label="กรองงานตามสถานะ" className="flex min-w-max gap-5 border-b border-base-300 px-1">
+                    {[{ key: "all" as const, tab: "ทั้งหมด" }, ...JOB_GROUPS.filter((g) => g.key !== 1 || groupCount(1) > 0)].map((f) => {
+                      const n  = f.key === "all" ? jobs.length : groupCount(f.key);
+                      const on = activeFilter === f.key;
+                      const hot = n > 0 && (f.key === 0 || f.key === 1); // needs the customer
+                      return (
+                        <button
+                          key={f.key}
+                          type="button"
+                          role="tab"
+                          aria-selected={on}
+                          disabled={n === 0 && f.key !== "all"}
+                          onClick={() => { setQFilter(f.key); setQExpanded(false); setSelectedQid(null); }}
+                          className={`-mb-px flex h-10 items-center gap-1.5 border-b-2 text-sm transition disabled:cursor-default disabled:opacity-40 ${
+                            on ? "border-base-content font-medium text-base-content" : "border-transparent text-base-content/55 hover:text-base-content"
+                          }`}
+                        >
+                          {f.tab}
+                          <span className={`text-xs tabular-nums ${hot ? `rounded-full px-1.5 ${f.key === 0 ? "bg-accent text-accent-content" : "bg-error text-error-content"}` : "text-base-content/40"}`}>
+                            {n}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
 
               {/* Grid: phone 1 col / tablet 2 / desktop 3 */}
-              <div ref={qGridRef} className="grid scroll-mt-20 grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <div ref={qGridRef} className="mt-5 grid scroll-mt-24 grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
 
-                {/* "+" card — click or drop a file; it opens on the upload form (PDF check + deadline) */}
+                {/* "+" card — click or drop a file; it opens on the upload form (PDF check + deadline).
+                    Phone: first · bigger screens: last in the row */}
                 <label
                   onDragOver={(e) => { e.preventDefault(); setQDragging(true); }}
                   onDragLeave={() => setQDragging(false)}
@@ -1066,10 +1080,8 @@ export default function Page(): JSX.Element {
                     setQDragging(false);
                     if (e.dataTransfer.files.length) startNewUpload(e.dataTransfer.files);
                   }}
-                  className={`group order-first sm:order-last flex min-h-42 cursor-pointer flex-col items-center justify-center rounded-[1.75rem] border-2 border-dashed p-5 text-center transition focus-within:ring-2 focus-within:ring-accent ${
-                    qDragging
-                      ? "border-accent bg-accent/15"
-                      : "border-accent/40 bg-accent/5 hover:border-accent hover:bg-accent/10"
+                  className={`group order-first sm:order-last flex min-h-33 sm:min-h-42 cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed p-5 text-center transition focus-within:ring-2 focus-within:ring-accent ${
+                    qDragging ? "border-accent bg-accent/15" : "border-accent/30 bg-accent/5 hover:border-accent/60 hover:bg-accent/10"
                   }`}
                 >
                   <input
@@ -1081,19 +1093,16 @@ export default function Page(): JSX.Element {
                       e.target.value = ""; // allow picking the same file again
                     }}
                   />
-                  <span className="flex h-12 w-12 items-center justify-center rounded-full bg-accent text-accent-content shadow-md shadow-accent/20 transition group-hover:scale-110">
-                    <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={2.2}>
+                  <span className="flex h-11 w-11 items-center justify-center rounded-full bg-accent text-accent-content transition group-hover:scale-110">
+                    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2.2}>
                       <path d="M12 5v14M5 12h14" strokeLinecap="round" />
                     </svg>
                   </span>
-                  <span className="mt-3 text-sm font-medium">
-                    {qDragging ? "ปล่อยไฟล์ตรงนี้ได้เลย" : "ส่งเอกสารใหม่"}
-                  </span>
-                  <span className="mt-0.5 text-xs text-base-content/55">คลิกเพื่อเลือก หรือลากไฟล์มาวาง</span>
-                  <span className="mt-1 text-[11px] text-base-content/40">PDF · สูงสุด 10 MB</span>
+                  <span className="mt-2.5 text-sm font-medium">{qDragging ? "ปล่อยไฟล์ตรงนี้ได้เลย" : "ส่งเอกสารใหม่"}</span>
+                  <span className="mt-0.5 text-xs text-base-content/55">คลิกหรือลากไฟล์มาวาง · PDF สูงสุด 10 MB</span>
                 </label>
 
-                {/* First row: newest jobs (the "+" card above sits next to them) */}
+                {/* First row: top jobs (the "+" card sits next to them) */}
                 {shownJobs.slice(0, Q_COLLAPSED).map(renderQCard)}
               </div>
 
@@ -1122,24 +1131,21 @@ export default function Page(): JSX.Element {
                 </div>
               )}
 
-              {/* Show more / less / all (only when there are more jobs than the collapsed view shows) */}
+              {/* Show more / less / all */}
               {shownJobs.length > Q_COLLAPSED && (
                 <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
                   {!qExpanded ? (
-                    <button type="button" onClick={() => setQExpanded(true)} aria-expanded={false} className="btn btn-outline btn-sm rounded-full gap-1.5">
-                      แสดงเพิ่มอีก {Math.min(shownJobs.length, Q_EXPANDED) - Q_COLLAPSED} งาน
-                      <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2}><path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                    <button type="button" onClick={() => setQExpanded(true)} aria-expanded={false} className={QBTN_GHOST}>
+                      แสดงเพิ่มอีก {Math.min(shownJobs.length, Q_EXPANDED) - Q_COLLAPSED} งาน <IconChevron />
                     </button>
                   ) : (
                     <>
-                      <button type="button" onClick={collapseQuotations} aria-expanded={true} className="btn btn-outline btn-sm rounded-full gap-1.5">
-                        ย่อลง
-                        <svg viewBox="0 0 24 24" className="h-4 w-4 rotate-180" fill="none" stroke="currentColor" strokeWidth={2}><path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                      <button type="button" onClick={collapseQuotations} aria-expanded={true} className={QBTN_GHOST}>
+                        ย่อลง <IconChevron up />
                       </button>
                       {shownJobs.length > Q_EXPANDED && (
-                        <button type="button" onClick={() => router.push("/Client/quotation")} className="btn btn-primary btn-sm rounded-full gap-1.5">
-                          ดูรายละเอียดทั้งหมด ({quotations.length} งาน)
-                          <IconArrow />
+                        <button type="button" onClick={() => router.push("/Client/quotation")} className={QBTN_INK}>
+                          ดูทั้งหมด {shownJobs.length} งาน <IconArrow />
                         </button>
                       )}
                     </>
@@ -1147,156 +1153,102 @@ export default function Page(): JSX.Element {
                 </div>
               )}
 
-              {/* ── Detail panel: the selected job (everything the old card had) ── */}
-              <div className="mt-6 rounded-[1.75rem] bg-base-200/60 p-5 sm:p-6 flex flex-col gap-5">
-
+              {/* ── Detail: the selected job — name + actions, then the timeline (the status lives there) ── */}
+              <div className="mt-6 border-t border-base-300 pt-6">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="text-sm text-base-content/55">
-                      สถานะของ <span className="font-medium text-base-content">{latest.filename}</span>
-                    </p>
-                    <p className="text-xs text-base-content/40 mt-0.5">
-                      {new Date(latest.createdAt).toLocaleDateString("th-TH", {
-                        year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
-                      })}
-                      {latest.dueAt && <> · ต้องการภายใน {formatDue(latest.dueAt)}</>}
+                    <p className="break-all text-sm font-medium">{latest.filename}</p>
+                    <p className="mt-0.5 text-xs text-base-content/40">
+                      ส่งเมื่อ {fmtDateTime(latest.createdAt)}
+                      {latest.dueAt && ` · ต้องการภายใน ${formatDue(latest.dueAt)}`}
                     </p>
                   </div>
-                  <div className="flex items-center gap-3 shrink-0">
+                  <div className="flex w-full flex-wrap gap-2 sm:w-auto">
                     {(latest.status === "bargaining" || latest.status === "confirmed") && (
-                      <button
-                        type="button"
-                        onClick={() => setModalQuotation(latest)}
-                        className="btn btn-ghost btn-sm btn-circle tooltip tooltip-bottom"
-                        data-tip="ดูเอกสาร"
-                        aria-label="ดูเอกสารใบเสนอราคา"
-                      >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M2.25 12s3.75-7.5 9.75-7.5 9.75 7.5 9.75 7.5-3.75 7.5-9.75 7.5S2.25 12 2.25 12z" />
-                          <circle cx="12" cy="12" r="3" strokeWidth={1.75} />
-                        </svg>
+                      <button type="button" onClick={() => setModalQuotation(latest)} className={`${QBTN_GHOST} flex-1 sm:flex-none`} aria-label="ดูเอกสารใบเสนอราคา">
+                        <IconEye /> ดูเอกสาร
                       </button>
                     )}
-                    <span className={`badge ${meta.badge}`}>{meta.label}</span>
+                    {latest.status === "bargaining" && (
+                      <button type="button" onClick={() => router.push(`/Client/Bargain?q=${latest._id}`)} className={`${QBTN_ACCENT} flex-1 sm:flex-none`}>
+                        ต่อรองราคา <IconArrow />
+                      </button>
+                    )}
+                    {latest.status === "confirmed" && (
+                      <>
+                        <button type="button" onClick={handleDirectPrint} disabled={printReady} className={`${QBTN_INK} flex-1 sm:flex-none`}>
+                          {printReady ? <span className="loading loading-spinner loading-xs" /> : (
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                            </svg>
+                          )}
+                          พิมพ์
+                        </button>
+                        <button type="button" onClick={handleDirectDownload} disabled={downloadReady} className={`${QBTN_GHOST} flex-1 sm:flex-none`}>
+                          {downloadReady ? <span className="loading loading-spinner loading-xs" /> : (
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                            </svg>
+                          )}
+                          ดาวน์โหลด
+                        </button>
+                      </>
+                    )}
+                    {latest.status === "failed" && (
+                      <button type="button" onClick={() => router.push("/Client/quotation?upload=1")} className={`${QBTN_ACCENT} flex-1 sm:flex-none`}>
+                        อัปโหลดเอกสารใหม่ <IconArrow />
+                      </button>
+                    )}
                   </div>
                 </div>
 
-                {/* Spotlight — bargaining: go negotiate · confirmed: open the document */}
-                <div
-                  onClick={
-                    latest.status === "bargaining"
-                      ? () => router.push(`/Client/Bargain?q=${latest._id}`)
-                      : latest.status === "confirmed"
-                        ? () => setModalQuotation(latest)
-                        : undefined
-                  }
-                  role={latest.status === "bargaining" || latest.status === "confirmed" ? "button" : undefined}
-                  tabIndex={latest.status === "bargaining" || latest.status === "confirmed" ? 0 : undefined}
-                  onKeyDown={(e) => { if (e.key === "Enter") (e.currentTarget as HTMLDivElement).click(); }}
-                  className={`rounded-[1.75rem] border px-6 py-5 flex items-center gap-4 bg-base-100 ${meta.spotlight} ${
-                    latest.status === "bargaining" || latest.status === "confirmed"
-                      ? "cursor-pointer hover:opacity-90 transition-opacity"
-                      : ""
-                  }`}
-                >
-                  <span className={`w-3 h-3 rounded-full shrink-0 ${meta.dot} ${isInProgress ? "animate-pulse" : ""}`} />
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold">{currentStep.label}</p>
-                    <p className="text-sm text-base-content/50 mt-0.5">{currentStep.sublabel}</p>
-                  </div>
-                  {isInProgress && <span className="loading loading-dots loading-sm opacity-30" />}
-                  {(latest.status === "bargaining" || latest.status === "confirmed") && (
-                    <svg className="w-4 h-4 text-base-content/30 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
-                  )}
-                </div>
-
-                {/* Next step / actions */}
+                {/* failed is off the timeline → say why here */}
                 {latest.status === "failed" && (
-                  <button
-                    onClick={() => router.push("/Client/quotation?upload=1")}
-                    className="btn btn-primary w-full font-semibold gap-2 shadow-lg shadow-primary/20"
-                  >
-                    อัปโหลดเอกสารใหม่
-                    <IconArrow />
-                  </button>
-                )}
-                {latest.status !== "bargaining" && latest.status !== "confirmed" && latest.status !== "failed" && (
-                  STEPS[STATUS_ORDER[latest.status] + 1] ? (
-                    <div className="flex items-center gap-3 text-xs text-base-content/30">
-                      <div className="flex-1 h-px bg-base-300" />
-                      <span>ขั้นถัดไป · {STEPS[STATUS_ORDER[latest.status] + 1].label}</span>
-                      <div className="flex-1 h-px bg-base-300" />
-                    </div>
-                  ) : null
-                )}
-                {latest.status === "confirmed" && (
-                  <div className="flex gap-2">
-                    <button
-                      onClick={handleDirectPrint}
-                      disabled={printReady}
-                      className="btn btn-success flex-1 font-semibold gap-2 shadow-lg shadow-success/20"
-                    >
-                      {printReady ? (
-                        <span className="loading loading-spinner loading-sm" />
-                      ) : (
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-                        </svg>
-                      )}
-                      พิมพ์
-                    </button>
-                    <button
-                      onClick={handleDirectDownload}
-                      disabled={downloadReady}
-                      className="btn btn-outline btn-success flex-1 font-semibold gap-2"
-                    >
-                      {downloadReady ? (
-                        <span className="loading loading-spinner loading-sm" />
-                      ) : (
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                        </svg>
-                      )}
-                      ดาวน์โหลด
-                    </button>
+                  <div role="alert" className="mt-5 rounded-2xl border border-error/25 bg-error/5 px-5 py-4">
+                    <p className="text-sm font-medium text-error">{currentStep.label}</p>
+                    <p className="mt-0.5 text-sm text-base-content/60">{currentStep.sublabel}</p>
                   </div>
                 )}
 
-                {/* Timeline — horizontal on desktop, vertical on phone */}
-                <ol className="grid gap-3 md:grid-cols-6 md:gap-2">
+                {/* Timeline — vertical on phone, horizontal from md */}
+                <ol className="mt-6 grid gap-4 md:grid-cols-6 md:gap-2">
                   {STEPS.map((step, i) => {
-                    const done    = i <= STATUS_ORDER[latest.status];
-                    const current = i === STATUS_ORDER[latest.status];
+                    const at      = STATUS_ORDER[latest.status];
+                    const done    = i <= at;
+                    const current = i === at;
                     return (
                       <li key={step.key} className="relative flex items-start gap-3 md:flex-col md:items-center md:text-center">
                         {i < STEPS.length - 1 && (
                           <span
-                            className={`absolute left-[calc(50%+14px)] top-3.5 hidden h-px w-[calc(100%-20px)] md:block ${
-                              i < STATUS_ORDER[latest.status] ? "bg-primary/40" : "bg-base-300"
+                            className={`absolute left-[11px] top-6 h-[calc(100%-8px)] w-px md:left-[calc(50%+14px)] md:top-3 md:h-px md:w-[calc(100%-20px)] ${
+                              i < at ? "bg-base-content/70" : "bg-base-300"
                             }`}
                           />
                         )}
                         <span
-                          className={`relative z-10 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold transition-colors ${
-                            done ? "bg-primary text-primary-content" : "bg-base-100 border border-base-300 text-base-content/30"
+                          className={`relative z-10 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] ${
+                            current && step.key === "bargaining"
+                              ? "bg-accent text-accent-content ring-4 ring-accent/15"
+                              : current && isInProgress
+                                ? "bg-primary text-primary-content ring-4 ring-primary/10 animate-pulse"
+                                : done
+                                  ? "bg-primary text-primary-content"
+                                  : "border border-base-300 bg-base-100 text-base-content/40"
                           }`}
                         >
-                          {done ? "✓" : i + 1}
+                          {done ? <IconCheckSm /> : i + 1}
                         </span>
                         <div className="md:mt-2 min-w-0">
-                          <p className={`text-sm font-medium leading-tight ${current ? "text-base-content" : done ? "text-base-content/70" : "text-base-content/30"}`}>
+                          <p className={`text-sm md:text-xs ${current ? "font-medium text-base-content" : done ? "text-base-content/60" : "text-base-content/40"}`}>
                             {step.label}
                           </p>
-                          {current && <p className="text-xs text-base-content/45 mt-0.5">{step.sublabel}</p>}
+                          {current && <p className="mt-0.5 text-xs text-base-content/50 md:text-[11px]">{step.sublabel}</p>}
                         </div>
                       </li>
                     );
                   })}
                 </ol>
               </div>
-
             </div>
           </div>
 
