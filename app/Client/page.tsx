@@ -1001,7 +1001,8 @@ export default function Page(): JSX.Element {
                     <button
                       key={q._id}
                       type="button"
-                      onClick={() => setSelectedQid(q._id)}
+                      // ready to bargain → straight to the Bargain page; otherwise show it below
+                      onClick={() => (q.status === "bargaining" ? router.push(`/Client/Bargain?q=${q._id}`) : setSelectedQid(q._id))}
                       aria-pressed={active}
                       className={`flex min-h-42 flex-col rounded-[1.75rem] border bg-base-100 p-5 text-left transition hover:-translate-y-0.5 hover:shadow-mc-sm ${
                         active ? "border-base-content ring-1 ring-base-content" : "border-base-300"
@@ -1034,7 +1035,11 @@ export default function Page(): JSX.Element {
                           />
                         </div>
                         <p className="mt-1.5 text-[11px] text-base-content/50">
-                          {q.status === "failed" ? "ไม่สำเร็จ · กดเพื่อดูสาเหตุ" : `ขั้นที่ ${step} จาก ${STEPS.length}`}
+                          {q.status === "failed"
+                            ? "ไม่สำเร็จ · กดเพื่อดูสาเหตุ"
+                            : q.status === "bargaining"
+                              ? <span className="font-medium text-accent">กดเพื่อต่อรองราคา →</span>
+                              : `ขั้นที่ ${step} จาก ${STEPS.length}`}
                         </p>
                       </div>
                     </button>
@@ -1083,6 +1088,20 @@ export default function Page(): JSX.Element {
                     </p>
                   </div>
                   <div className="flex items-center gap-3 shrink-0">
+                    {(latest.status === "bargaining" || latest.status === "confirmed") && (
+                      <button
+                        type="button"
+                        onClick={() => setModalQuotation(latest)}
+                        className="btn btn-ghost btn-sm btn-circle tooltip tooltip-bottom"
+                        data-tip="ดูเอกสาร"
+                        aria-label="ดูเอกสารใบเสนอราคา"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M2.25 12s3.75-7.5 9.75-7.5 9.75 7.5 9.75 7.5-3.75 7.5-9.75 7.5S2.25 12 2.25 12z" />
+                          <circle cx="12" cy="12" r="3" strokeWidth={1.75} />
+                        </svg>
+                      </button>
+                    )}
                     <span className={`badge ${meta.badge}`}>{meta.label}</span>
                     <button onClick={() => router.push("/Client/quotation")} className="text-sm font-medium text-accent hover:underline">
                       ดูรายละเอียด →
@@ -1090,13 +1109,18 @@ export default function Page(): JSX.Element {
                   </div>
                 </div>
 
-                {/* Spotlight — opens the document for bargaining / confirmed jobs */}
+                {/* Spotlight — bargaining: go negotiate · confirmed: open the document */}
                 <div
                   onClick={
-                    latest.status === "bargaining" || latest.status === "confirmed"
-                      ? () => setModalQuotation(latest)
-                      : undefined
+                    latest.status === "bargaining"
+                      ? () => router.push(`/Client/Bargain?q=${latest._id}`)
+                      : latest.status === "confirmed"
+                        ? () => setModalQuotation(latest)
+                        : undefined
                   }
+                  role={latest.status === "bargaining" || latest.status === "confirmed" ? "button" : undefined}
+                  tabIndex={latest.status === "bargaining" || latest.status === "confirmed" ? 0 : undefined}
+                  onKeyDown={(e) => { if (e.key === "Enter") (e.currentTarget as HTMLDivElement).click(); }}
                   className={`rounded-[1.75rem] border px-6 py-5 flex items-center gap-4 bg-base-100 ${meta.spotlight} ${
                     latest.status === "bargaining" || latest.status === "confirmed"
                       ? "cursor-pointer hover:opacity-90 transition-opacity"
@@ -1134,15 +1158,6 @@ export default function Page(): JSX.Element {
                       <div className="flex-1 h-px bg-base-300" />
                     </div>
                   ) : null
-                )}
-                {latest.status === "bargaining" && (
-                  <button
-                    onClick={() => router.push(`/Client/Bargain?q=${latest._id}`)}
-                    className="btn btn-accent w-full font-semibold gap-2 shadow-lg shadow-accent/20"
-                  >
-                    ไปยังหน้าต่อรองราคา
-                    <IconArrow />
-                  </button>
                 )}
                 {latest.status === "confirmed" && (
                   <div className="flex gap-2">
