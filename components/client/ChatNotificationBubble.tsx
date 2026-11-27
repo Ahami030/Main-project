@@ -73,7 +73,8 @@ export default function ChatNotificationBubble() {
       } catch {}
     };
     fetchMsgs();
-    const iv = setInterval(fetchMsgs, open ? 1000 : 3000);
+    // ponytail: skip polls while the tab is hidden — background tabs were burning Vercel CPU all night
+    const iv = setInterval(() => !document.hidden && fetchMsgs(), open ? 1000 : 3000);
     return () => clearInterval(iv);
   }, [userId, open, hidden]);
 

@@ -70,6 +70,7 @@ export default function AdminPage() {
     initLoad();
 
     const interval = setInterval(async () => {
+      if (document.hidden) return;
       try {
         const res = await fetch("/api/chat/users", { cache: "no-store" });
         const data = await res.json();
@@ -224,7 +225,7 @@ export default function AdminPage() {
   useEffect(() => {
     if (!selectedUserId || status !== 'authenticated') return;
     loadChats();
-    const interval = setInterval(loadChats, 3000);
+    const interval = setInterval(() => !document.hidden && loadChats(), 3000);
     return () => clearInterval(interval);
   }, [selectedUserId, status]);
 

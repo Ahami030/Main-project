@@ -283,7 +283,7 @@ export default function ClientPOPage(): JSX.Element {
 
   useEffect(() => {
     if (view !== "history") return;
-    const id = setInterval(() => fetchOrders(true), 8000);
+    const id = setInterval(() => !document.hidden && fetchOrders(true), 8000);
     return () => clearInterval(id);
   }, [view, fetchOrders]);
 

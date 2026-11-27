@@ -75,7 +75,7 @@ export function useAdminChat(opts: { enabled?: boolean; onRfqCount?: (n: number)
       } catch {}
     };
     fetchUsers();
-    const iv = setInterval(fetchUsers, 3000);
+    const iv = setInterval(() => !document.hidden && fetchUsers(), 3000);
     return () => { cancelled = true; clearInterval(iv); };
   }, [enabled]);
 
@@ -99,7 +99,7 @@ export function useAdminChat(opts: { enabled?: boolean; onRfqCount?: (n: number)
       } catch {}
     };
     fetchMessages();
-    const iv = setInterval(fetchMessages, 1000);
+    const iv = setInterval(() => !document.hidden && fetchMessages(), 1000);
     return () => { cancelled = true; clearInterval(iv); };
   }, [activeUserId]);
 

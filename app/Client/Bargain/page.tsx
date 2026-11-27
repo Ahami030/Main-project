@@ -91,7 +91,7 @@ export default function DocumentChatPage() {
         })
         .finally(() => setRfqLoading(false));
     load();
-    const iv = setInterval(load, 10000);
+    const iv = setInterval(() => !document.hidden && load(), 10000);
     return () => clearInterval(iv);
   }, [USER_ID, rfqNumber]);
 
@@ -202,7 +202,7 @@ export default function DocumentChatPage() {
   useEffect(() => {
     if (!USER_ID) return;
     loadChats();
-    const interval = setInterval(loadChats, 1000);
+    const interval = setInterval(() => !document.hidden && loadChats(), 1000);
     return () => clearInterval(interval);
   }, [USER_ID]);
 

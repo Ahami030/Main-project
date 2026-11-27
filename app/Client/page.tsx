@@ -270,7 +270,7 @@ export default function Page(): JSX.Element {
 
   useEffect(() => { fetchQuotations(); }, [fetchQuotations]);
   useEffect(() => {
-    const id = setInterval(() => fetchQuotations(true), 5000);
+    const id = setInterval(() => !document.hidden && fetchQuotations(true), 5000);
     return () => clearInterval(id);
   }, [fetchQuotations]);
 
@@ -291,7 +291,7 @@ export default function Page(): JSX.Element {
 
   useEffect(() => { fetchPOOrders(); }, [fetchPOOrders]);
   useEffect(() => {
-    const id = setInterval(() => fetchPOOrders(true), 8000);
+    const id = setInterval(() => !document.hidden && fetchPOOrders(true), 8000);
     return () => clearInterval(id);
   }, [fetchPOOrders]);
 

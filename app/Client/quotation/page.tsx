@@ -288,7 +288,7 @@ export default function Page(): JSX.Element {
 
   useEffect(() => {
     if (view !== "history") return;
-    const id = setInterval(() => fetchHistory(true), 5000);
+    const id = setInterval(() => !document.hidden && fetchHistory(true), 5000);
     return () => clearInterval(id);
   }, [view, fetchHistory]);
 

@@ -60,7 +60,7 @@ export default function AdminPaymentsListPage() {
 
   useEffect(() => { fetchProofs(); }, [fetchProofs]);
   useEffect(() => {
-    const id = setInterval(() => fetchProofs(true), 10000);
+    const id = setInterval(() => !document.hidden && fetchProofs(true), 10000);
     return () => clearInterval(id);
   }, [fetchProofs]);
 

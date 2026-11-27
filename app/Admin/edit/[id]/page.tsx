@@ -368,7 +368,7 @@ export default function EditPage() {
       finally { setLoadingUsers(false); }
     };
     load();
-    const iv = setInterval(load, 3000);
+    const iv = setInterval(() => !document.hidden && load(), 3000);
     return () => clearInterval(iv);
   }, []);
 
@@ -401,7 +401,7 @@ export default function EditPage() {
   useEffect(() => {
     if (!selectedUserId) return;
     loadChats();
-    const iv = setInterval(loadChats, 2000);
+    const iv = setInterval(() => !document.hidden && loadChats(), 2000);
     return () => clearInterval(iv);
   }, [selectedUserId]);
 

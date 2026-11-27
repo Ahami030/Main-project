@@ -45,7 +45,7 @@ export default function AdminPOListPage() {
 
   useEffect(() => {
     fetchOrders();
-    const interval = setInterval(fetchOrders, 10000);
+    const interval = setInterval(() => !document.hidden && fetchOrders(), 10000);
     return () => clearInterval(interval);
   }, []);
 

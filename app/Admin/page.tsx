@@ -186,7 +186,7 @@ export default function AdminPage() {
       } catch {}
     };
     fetchPoCount();
-    const id = setInterval(fetchPoCount, 10000);
+    const id = setInterval(() => !document.hidden && fetchPoCount(), 10000);
     return () => clearInterval(id);
   }, [status]);
 
@@ -202,7 +202,7 @@ export default function AdminPage() {
       } catch {}
     };
     fetchPaymentCount();
-    const id = setInterval(fetchPaymentCount, 10000);
+    const id = setInterval(() => !document.hidden && fetchPaymentCount(), 10000);
     return () => clearInterval(id);
   }, [status]);
 
