@@ -93,6 +93,13 @@ const JOB_PRIORITY: Record<QuotationStatus, number> = {
   processing: 2, sent: 2, reviewing: 2, completed: 2,
   confirmed: 3,
 };
+// Summary chips / filter over those priority groups (a group with 0 jobs gets no chip)
+const JOB_GROUPS: { key: number; label: string; dot?: string }[] = [
+  { key: 0, label: "รอต่อรอง",  dot: "bg-success" },
+  { key: 1, label: "ไม่สำเร็จ", dot: "bg-error" },
+  { key: 2, label: "รอทีมงาน",  dot: "bg-warning" },
+  { key: 3, label: "เสร็จแล้ว" }, // ✓ instead of a dot — green is already "รอต่อรอง"
+];
 
 const STATUS_META: Record<QuotationStatus, {
   spotlight: string; dot: string; bar: string; badge: string; label: string;
@@ -225,6 +232,7 @@ export default function Page(): JSX.Element {
   const [selectedQid, setSelectedQid] = useState<string | null>(null);
   const [qExpanded, setQExpanded]     = useState(false);
   const [qDragging, setQDragging]     = useState(false);
+  const [qFilter, setQFilter]         = useState<number | "all">("all"); // JOB_GROUPS key
   const qGridRef = useRef<HTMLDivElement>(null);
   const [rfqForModal, setRfqForModal]             = useState<RFQData | null>(null);
   const [rfqForModalLoading, setRfqForModalLoading] = useState(false);
@@ -580,7 +588,11 @@ export default function Page(): JSX.Element {
   // the job in the detail panel: the one the customer clicked in the grid, else the newest
   // stable sort keeps the API's newest-first order inside each priority group
   const jobs        = [...quotations].sort((a, b) => JOB_PRIORITY[a.status] - JOB_PRIORITY[b.status]);
-  const latest      = jobs.find((q) => q._id === selectedQid) ?? jobs[0] ?? null;
+  const groupCount  = (k: number) => jobs.filter((q) => JOB_PRIORITY[q.status] === k).length;
+  // a filter whose group just emptied (status changed on a poll) falls back to "all"
+  const activeFilter = qFilter !== "all" && groupCount(qFilter) > 0 ? qFilter : "all";
+  const shownJobs   = activeFilter === "all" ? jobs : jobs.filter((q) => JOB_PRIORITY[q.status] === activeFilter);
+  const latest      = shownJobs.find((q) => q._id === selectedQid) ?? shownJobs[0] ?? null;
   const meta        = latest ? STATUS_META[latest.status] : null;
   const currentStep = !latest ? null : STEPS.find((s) => s.key === latest.status) ?? {
     label: "ประมวลผลเอกสารไม่สำเร็จ",
@@ -600,7 +612,7 @@ export default function Page(): JSX.Element {
   const collapseQuotations = () => {
     setQExpanded(false);
     // the selected job may now be hidden → back to the newest
-    if (jobs.findIndex((q) => q._id === selectedQid) >= Q_COLLAPSED) setSelectedQid(null);
+    if (shownJobs.findIndex((q) => q._id === selectedQid) >= Q_COLLAPSED) setSelectedQid(null);
     const top = qGridRef.current?.getBoundingClientRect().top ?? 0;
     if (top < 80) qGridRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
@@ -1016,6 +1028,32 @@ export default function Page(): JSX.Element {
                 )}
               </div>
 
+              {/* Summary + filter chips: counts per group at a glance, click to show only that group */}
+              {quotations.length > 1 && (
+                <div className="-mt-2 mb-5 flex flex-wrap gap-2" role="group" aria-label="กรองงานตามสถานะ">
+                  {[{ key: "all" as const, label: "ทั้งหมด", count: jobs.length, dot: undefined as string | undefined },
+                    ...JOB_GROUPS.map((g) => ({ ...g, count: groupCount(g.key) })).filter((g) => g.count > 0),
+                  ].map((g) => {
+                    const on = activeFilter === g.key;
+                    return (
+                      <button
+                        key={g.key}
+                        type="button"
+                        aria-pressed={on}
+                        onClick={() => { setQFilter(g.key); setQExpanded(false); setSelectedQid(null); }}
+                        className={`btn btn-sm rounded-full gap-1.5 font-medium ${on ? "btn-primary" : "btn-outline border-base-300 text-base-content/70"}`}
+                      >
+                        {g.key === 3
+                          ? <span className={on ? "" : "text-success"}>✓</span>
+                          : g.dot && <span className={`w-2 h-2 rounded-full ${g.dot}`} />}
+                        {g.label}
+                        <span className={`text-xs tabular-nums ${on ? "opacity-80" : "text-base-content/45"}`}>{g.count}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
               {/* Grid: phone 1 col / tablet 2 / desktop 3 */}
               <div ref={qGridRef} className="grid scroll-mt-20 grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
 
@@ -1056,13 +1094,13 @@ export default function Page(): JSX.Element {
                 </label>
 
                 {/* First row: newest jobs (the "+" card above sits next to them) */}
-                {jobs.slice(0, Q_COLLAPSED).map(renderQCard)}
+                {shownJobs.slice(0, Q_COLLAPSED).map(renderQCard)}
               </div>
 
               {/* Peek + expand: the hidden jobs show a faded strip; "แสดงเพิ่ม" (or a click on
                   the strip) slides them open. grid-rows 0fr→1fr animates to the content's real
                   height; min-h-16 on the clip keeps the peek strip visible while collapsed. */}
-              {quotations.length > Q_COLLAPSED && (
+              {shownJobs.length > Q_COLLAPSED && (
                 <div
                   className={`grid transition-[grid-template-rows] duration-500 ease-out ${qExpanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}
                   onClick={qExpanded ? undefined : () => setQExpanded(true)}
@@ -1078,18 +1116,18 @@ export default function Page(): JSX.Element {
                       inert={!qExpanded}
                       className={`grid grid-cols-1 gap-4 pt-4 sm:grid-cols-2 lg:grid-cols-3 ${qExpanded ? "" : "pointer-events-none"}`}
                     >
-                      {jobs.slice(Q_COLLAPSED, Q_EXPANDED).map(renderQCard)}
+                      {shownJobs.slice(Q_COLLAPSED, Q_EXPANDED).map(renderQCard)}
                     </div>
                   </div>
                 </div>
               )}
 
               {/* Show more / less / all (only when there are more jobs than the collapsed view shows) */}
-              {quotations.length > Q_COLLAPSED && (
+              {shownJobs.length > Q_COLLAPSED && (
                 <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
                   {!qExpanded ? (
                     <button type="button" onClick={() => setQExpanded(true)} aria-expanded={false} className="btn btn-outline btn-sm rounded-full gap-1.5">
-                      แสดงเพิ่มอีก {Math.min(quotations.length, Q_EXPANDED) - Q_COLLAPSED} งาน
+                      แสดงเพิ่มอีก {Math.min(shownJobs.length, Q_EXPANDED) - Q_COLLAPSED} งาน
                       <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2}><path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" /></svg>
                     </button>
                   ) : (
@@ -1098,7 +1136,7 @@ export default function Page(): JSX.Element {
                         ย่อลง
                         <svg viewBox="0 0 24 24" className="h-4 w-4 rotate-180" fill="none" stroke="currentColor" strokeWidth={2}><path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" /></svg>
                       </button>
-                      {quotations.length > Q_EXPANDED && (
+                      {shownJobs.length > Q_EXPANDED && (
                         <button type="button" onClick={() => router.push("/Client/quotation")} className="btn btn-primary btn-sm rounded-full gap-1.5">
                           ดูรายละเอียดทั้งหมด ({quotations.length} งาน)
                           <IconArrow />
