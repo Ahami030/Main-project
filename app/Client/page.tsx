@@ -86,6 +86,13 @@ const STATUS_ORDER: Record<QuotationStatus, number> = {
 // Quotation grid: job cards shown before / after "แสดงเพิ่ม" (the "+" card is extra)
 const Q_COLLAPSED = 2;
 const Q_EXPANDED  = 5;
+// Grid order (priority sort): what the customer must act on first, jobs waiting on staff next,
+// finished jobs last — a card moves on its own as its status changes. Same group → newest first.
+const JOB_PRIORITY: Record<QuotationStatus, number> = {
+  bargaining: 0, failed: 1,
+  processing: 2, sent: 2, reviewing: 2, completed: 2,
+  confirmed: 3,
+};
 
 const STATUS_META: Record<QuotationStatus, {
   spotlight: string; dot: string; bar: string; badge: string; label: string;
@@ -571,7 +578,9 @@ export default function Page(): JSX.Element {
 
   // ── Derived state ─────────────────────────────────────────────────────────
   // the job in the detail panel: the one the customer clicked in the grid, else the newest
-  const latest      = quotations.find((q) => q._id === selectedQid) ?? quotations[0] ?? null;
+  // stable sort keeps the API's newest-first order inside each priority group
+  const jobs        = [...quotations].sort((a, b) => JOB_PRIORITY[a.status] - JOB_PRIORITY[b.status]);
+  const latest      = jobs.find((q) => q._id === selectedQid) ?? jobs[0] ?? null;
   const meta        = latest ? STATUS_META[latest.status] : null;
   const currentStep = !latest ? null : STEPS.find((s) => s.key === latest.status) ?? {
     label: "ประมวลผลเอกสารไม่สำเร็จ",
@@ -591,7 +600,7 @@ export default function Page(): JSX.Element {
   const collapseQuotations = () => {
     setQExpanded(false);
     // the selected job may now be hidden → back to the newest
-    if (quotations.findIndex((q) => q._id === selectedQid) >= Q_COLLAPSED) setSelectedQid(null);
+    if (jobs.findIndex((q) => q._id === selectedQid) >= Q_COLLAPSED) setSelectedQid(null);
     const top = qGridRef.current?.getBoundingClientRect().top ?? 0;
     if (top < 80) qGridRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
@@ -1047,7 +1056,7 @@ export default function Page(): JSX.Element {
                 </label>
 
                 {/* First row: newest jobs (the "+" card above sits next to them) */}
-                {quotations.slice(0, Q_COLLAPSED).map(renderQCard)}
+                {jobs.slice(0, Q_COLLAPSED).map(renderQCard)}
               </div>
 
               {/* Peek + expand: the hidden jobs show a faded strip; "แสดงเพิ่ม" (or a click on
@@ -1069,7 +1078,7 @@ export default function Page(): JSX.Element {
                       inert={!qExpanded}
                       className={`grid grid-cols-1 gap-4 pt-4 sm:grid-cols-2 lg:grid-cols-3 ${qExpanded ? "" : "pointer-events-none"}`}
                     >
-                      {quotations.slice(Q_COLLAPSED, Q_EXPANDED).map(renderQCard)}
+                      {jobs.slice(Q_COLLAPSED, Q_EXPANDED).map(renderQCard)}
                     </div>
                   </div>
                 </div>
@@ -1131,9 +1140,6 @@ export default function Page(): JSX.Element {
                       </button>
                     )}
                     <span className={`badge ${meta.badge}`}>{meta.label}</span>
-                    <button onClick={() => router.push("/Client/quotation")} className="text-sm font-medium text-accent hover:underline">
-                      ดูรายละเอียด →
-                    </button>
                   </div>
                 </div>
 
