@@ -108,7 +108,7 @@ export default function RFQListPage() {
   useEffect(() => { fetchData(); }, [fetchData]);
   // silent refresh so "👤 … กำลังทำ" and new jobs show up without a reload
   useEffect(() => {
-    const iv = setInterval(() => fetchData(true), PRESENCE_HEARTBEAT_MS);
+    const iv = setInterval(() => !document.hidden && fetchData(true), PRESENCE_HEARTBEAT_MS);
     return () => clearInterval(iv);
   }, [fetchData]);
 
