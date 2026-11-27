@@ -17,11 +17,7 @@ export async function GET(req) {
 
   await connectMongoDB();
 
-  // staff working on quotations (admin, or employee with the "quotation" permission) open
-  // any customer's RFQ PDF; customers only their own
-  const isAdmin =
-    session.user.role === "admin" ||
-    (session.user.role === "employee" && (session.user.permissions ?? []).includes("quotation"));
+  const isAdmin = session.user.role === "admin";
 
   let pdf = null;
   if (id) {

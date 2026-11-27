@@ -16,11 +16,7 @@ export async function GET() {
 
   await connectMongoDB();
 
-  // same rule as /api/pdf/view: quotation staff see every customer's PDFs
-  const isStaff =
-    session.user.role === "admin" ||
-    (session.user.role === "employee" && (session.user.permissions ?? []).includes("quotation"));
-  const filter = isStaff ? {} : { userId: session.user.id };
+  const filter = session.user.role === "admin" ? {} : { userId: session.user.id };
   const pdfs = await PDF.find(filter).sort({ uploadDate: -1 });
 
   return NextResponse.json(pdfs);
