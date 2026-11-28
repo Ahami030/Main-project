@@ -292,22 +292,36 @@ export default function EditPage() {
   const shouldAutoScrollRef = useRef(true);
   const prevChatsLengthRef = useRef(0);
 
-  // ── Presence: tell others I'm on this RFQ, learn who else is (warning only) ──
+  // ── Presence: claim this RFQ until I leave the page, learn who else holds it (warning only) ──
+  // Hidden tab → one "away" signal, then silence (no CPU); the claim stays. Rules: lib/presence.ts
   const [otherEditors, setOtherEditors] = useState<Editor[]>([]);
   useEffect(() => {
     if (!id) return;
     const url = `/api/rfq/${id}/presence`;
-    const beat = () =>
-      fetch(url, { method: "POST" })
+    const signal = (away: boolean) =>
+      fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ away }),
+        keepalive: away, // "away" may be the tab's last request before it's backgrounded/closed
+      })
         .then((r) => (r.ok ? r.json() : { others: [] }))
         .then((d) => setOtherEditors(d.others ?? []))
         .catch(() => {});
     // keepalive lets the DELETE survive the tab closing; if it's lost the entry expires anyway
     const leave = () => { fetch(url, { method: "DELETE", keepalive: true }).catch(() => {}); };
-    beat();
-    const iv = setInterval(beat, PRESENCE_HEARTBEAT_MS);
+    // back on the tab → re-claim at once and see who came in while I was away
+    const onVisibility = () => signal(document.hidden);
+    signal(false);
+    const iv = setInterval(() => !document.hidden && signal(false), PRESENCE_HEARTBEAT_MS);
+    document.addEventListener("visibilitychange", onVisibility);
     window.addEventListener("pagehide", leave);
-    return () => { clearInterval(iv); window.removeEventListener("pagehide", leave); leave(); };
+    return () => {
+      clearInterval(iv);
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("pagehide", leave);
+      leave();
+    };
   }, [id]);
 
   // ── Fetch RFQ ──────────────────────────────────────────────
@@ -710,7 +724,12 @@ export default function EditPage() {
       {otherEditors.length > 0 && (
         <div className="toast toast-top toast-center z-50 mt-16">
           <div role="status" className="alert alert-warning py-2 text-sm shadow-lg">
-            ⚠️ {otherEditors.map((e) => e.name || "พนักงานอีกคน").join(", ")} กำลังแก้ไขเอกสารนี้อยู่ — ระวังทำงานซ้ำกัน
+            ⚠️ {otherEditors.map((e) => {
+              const who = e.name || "พนักงานอีกคน";
+              if (!e.away) return `${who} กำลังแก้ไขเอกสารนี้อยู่`;
+              const since = new Date(e.at).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" });
+              return `${who} เปิดเอกสารนี้ค้างไว้ (สลับไปหน้าอื่นตั้งแต่ ${since})`;
+            }).join(", ")} — ระวังทำงานซ้ำกัน
           </div>
         </div>
       )}

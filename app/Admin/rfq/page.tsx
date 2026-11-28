@@ -702,7 +702,7 @@ export default function RFQListPage() {
                             )}
                             {working.length > 0 && (
                               <span className="badge badge-info badge-sm text-[10px] whitespace-nowrap">
-                                👤 {working.map((e) => e.name || "พนักงาน").join(", ")} กำลังทำ
+                                👤 {working.map((e) => (e.name || "พนักงาน") + (e.away ? " (ไม่อยู่หน้าจอ)" : "")).join(", ")} กำลังทำ
                               </span>
                             )}
                             {hasNewChat(item.USER_ID) && (
@@ -815,7 +815,7 @@ export default function RFQListPage() {
                         )}
                         {working.length > 0 && (
                           <span className="badge badge-info badge-xs text-[9px] shrink-0 whitespace-nowrap">
-                            👤 {working.map((e) => e.name || "พนักงาน").join(", ")}
+                            👤 {working.map((e) => (e.name || "พนักงาน") + (e.away ? " (ไม่อยู่หน้าจอ)" : "")).join(", ")}
                           </span>
                         )}
                         {hasNewChat(item.USER_ID) && (

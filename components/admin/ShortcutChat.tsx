@@ -5,15 +5,24 @@ import { usePathname } from 'next/navigation';
 import ChatFileAttachment from '@/components/chat/ChatFileAttachment';
 import ChatRfqSidebar from '@/components/admin/ChatRfqSidebar';
 import { useAdminChat, type UserWithChat } from '@/components/admin/useAdminChat';
+import { useIsDesktop } from '@/components/admin/useIsDesktop';
+
+// The dashboard toasts "new work" from the newRfqCount this poll already carries.
+// On mobile the bubble is the dashboard's only chat poll, so it hands the count over.
+const shareRfqCount = (n: number) =>
+  window.dispatchEvent(new CustomEvent('admin:rfq-count', { detail: n }));
 
 export default function ShortcutChat() {
   const pathname = usePathname();
+  const isDesktop = useIsDesktop();
 
-  // Suppress on pages that have their own inline chat
+  // Suppress on pages that have their own inline chat — one chat poll per page
   // (/Admin/rfq/edit only shows chat *files*, not a chat — the bubble must stay available there)
+  // Dashboard: desktop uses InlineChatPanel; null = width not known yet → stay off until it is
   const hidden =
     pathname === '/Admin/chat' ||
-    pathname?.startsWith('/Admin/edit/');
+    pathname?.startsWith('/Admin/edit/') ||
+    (pathname === '/Admin' && isDesktop !== false);
 
   const {
     activeTab, setActiveTab,
@@ -23,7 +32,7 @@ export default function ShortcutChat() {
     draft, setDraft, sendMessage, uploadAndSend, uploading, deleteMessage,
     msgContainerRef, handleScroll, scrollToBottom, showNewMsgButton, pinBottomAfterImage,
     fmtTime, userInitial, userName,
-  } = useAdminChat({ enabled: !hidden });
+  } = useAdminChat({ enabled: !hidden, onRfqCount: shareRfqCount });
 
   const [view, setView] = useState<'list' | 'chat'>('list');
   // Pasted image kept with its object URL so cleanup is local — no effect needed.

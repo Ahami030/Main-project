@@ -34,10 +34,10 @@ const RFQSchema = new mongoose.Schema({
     type: [ChangeLogEntrySchema],
     default: [],
   },
-  // staff currently on the edit page (heartbeat via /api/rfq/[id]/presence) — an entry
-  // older than PRESENCE_TTL_MS means that tab is gone. Warning only, never a lock.
+  // staff currently holding this RFQ open on the edit page (claim via /api/rfq/[id]/presence,
+  // dropped on leave). away = their tab is hidden. Expiry rules: lib/presence.ts. Warning only.
   editors: {
-    type: [new mongoose.Schema({ id: String, name: String, at: Date }, { _id: false })],
+    type: [new mongoose.Schema({ id: String, name: String, at: Date, away: Boolean }, { _id: false })],
     default: [],
   },
 }, {

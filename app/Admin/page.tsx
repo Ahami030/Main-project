@@ -3,6 +3,7 @@ import { JSX, useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import InlineChatPanel from '@/components/admin/InlineChatPanel';
+import { useIsDesktop } from '@/components/admin/useIsDesktop';
 import StaffStatsCard from '@/components/admin/StaffStatsCard';
 import { DUE_BADGE, byDue, dueInfo, isDueOpen } from '@/lib/dueDate';
 
@@ -146,7 +147,8 @@ export default function AdminPage() {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   };
 
-  // Called by InlineChatPanel on every 3s chat/users poll — zero extra requests
+  // Called on every 3s chat/users poll — zero extra requests. Desktop: InlineChatPanel
+  // passes it directly; mobile: the floating ShortcutChat (in the layout) sends it as an event.
   const handleRfqCount = useCallback((count: number) => {
     setNewRfqCount(count);
     if (prevRfqCountRef.current !== null && count > prevRfqCountRef.current) {
@@ -157,6 +159,15 @@ export default function AdminPage() {
     }
     prevRfqCountRef.current = count;
   }, []);
+
+  useEffect(() => {
+    const onCount = (e: Event) => handleRfqCount((e as CustomEvent<number>).detail);
+    window.addEventListener('admin:rfq-count', onCount);
+    return () => window.removeEventListener('admin:rfq-count', onCount);
+  }, [handleRfqCount]);
+
+  // One chat poll per page: the inline panel only exists on desktop (not just CSS-hidden)
+  const isDesktop = useIsDesktop();
 
   const fetchQuotations = useCallback(async () => {
     setLoading(true);
@@ -297,9 +308,11 @@ export default function AdminPage() {
           </div>
 
           {/* ── Chat panel: desktop only (mobile uses floating button) ── */}
-          <div className="hidden lg:block bg-base-100 border border-base-300/70 rounded-[2rem] overflow-hidden shadow-mc-sm" style={{ height: '480px' }}>
-            <InlineChatPanel onRfqCount={handleRfqCount} />
-          </div>
+          {isDesktop && (
+            <div className="hidden lg:block bg-base-100 border border-base-300/70 rounded-[2rem] overflow-hidden shadow-mc-sm" style={{ height: '480px' }}>
+              <InlineChatPanel onRfqCount={handleRfqCount} />
+            </div>
+          )}
 
           {/* ── Management section ──────────────────────────────────────── */}
           <section className="flex flex-col gap-4">
